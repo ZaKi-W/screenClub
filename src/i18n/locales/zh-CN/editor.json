@@ -97,6 +97,17 @@
 			"rec": "录制"
 		}
 	},
+	"aspectRatio": {
+		"label": "宽高比",
+		"auto": "自动",
+		"wide": "宽屏 16:9",
+		"square": "方形 1:1",
+		"classic": "经典 4:3",
+		"vertical": "竖屏 9:16",
+		"tall": "长屏 3:4",
+		"portrait": "人像 4:5",
+		"crop": "裁剪"
+	},
 	"rec": {
 		"source": "来源",
 		"systemPicker": "系统将询问要共享的内容",

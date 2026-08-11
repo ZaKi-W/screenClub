@@ -5,7 +5,7 @@
  *      rect (measured via ResizeObserver + window resize/scroll, rAF-coalesced
  *      — the exact same sync machinery as before, repurposed: it now drives
  *      the offscreen render-target resolution instead of a window position).
- *   2. Polls `readCompositorFrame` on every other rAF tick (~30fps), passing the
+ *   2. Polls `readCompositorFrame` on every rAF tick (normally ~60fps), passing the
  *      generation it last painted. Native returns a self-describing packet
  *      (`{ gen, width, height, data }`) ONLY when a newer frame exists — otherwise
  *      `null`, and the canvas is left untouched. So while the preview sits still
@@ -19,7 +19,7 @@
  */
 
 import type { RefObject } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { noteUiProbePreviewFrame } from "@/lib/ai-edition/perf/uiFrameProbe";
 import {
 	createCompositorView,
@@ -77,10 +77,10 @@ function safelyCall(label: string, call: () => Promise<unknown>) {
 	}
 }
 
-/** Throttle the rAF pull loop to roughly 30fps: process every other animation
- *  frame. Keeps IPC + GPU readback + putImageData cheap on high-refresh
- *  displays (120/144 Hz) without changing perceived preview smoothness. */
-const PULL_LOOP_TICK_DIVISOR = 2;
+/** Target a real 60fps on both 60Hz and high-refresh displays. The previous fixed
+ * every-other-rAF throttle meant 30fps on the common 60Hz case, reducing a 450 ms zoom to
+ * about 14 visible frames. A time budget keeps 120/144Hz displays from over-polling. */
+const PULL_INTERVAL_MS = 1000 / 60;
 
 export function useNativeCompositorView(
 	canvasRef: RefObject<HTMLCanvasElement>,
@@ -88,8 +88,17 @@ export function useNativeCompositorView(
 ): UseNativeCompositorViewResult {
 	const enabled = opts.enabled !== false;
 	// Re-create the native view when the screen source changes (e.g. loading a different
-	// project) so it never keeps showing a stale clip.
+	// project) so it never keeps showing a stale clip. Stabilize the object itself: callers
+	// commonly construct `{ sources }` inline, and depending on that identity would destroy and
+	// recreate the native decoder on unrelated React renders.
 	const screenPath = opts.sources?.screenPath;
+	const webcamPath = opts.sources?.webcamPath;
+	const cursorPath = opts.sources?.cursorPath;
+	const sources = useMemo(
+		() =>
+			screenPath || webcamPath || cursorPath ? { screenPath, webcamPath, cursorPath } : undefined,
+		[screenPath, webcamPath, cursorPath],
+	);
 	const [viewId, setViewId] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	// Mirror into a ref so async callbacks always see the freshest id without
@@ -108,7 +117,7 @@ export function useNativeCompositorView(
 
 		let rectRafHandle = 0;
 		let pullRafHandle = 0;
-		let pullTick = 0;
+		let lastPullAt = Number.NEGATIVE_INFINITY;
 		let lastRect: CompositorViewRect | null = null;
 		let disposed = false;
 		// Fresh view (source or enablement changed) → the previous view's fatal error
@@ -166,24 +175,27 @@ export function useNativeCompositorView(
 		// preview sits still (paused editing — the dominant case). `0` = "painted
 		// nothing yet", which forces delivery of the first frame.
 		let lastGen = 0;
+		// Bitmap conversion is asynchronous and can resolve out of order. Never let an older
+		// generation paint over a newer one — that one-frame rewind reads as micro-stutter.
+		let lastPaintedGen = 0;
 		// Only one readFrame in flight at a time. Skipping while pending both avoids
 		// redundant IPC and removes any chance of two responses landing out of order
 		// and rewinding `lastGen` (which would re-deliver an already-painted frame).
 		let inFlight = false;
 
-		/** rAF pull loop: throttle to ~30fps and repaint ONLY when native reports a
+		/** rAF pull loop: target 60fps and repaint ONLY when native reports a
 		 *  newer generation. The returned packet is self-describing (`gen` + dims +
 		 *  pixels), so the canvas is sized from the packet — pixels and canvas can
 		 *  never drift out of sync. Runs off the main thread so UI stays at 60/120fps. */
-		const pullLoop = () => {
+		const pullLoop = (timestamp: number) => {
 			pullRafHandle = requestAnimationFrame(pullLoop);
 			if (disposed || inFlight) {
 				return;
 			}
-			pullTick = (pullTick + 1) % PULL_LOOP_TICK_DIVISOR;
-			if (pullTick !== 0) {
+			if (timestamp - lastPullAt < PULL_INTERVAL_MS - 1) {
 				return;
 			}
+			lastPullAt = timestamp;
 			const id = viewIdRef.current;
 			if (id == null) {
 				return;
@@ -231,14 +243,16 @@ export function useNativeCompositorView(
 					// is the synchronous fallback if bitmap creation is unavailable.
 					createImageBitmap(image)
 						.then((bitmap) => {
-							if (!disposed && ctx) {
+							if (!disposed && ctx && gen > lastPaintedGen) {
 								ctx.drawImage(bitmap, 0, 0);
+								lastPaintedGen = gen;
 							}
 							bitmap.close();
 						})
 						.catch(() => {
-							if (!disposed && ctx) {
+							if (!disposed && ctx && gen > lastPaintedGen) {
 								ctx.putImageData(image, 0, 0);
+								lastPaintedGen = gen;
 							}
 						});
 					// Advance only after a successful, validated frame — so a dropped/
@@ -278,7 +292,7 @@ export function useNativeCompositorView(
 		syncCanvasSize(initialRect);
 
 		safelyCall("createView", async () => {
-			const result = await createCompositorView(initialRect, opts.sources);
+			const result = await createCompositorView(initialRect, sources);
 			if (disposed) {
 				// The element unmounted before the response came back; clean up.
 				safelyCall("destroyView (late)", () => destroyCompositorView(result.id));
@@ -320,7 +334,7 @@ export function useNativeCompositorView(
 		};
 		// `canvasRef` is a stable RefObject; we re-run (destroy + re-create the view) when the
 		// enabled flag flips or the screen source changes.
-	}, [enabled, canvasRef, screenPath]);
+	}, [enabled, canvasRef, sources]);
 
 	const setParam = useCallback((key: string, value: CompositorParamValue) => {
 		const id = viewIdRef.current;

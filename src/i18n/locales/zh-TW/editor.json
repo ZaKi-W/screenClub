@@ -97,6 +97,17 @@
 			"rec": "錄製"
 		}
 	},
+	"aspectRatio": {
+		"label": "長寬比",
+		"auto": "自動",
+		"wide": "寬螢幕 16:9",
+		"square": "正方形 1:1",
+		"classic": "經典 4:3",
+		"vertical": "直式 9:16",
+		"tall": "長版 3:4",
+		"portrait": "人像 4:5",
+		"crop": "裁剪"
+	},
 	"rec": {
 		"source": "來源",
 		"systemPicker": "系統將詢問要分享的內容",

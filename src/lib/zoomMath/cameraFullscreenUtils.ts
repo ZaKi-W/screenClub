@@ -8,8 +8,8 @@ const LEAD_OUT_WINDOW_MS = TRANSITION_WINDOW_MS * 1.5;
 
 /**
  * Ease-in/hold/ease-out envelope for a single region. Unlike zoom's
- * `computeRegionStrength` (which anticipates the transition before `startMs`),
- * Full Camera must stay fully contained within [startMs, endMs]: progress is
+ * `computeRegionStrength` (whose zoom-out extends beyond `endMs`), Full Camera
+ * must stay fully contained within [startMs, endMs]: progress is
  * exactly 0 at startMs, eases up to 1 within a lead-in window that starts at
  * startMs, holds at 1, then eases back down to exactly 0 at endMs (over a longer
  * window than the lead-in). Outside [startMs, endMs] progress is always 0. The

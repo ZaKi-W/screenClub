@@ -7,7 +7,13 @@ import {
 } from "@/components/video-editor/types";
 import type { AxcutDocument } from "../schema";
 import { axcutSchemaVersion } from "../schema";
-import { DEFAULT_EDITOR_SETTINGS, getEditorSettings, patchEditorSettings } from "./editorSettings";
+import {
+	CURSOR_ANIMATION_SMOOTHING,
+	cursorAnimationStyleForSmoothing,
+	DEFAULT_EDITOR_SETTINGS,
+	getEditorSettings,
+	patchEditorSettings,
+} from "./editorSettings";
 
 const baseDoc: AxcutDocument = {
 	schemaVersion: axcutSchemaVersion,
@@ -43,9 +49,12 @@ describe("getEditorSettings", () => {
 		expect(snap.padding).toBe(0);
 		expect(snap.shadowIntensity).toBe(DEFAULT_EDITOR_SETTINGS.shadowIntensity);
 		expect(snap.showBlur).toBe(false);
+		expect(snap.motionBlurZoom).toBe(DEFAULT_EDITOR_SETTINGS.motionBlurZoom);
+		expect(snap.motionBlurPan).toBe(DEFAULT_EDITOR_SETTINGS.motionBlurPan);
 		expect(snap.webcamLayoutPreset).toBe(DEFAULT_WEBCAM_LAYOUT_PRESET);
 		expect(snap.webcamMaskShape).toBe(DEFAULT_WEBCAM_MASK_SHAPE);
 		expect(snap.cursor.size).toBe(DEFAULT_CURSOR_SIZE);
+		expect(snap.screenAnimationStyle).toBe("focused");
 	});
 
 	it("returns the defaults when the document is null", () => {
@@ -65,6 +74,7 @@ describe("getEditorSettings", () => {
 				webcamMaskShape: "circle",
 				cursorSize: 5,
 				cursorSmoothing: 0.8,
+				screenAnimationStyle: "smooth",
 			},
 		};
 		const snap = getEditorSettings(doc);
@@ -76,6 +86,7 @@ describe("getEditorSettings", () => {
 		expect(snap.webcamMaskShape).toBe("circle");
 		expect(snap.cursor.size).toBe(5);
 		expect(snap.cursor.smoothing).toBe(0.8);
+		expect(snap.screenAnimationStyle).toBe("smooth");
 	});
 
 	it("falls back to defaults for unknown or wrong-type values", () => {
@@ -85,6 +96,29 @@ describe("getEditorSettings", () => {
 		};
 		const snap = getEditorSettings(doc);
 		expect(snap.showBlur).toBe(false);
+		expect(snap.screenAnimationStyle).toBe("focused");
+	});
+
+	it("uses the legacy screen blur for both motion channels in old projects", () => {
+		const doc: AxcutDocument = {
+			...baseDoc,
+			legacyEditor: { motionBlurAmount: 0.63 },
+		};
+		const snap = getEditorSettings(doc);
+		expect(snap.motionBlurAmount).toBe(0.63);
+		expect(snap.motionBlurZoom).toBe(0.63);
+		expect(snap.motionBlurPan).toBe(0.63);
+	});
+
+	it("reads independent screen motion blur channels when present", () => {
+		const doc: AxcutDocument = {
+			...baseDoc,
+			legacyEditor: { motionBlurAmount: 0.4, motionBlurZoom: 0.8, motionBlurPan: 0.25 },
+		};
+		const snap = getEditorSettings(doc);
+		expect(snap.motionBlurAmount).toBe(0.4);
+		expect(snap.motionBlurZoom).toBe(0.8);
+		expect(snap.motionBlurPan).toBe(0.25);
 	});
 });
 
@@ -122,6 +156,29 @@ describe("patchEditorSettings", () => {
 		expect(snap.cursor.smoothing).toBe(0.9);
 	});
 
+	it("round-trips the screen animation style", () => {
+		const styles = ["rapid", "focused", "balanced", "smooth", "cinematic", "classic"] as const;
+		for (const style of styles) {
+			const next = patchEditorSettings(baseDoc, { screenAnimationStyle: style });
+			expect(getEditorSettings(next).screenAnimationStyle).toBe(style);
+		}
+	});
+
+	it("falls back to focused for an unknown persisted screen animation style", () => {
+		const doc: AxcutDocument = {
+			...baseDoc,
+			legacyEditor: { screenAnimationStyle: "elastic" },
+		};
+		expect(getEditorSettings(doc).screenAnimationStyle).toBe("focused");
+	});
+
+	it("round-trips independent screen motion blur channels", () => {
+		const next = patchEditorSettings(baseDoc, { motionBlurZoom: 0.72, motionBlurPan: 0.31 });
+		const snap = getEditorSettings(next);
+		expect(snap.motionBlurZoom).toBe(0.72);
+		expect(snap.motionBlurPan).toBe(0.31);
+	});
+
 	it("does not mutate the source document", () => {
 		const before = getEditorSettings(baseDoc);
 		patchEditorSettings(baseDoc, { showBlur: true });
@@ -144,5 +201,20 @@ describe("patchEditorSettings", () => {
 		};
 		const snap = getEditorSettings(doc);
 		expect(snap.webcamPosition).toEqual({ cx: 1, cy: 0 });
+	});
+});
+
+describe("cursor animation style presets", () => {
+	it("map the four cards onto the existing smoothing setting", () => {
+		expect(CURSOR_ANIMATION_SMOOTHING.none).toBe(0);
+		expect(CURSOR_ANIMATION_SMOOTHING.rapid).toBeLessThan(CURSOR_ANIMATION_SMOOTHING.medium);
+		expect(CURSOR_ANIMATION_SMOOTHING.medium).toBeLessThan(CURSOR_ANIMATION_SMOOTHING.smooth);
+	});
+
+	it("select the nearest card for legacy numeric values", () => {
+		expect(cursorAnimationStyleForSmoothing(0)).toBe("none");
+		expect(cursorAnimationStyleForSmoothing(0.2)).toBe("rapid");
+		expect(cursorAnimationStyleForSmoothing(0.4)).toBe("medium");
+		expect(cursorAnimationStyleForSmoothing(0.7)).toBe("smooth");
 	});
 });

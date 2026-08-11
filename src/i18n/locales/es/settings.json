@@ -71,6 +71,43 @@
 		"on": "activado",
 		"help": "Estilo del marco de la grabación: desenfoque de fondo, sombra, desenfoque de movimiento, radio de esquinas y margen alrededor del vídeo."
 	},
+	"animation": {
+		"title": "Animación",
+		"help": "Controla la respuesta del zoom de pantalla, el movimiento del cursor y el desenfoque de movimiento durante la reproducción y exportación.",
+		"screen": {
+			"title": "Estilo de animación de pantalla",
+			"rapid": "Rápido",
+			"focused": "Enfocado",
+			"balanced": "Equilibrado",
+			"smooth": "Suave",
+			"cinematic": "Cinemático",
+			"classic": "Clásico",
+			"rapidDescription": "Alcanza el objetivo rápidamente con una respuesta ágil y precisa.",
+			"focusedDescription": "Se estabiliza rápidamente para facilitar el seguimiento y la lectura del contenido.",
+			"balancedDescription": "Equilibra la rapidez y la suavidad para grabaciones cotidianas.",
+			"smoothDescription": "Usa una respuesta de cámara más suave entre los puntos de enfoque.",
+			"cinematicDescription": "Añade una respuesta de cámara más lenta y con más peso para movimientos pausados.",
+			"classicDescription": "Usa una aceleración y desaceleración tradicionales, sin efecto de resorte."
+		},
+		"cursor": {
+			"title": "Estilo de animación del cursor",
+			"smooth": "Suave",
+			"medium": "Medio",
+			"rapid": "Rápido",
+			"none": "Ninguno"
+		},
+		"motionBlur": {
+			"title": "Desenfoque de movimiento",
+			"description": "Añade desenfoque cinematográfico cuando se mueve el cursor o la pantalla.",
+			"amount": "Intensidad",
+			"advanced": "Ajustes avanzados de desenfoque",
+			"screen": "Desenfoque de pantalla",
+			"cursor": "Desenfoque del cursor",
+			"cursorMovement": "Movimiento del cursor",
+			"screenZooming": "Zoom de pantalla",
+			"screenMoving": "Movimiento de pantalla"
+		}
+	},
 	"background": {
 		"title": "Fondo",
 		"image": "Imagen",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	ASPECT_RATIO_PRESETS,
 	getAspectRatioValue,
 	getNativeAspectRatioValue,
 	isAspectRatio,
@@ -8,6 +9,10 @@ import {
 } from "./aspectRatioUtils";
 
 const FALLBACK_RATIO = 16 / 9;
+
+it("matches the Screen Studio preset order", () => {
+	expect(ASPECT_RATIO_PRESETS).toEqual(["16:9", "1:1", "4:3", "9:16", "3:4", "4:5"]);
+});
 
 describe("parseAspectRatio", () => {
 	it("splits a well-formed token", () => {

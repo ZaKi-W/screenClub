@@ -71,6 +71,43 @@
 		"on": "开",
 		"help": "录制画面的边框样式：背景模糊、投影、运动模糊、圆角半径以及视频四周的内边距。"
 	},
+	"animation": {
+		"title": "动画",
+		"help": "控制播放和导出时画面缩放、光标移动与运动模糊的响应方式。",
+		"screen": {
+			"title": "画面动画样式",
+			"rapid": "迅速",
+			"focused": "聚焦",
+			"balanced": "均衡",
+			"smooth": "平滑",
+			"cinematic": "电影感",
+			"classic": "经典",
+			"rapidDescription": "快速到达目标，镜头响应干脆利落。",
+			"focusedDescription": "动画会快速稳定，让内容更容易跟随和阅读。",
+			"balancedDescription": "在响应速度和柔和度之间取得平衡，适合日常录制。",
+			"smoothDescription": "使用更柔和的镜头响应，在不同焦点之间流畅移动。",
+			"cinematicDescription": "镜头响应更慢、更有重量感，营造从容的运动效果。",
+			"classicDescription": "使用熟悉的缓入缓出曲线，没有弹簧感。"
+		},
+		"cursor": {
+			"title": "光标动画样式",
+			"smooth": "平滑",
+			"medium": "适中",
+			"rapid": "快速",
+			"none": "无"
+		},
+		"motionBlur": {
+			"title": "运动模糊",
+			"description": "光标或画面移动时应用电影感运动模糊。",
+			"amount": "强度",
+			"advanced": "高级运动模糊设置",
+			"screen": "画面模糊",
+			"cursor": "光标模糊",
+			"cursorMovement": "光标移动",
+			"screenZooming": "画面缩放",
+			"screenMoving": "画面移动"
+		}
+	},
 	"background": {
 		"title": "背景",
 		"image": "图片",

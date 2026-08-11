@@ -1,11 +1,11 @@
 import {
+	Activity,
 	Captions as CaptionsIcon,
 	ChevronRight,
 	FileText,
 	Layout as LayoutIcon,
 	Maximize2,
 	MousePointer2,
-	Pencil,
 	Scissors,
 	SlidersHorizontal,
 	Trash2,
@@ -32,16 +32,16 @@ import {
 	type AnnotationTextAnimation,
 	TEXT_ANIMATION_VALUES,
 } from "@/lib/ai-edition/annotations/textAnimation";
-import type { AxcutAnnotationRegion, AxcutClip } from "@/lib/ai-edition/schema";
+import type { AxcutAnnotationRegion } from "@/lib/ai-edition/schema";
 import { rafCoalesce } from "@/lib/ai-edition/store/rafCoalesce";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
-import { formatSeconds } from "@/lib/ai-edition/timeline/format";
 import { coalescedTrimGroups } from "@/lib/ai-edition/timeline/trim-mapping";
 import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { CaptionsPane } from "../CaptionsPane";
 import { ColorField } from "../ColorField";
 import {
+	AnimationPane,
 	CursorPane,
 	LayoutPane,
 	SliderCell,
@@ -53,12 +53,20 @@ import styles from "./EditorShellV4.module.css";
 
 type TimelineApi = ReturnType<typeof useTimeline>;
 
-export type Facet = "background" | "effects" | "layout" | "cursor" | "captions" | "transcript";
+export type Facet =
+	| "background"
+	| "effects"
+	| "layout"
+	| "cursor"
+	| "animation"
+	| "captions"
+	| "transcript";
 
 const FACETS: Array<{ id: Facet; labelKey: string; icon: typeof SlidersHorizontal }> = [
 	{ id: "effects", labelKey: "effects.title", icon: SlidersHorizontal },
 	{ id: "layout", labelKey: "layout.title", icon: LayoutIcon },
 	{ id: "cursor", labelKey: "cursor.title", icon: MousePointer2 },
+	{ id: "animation", labelKey: "animation.title", icon: Activity },
 	...(TRANSCRIPTION_FEATURE_ENABLED
 		? [
 				{ id: "captions" as const, labelKey: "facets.captions", icon: CaptionsIcon },
@@ -74,12 +82,6 @@ interface FloatingInspectorProps {
 	open: boolean;
 	onFacetChange: (facet: Facet) => void;
 	onToggleOpen: () => void;
-	/** Clips on the timeline, for the "Edit clip" picker — crop + trim now live
-	 * per-clip (see clipSchema.cropRegion) instead of behind a document-wide
-	 * facet, so this button opens EditClipModal directly instead of routing
-	 * through a facet body. */
-	clips: AxcutClip[];
-	onEditClip: (clip: AxcutClip) => void;
 	transcriptProps: TranscriptProps;
 	/** Drives the selected-element settings pane (zoom/speed/annotation/trim) —
 	 * takes over the inspector, forcing it open, whenever a timeline region is
@@ -93,14 +95,10 @@ export function FloatingInspector({
 	open,
 	onFacetChange,
 	onToggleOpen,
-	clips,
-	onEditClip,
 	transcriptProps,
 	tl,
 }: FloatingInspectorProps) {
 	const ts = useScopedT("settings");
-	const te = useScopedT("editor");
-	const [clipPickerOpen, setClipPickerOpen] = useState(false);
 	const selection = tl.selection;
 	const effectiveOpen = open || selection !== null;
 	const visibleFacet =
@@ -146,91 +144,6 @@ export function FloatingInspector({
 						<Icon size={17} />
 					</button>
 				))}
-				<div style={{ position: "relative" }}>
-					<button
-						type="button"
-						title={te("editClipDialog.title")}
-						aria-label={te("editClipDialog.title")}
-						aria-haspopup={clips.length > 1 ? "menu" : undefined}
-						aria-expanded={clips.length > 1 ? clipPickerOpen : undefined}
-						onClick={() => {
-							if (selection) tl.clearSelection();
-							if (clips.length === 0) return;
-							if (clips.length === 1) {
-								onEditClip(clips[0]);
-								return;
-							}
-							setClipPickerOpen((v) => !v);
-						}}
-					>
-						<Pencil size={17} />
-					</button>
-					{clipPickerOpen && clips.length > 1 ? (
-						<div
-							role="menu"
-							aria-label={te("editClipDialog.pickClipTitle")}
-							style={{
-								position: "absolute",
-								top: 0,
-								right: "calc(100% + 8px)",
-								minWidth: 200,
-								maxHeight: 320,
-								overflowY: "auto",
-								background: "var(--surface-1)",
-								border: "1px solid var(--border)",
-								borderRadius: 12,
-								boxShadow: "var(--elev-pop)",
-								backdropFilter: "blur(18px)",
-								padding: 6,
-								zIndex: 30,
-							}}
-						>
-							<p
-								style={{
-									margin: "4px 8px 6px",
-									fontSize: 11,
-									fontWeight: 600,
-									textTransform: "uppercase",
-									letterSpacing: "0.04em",
-									color: "var(--muted)",
-								}}
-							>
-								{te("editClipDialog.pickClipTitle")}
-							</p>
-							{clips.map((clip, index) => (
-								<button
-									key={clip.id}
-									type="button"
-									role="menuitem"
-									onClick={() => {
-										setClipPickerOpen(false);
-										onEditClip(clip);
-									}}
-									style={{
-										display: "flex",
-										flexDirection: "column",
-										alignItems: "flex-start",
-										width: "100%",
-										padding: "7px 8px",
-										border: "none",
-										borderRadius: 8,
-										background: "transparent",
-										color: "var(--fg)",
-										cursor: "pointer",
-										textAlign: "left",
-									}}
-								>
-									<span style={{ font: "600 12.5px var(--font-display)" }}>
-										{te("editClipDialog.clipLabel", { index: index + 1 })}
-									</span>
-									<span style={{ font: "500 11px var(--font-mono)", color: "var(--muted)" }}>
-										{formatSeconds(clip.timelineStartSec)}–{formatSeconds(clip.timelineEndSec)}
-									</span>
-								</button>
-							))}
-						</div>
-					) : null}
-				</div>
 			</div>
 		</div>
 	);
@@ -1067,6 +980,7 @@ function FacetBody({
 	if (facet === "effects") return wrap(collapse, <VideoAppearancePane />);
 	if (facet === "layout") return wrap(collapse, <LayoutPane />);
 	if (facet === "cursor") return wrap(collapse, <CursorPane />);
+	if (facet === "animation") return wrap(collapse, <AnimationPane />);
 	if (facet === "transcript") return wrap(collapse, <TranscriptPane {...transcriptProps} />);
 	return wrap(collapse, <CaptionsPane />);
 }

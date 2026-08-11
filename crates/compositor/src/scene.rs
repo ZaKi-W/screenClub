@@ -6,6 +6,49 @@
 
 use serde::Deserialize;
 
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScreenAnimationStyle {
+    Rapid,
+    #[default]
+    Focused,
+    Balanced,
+    Smooth,
+    Cinematic,
+    Classic,
+}
+
+impl ScreenAnimationStyle {
+    /// Screen Studio's exact values are private, but its public changelog confirms a mass-based
+    /// spring simulation. The comparison presets span fast-to-heavy critical springs, plus a
+    /// symmetric Cinematic envelope and the previous front-loaded Classic Bezier.
+    pub fn zoom_transition_window_sec(self) -> f32 {
+        match self {
+            Self::Rapid => 0.32,
+            Self::Focused => 0.45,
+            Self::Balanced => 0.54,
+            Self::Smooth => 0.65,
+            Self::Cinematic => 0.70,
+            Self::Classic => 0.45,
+        }
+    }
+
+    pub fn spring_params(self) -> (f32, f32, f32) {
+        match self {
+            Self::Rapid => (625.0, 50.0, 1.0),
+            Self::Focused => (225.0, 30.0, 1.0),
+            Self::Balanced => (121.0, 22.0, 1.0),
+            Self::Smooth => (64.0, 16.0, 1.0),
+            // Cinematic's zoom envelope is smootherstep, but auto-follow still needs a
+            // stateful filter. This critical spring gives it the same slow, weighty feel.
+            Self::Cinematic => (49.0, 14.0, 1.0),
+            // Classic compares the old front-loaded Bezier while preserving the established
+            // Focused camera-follow response.
+            Self::Classic => (225.0, 30.0, 1.0),
+        }
+    }
+}
+
 /// Un clip de la timeline (fichiers screen+webcam + fenêtre source). = `CompositorClipInput` (TS).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +202,26 @@ pub struct SceneEffects {
     pub roundness_frac: f32,
     /// 0..1 flou de mouvement.
     pub motion_blur: f32,
+    /// Overrides for the two independent kinds of screen motion. Older scenes only contain
+    /// `motionBlur`; `None` deliberately falls back to that value instead of silently disabling
+    /// blur after a project upgrade.
+    #[serde(default)]
+    pub motion_blur_zoom: Option<f32>,
+    #[serde(default)]
+    pub motion_blur_pan: Option<f32>,
+    /// Global camera animation feel. Absent in older projects/scenes → Focused.
+    #[serde(default)]
+    pub screen_animation_style: ScreenAnimationStyle,
+}
+
+impl SceneEffects {
+    pub fn zoom_motion_blur(self) -> f32 {
+        self.motion_blur_zoom.unwrap_or(self.motion_blur).clamp(0.0, 1.0)
+    }
+
+    pub fn pan_motion_blur(self) -> f32 {
+        self.motion_blur_pan.unwrap_or(self.motion_blur).clamp(0.0, 1.0)
+    }
 }
 
 /// Fond derrière l'écran (parsé depuis `settings.wallpaper`).
@@ -485,6 +548,8 @@ mod tests {
         assert!(scene.clips[0].has_audio);
         assert_eq!(scene.crop_by_clip.len(), 1);
         assert_eq!(scene.output.width, 1920);
+        assert_eq!(scene.effects.zoom_motion_blur(), scene.effects.motion_blur);
+        assert_eq!(scene.effects.pan_motion_blur(), scene.effects.motion_blur);
     }
 
     #[test]
@@ -496,6 +561,46 @@ mod tests {
             _ => panic!("expected color"),
         }
         assert_eq!(s.output.fps, Some(30.0));
+
+        let explicit_blur = color.replace(
+            "\"motionBlur\":0}",
+            "\"motionBlur\":0.1,\"motionBlurZoom\":0.7,\"motionBlurPan\":0.35}",
+        );
+        let s = Scene::from_json(&explicit_blur).expect("parse independent motion blur");
+        assert!((s.effects.zoom_motion_blur() - 0.7).abs() < 1e-6);
+        assert!((s.effects.pan_motion_blur() - 0.35).abs() < 1e-6);
+    }
+
+    #[test]
+    fn screen_animation_presets_are_critically_damped() {
+        for style in [
+            ScreenAnimationStyle::Rapid,
+            ScreenAnimationStyle::Focused,
+            ScreenAnimationStyle::Balanced,
+            ScreenAnimationStyle::Smooth,
+            ScreenAnimationStyle::Cinematic,
+            ScreenAnimationStyle::Classic,
+        ] {
+            let (stiffness, damping, mass) = style.spring_params();
+            let critical = 2.0 * (stiffness * mass).sqrt();
+            assert!((damping - critical).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn parses_every_screen_animation_style() {
+        let base = r##"{"clips":[],"layout":{"preset":"no-webcam","webcamSize":1,"webcamShape":"rectangle","webcamMirror":false,"webcamPosition":null,"webcamReactiveZoom":false},"effects":{"padding":0,"blur":false,"shadow":0,"roundnessFrac":0,"motionBlur":0,"screenAnimationStyle":"STYLE"},"background":{"kind":"color","color":"#123456"},"zoomRegions":[],"cursor":{"show":false,"size":1,"smoothing":0,"motionBlur":0,"clickBounce":0,"clipToBounds":false,"theme":"default"},"cropByClip":[],"output":{"width":1280,"height":720,"fps":30}}"##;
+        for (name, expected) in [
+            ("rapid", ScreenAnimationStyle::Rapid),
+            ("focused", ScreenAnimationStyle::Focused),
+            ("balanced", ScreenAnimationStyle::Balanced),
+            ("smooth", ScreenAnimationStyle::Smooth),
+            ("cinematic", ScreenAnimationStyle::Cinematic),
+            ("classic", ScreenAnimationStyle::Classic),
+        ] {
+            let scene = Scene::from_json(&base.replace("STYLE", name)).expect("parse style");
+            assert_eq!(scene.effects.screen_animation_style, expected);
+        }
     }
 
     #[test]

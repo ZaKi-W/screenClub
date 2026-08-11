@@ -71,6 +71,43 @@
 		"padding": "여백",
 		"help": "녹화 프레임 스타일: 배경 흐림, 그림자, 모션 블러, 모서리 둥글기, 영상 주변 여백."
 	},
+	"animation": {
+		"title": "애니메이션",
+		"help": "재생 및 내보내기 중 화면 확대, 커서 이동, 모션 블러의 반응을 조절합니다.",
+		"screen": {
+			"title": "화면 애니메이션 스타일",
+			"rapid": "빠르게",
+			"focused": "집중",
+			"balanced": "균형",
+			"smooth": "부드럽게",
+			"cinematic": "시네마틱",
+			"classic": "클래식",
+			"rapidDescription": "목표에 빠르게 도달하는 선명하고 즉각적인 반응입니다.",
+			"focusedDescription": "빠르게 안정되어 콘텐츠를 쉽게 따라가고 읽을 수 있습니다.",
+			"balancedDescription": "반응성과 부드러움의 균형을 맞춰 일반적인 녹화에 적합합니다.",
+			"smoothDescription": "초점 지점 사이를 더 부드러운 카메라 반응으로 이동합니다.",
+			"cinematicDescription": "느리고 무게감 있는 카메라 반응으로 차분한 움직임을 만듭니다.",
+			"classicDescription": "스프링 느낌 없이 익숙한 이즈 인·아웃 반응을 사용합니다."
+		},
+		"cursor": {
+			"title": "커서 애니메이션 스타일",
+			"smooth": "부드럽게",
+			"medium": "보통",
+			"rapid": "빠르게",
+			"none": "없음"
+		},
+		"motionBlur": {
+			"title": "모션 블러",
+			"description": "커서나 화면이 움직일 때 영화 같은 모션 블러를 추가합니다.",
+			"amount": "강도",
+			"advanced": "고급 모션 블러 설정",
+			"screen": "화면 블러",
+			"cursor": "커서 블러",
+			"cursorMovement": "커서 이동",
+			"screenZooming": "화면 확대/축소",
+			"screenMoving": "화면 이동"
+		}
+	},
 	"background": {
 		"title": "배경",
 		"image": "이미지",

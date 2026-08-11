@@ -71,6 +71,43 @@
 		"padding": "Padding",
 		"help": "Frame styling for the recording: background blur, drop shadow, motion blur, corner radius, and padding around the video."
 	},
+	"animation": {
+		"title": "Animation",
+		"help": "Control how screen zooms, cursor movement, and motion blur respond during playback and export.",
+		"screen": {
+			"title": "Screen animation style",
+			"rapid": "Rapid",
+			"focused": "Focused",
+			"balanced": "Balanced",
+			"smooth": "Smooth",
+			"cinematic": "Cinematic",
+			"classic": "Classic",
+			"rapidDescription": "Reaches the target quickly with a crisp, responsive feel.",
+			"focusedDescription": "Stabilizes quickly, making content easier to follow and read.",
+			"balancedDescription": "Balances responsiveness and softness for everyday recordings.",
+			"smoothDescription": "Uses a softer camera response for fluid movement between focus points.",
+			"cinematicDescription": "Adds a slower, weightier camera response for deliberate movement.",
+			"classicDescription": "Uses a familiar ease-in-out response without a spring-like feel."
+		},
+		"cursor": {
+			"title": "Cursor animation style",
+			"smooth": "Smooth",
+			"medium": "Medium",
+			"rapid": "Rapid",
+			"none": "None"
+		},
+		"motionBlur": {
+			"title": "Motion blur",
+			"description": "Adds cinematic motion blur while the mouse cursor or screen is moving.",
+			"amount": "Amount",
+			"advanced": "Advanced motion blur settings",
+			"screen": "Screen blur",
+			"cursor": "Cursor blur",
+			"cursorMovement": "Cursor movement",
+			"screenZooming": "Screen zooming",
+			"screenMoving": "Screen moving"
+		}
+	},
 	"background": {
 		"title": "Background",
 		"image": "Image",

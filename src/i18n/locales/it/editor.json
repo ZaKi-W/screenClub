@@ -97,6 +97,17 @@
 			"rec": "Registra"
 		}
 	},
+	"aspectRatio": {
+		"label": "Proporzioni",
+		"auto": "Auto",
+		"wide": "Panoramico 16:9",
+		"square": "Quadrato 1:1",
+		"classic": "Classico 4:3",
+		"vertical": "Verticale 9:16",
+		"tall": "Alto 3:4",
+		"portrait": "Ritratto 4:5",
+		"crop": "Ritaglia"
+	},
 	"rec": {
 		"source": "Sorgente",
 		"systemPicker": "Il sistema ti chiederà cosa condividere",

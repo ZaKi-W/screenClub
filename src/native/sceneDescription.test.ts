@@ -839,6 +839,38 @@ describe("buildSceneDescription.settings mapping", () => {
 		expect(cursor.clipToBounds).toBe(true);
 	});
 
+	it("maps every global screen animation style and defaults old documents to focused", () => {
+		expect(buildSceneDescription(makeDoc()).effects.screenAnimationStyle).toBe("focused");
+		const styles = ["rapid", "focused", "balanced", "smooth", "cinematic", "classic"] as const;
+		for (const style of styles) {
+			const doc = makeDoc({ legacyEditor: { screenAnimationStyle: style } });
+			expect(buildSceneDescription(doc).effects.screenAnimationStyle).toBe(style);
+		}
+	});
+
+	it("falls back to focused for an unknown persisted screen animation style", () => {
+		const doc = makeDoc({ legacyEditor: { screenAnimationStyle: "elastic" } });
+		expect(buildSceneDescription(doc).effects.screenAnimationStyle).toBe("focused");
+	});
+
+	it("maps independent screen motion blur and keeps the legacy aggregate", () => {
+		const doc = makeDoc({
+			legacyEditor: { motionBlurAmount: 0.4, motionBlurZoom: 0.75, motionBlurPan: 0.2 },
+		});
+		const effects = buildSceneDescription(doc).effects;
+		expect(effects.motionBlur).toBe(0.4);
+		expect(effects.motionBlurZoom).toBe(0.75);
+		expect(effects.motionBlurPan).toBe(0.2);
+	});
+
+	it("falls back to the legacy screen blur for both new channels", () => {
+		const effects = buildSceneDescription(
+			makeDoc({ legacyEditor: { motionBlurAmount: 0.55 } }),
+		).effects;
+		expect(effects.motionBlurZoom).toBe(0.55);
+		expect(effects.motionBlurPan).toBe(0.55);
+	});
+
 	it("maps show / theme / shape / mirror through to layout+cursor", () => {
 		const doc = makeDoc({
 			legacyEditor: {

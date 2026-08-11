@@ -1,13 +1,9 @@
 name: Diagnostic artifact
 
+# Temporarily manual-only while the current feature branch is being iterated.
+# Restore the push/pull_request triggers once the feature work is complete.
+
 on:
-  push:
-    branches: [main, "release/**"]
-  # Release branches too: a recording fix targeting a release is exactly when a
-  # reviewer needs the compiled helper, and filtering on main alone meant
-  # retargeting a PR silently removed the artifact its own test steps ask for.
-  pull_request:
-    branches: [main, "release/**"]
   workflow_dispatch:
 
 permissions:

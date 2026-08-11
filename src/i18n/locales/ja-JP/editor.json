@@ -97,6 +97,17 @@
 			"rec": "録画"
 		}
 	},
+	"aspectRatio": {
+		"label": "アスペクト比",
+		"auto": "自動",
+		"wide": "ワイド 16:9",
+		"square": "正方形 1:1",
+		"classic": "クラシック 4:3",
+		"vertical": "縦型 9:16",
+		"tall": "トール 3:4",
+		"portrait": "ポートレート 4:5",
+		"crop": "トリミング"
+	},
 	"rec": {
 		"source": "ソース",
 		"systemPicker": "共有する対象はシステムが確認します",
