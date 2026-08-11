@@ -97,6 +97,17 @@
 			"rec": "Grabar"
 		}
 	},
+	"aspectRatio": {
+		"label": "Relación de aspecto",
+		"auto": "Auto",
+		"wide": "Panorámico 16:9",
+		"square": "Cuadrado 1:1",
+		"classic": "Clásico 4:3",
+		"vertical": "Vertical 9:16",
+		"tall": "Alto 3:4",
+		"portrait": "Retrato 4:5",
+		"crop": "Recortar"
+	},
 	"rec": {
 		"source": "Fuente",
 		"systemPicker": "El sistema te preguntará qué compartir",

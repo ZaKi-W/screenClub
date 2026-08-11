@@ -1,5 +1,4 @@
 import {
-	ChevronDown,
 	Clock,
 	Crosshair,
 	Loader2,
@@ -13,7 +12,6 @@ import {
 	ZoomIn,
 } from "lucide-react";
 import {
-	type CSSProperties,
 	memo,
 	type PointerEvent as ReactPointerEvent,
 	useCallback,
@@ -29,7 +27,6 @@ import { ZOOM_DEPTH_SCALES } from "@/components/video-editor/types";
 import { useScopedT } from "@/contexts/I18nContext";
 import { useAudioPeaks } from "@/hooks/useAudioPeaks";
 import { createId } from "@/lib/ai-edition/document/ids";
-import { collectNativeFormats } from "@/lib/ai-edition/document/outputFormat";
 import { setUiProbeScrubbing } from "@/lib/ai-edition/perf/uiFrameProbe";
 import type { AxcutClip } from "@/lib/ai-edition/schema";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
@@ -53,7 +50,6 @@ import {
 } from "@/lib/ai-edition/timeline/zoom-suggestions";
 import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { nativeBridgeClient } from "@/native/client";
-import { ASPECT_RATIO_PRESETS, getAspectRatioLabel } from "@/utils/aspectRatioUtils";
 import { TransportBar } from "../TransportBar";
 import type { VideoSource } from "../VirtualPreview";
 import styles from "./EditorShellV4.module.css";
@@ -311,28 +307,6 @@ const ClipWaveform = memo(function ClipWaveform({
 	);
 });
 
-/** Right-aligned hint on a ratio row. Marks the shapes that are native to the timeline's own
- *  clips, so "Original" annotates a concrete ratio the user can name instead of being a separate
- *  menu entry that resolves to a different shape depending on which clips are loaded. */
-const nativeBadgeStyle: CSSProperties = {
-	marginLeft: "auto",
-	fontSize: 10.5,
-	fontWeight: 500,
-	color: "var(--muted)",
-	whiteSpace: "nowrap",
-};
-
-/** Header for native shapes that match no preset (an ultrawide, an odd capture size) and so
- *  need a row of their own. */
-const aspectSectionLabelStyle: CSSProperties = {
-	padding: "8px 10px 4px",
-	fontSize: 10,
-	fontWeight: 600,
-	letterSpacing: "0.04em",
-	textTransform: "uppercase",
-	color: "var(--muted)",
-};
-
 interface LanePill {
 	id: string;
 	kind: "annotation" | "speed" | "trim" | "zoom" | "cameraFullscreen";
@@ -403,21 +377,6 @@ export function V4Timeline({
 	const [splitMode, setSplitMode] = useState(false);
 	const [splitGuideTimeSec, setSplitGuideTimeSec] = useState<number | null>(null);
 	const { settings, set: setSettings } = useEditorSettings();
-	const document = useProjectStore((s) => s.document);
-	// The distinct native shapes of the clips actually on the timeline. "Original" used to be a
-	// single menu entry that silently resolved to whichever clip had the most pixels — so adding
-	// a 4K portrait rush flipped the whole project to portrait with no UI feedback. Enumerating
-	// them instead means the user picks a shape explicitly, and what gets stored is a concrete
-	// "W:H" token that no longer moves when the clip list changes.
-	const nativeFormats = useMemo(() => (document ? collectNativeFormats(document) : []), [document]);
-	// The ORIGINAL section lists every distinct shape actually on the timeline (deduplicated by
-	// ratio), so the user sees what their footage is — including shapes that also happen to match a
-	// preset. A preset row and its matching Original row select the same token; the preset section
-	// stays a pure list of fixed choices, and "which shapes are my clips" lives solely in ORIGINAL
-	// (no more per-preset badge, which split that one answer across two places).
-	const timelineIsMixed = nativeFormats.length > 1;
-
-	const [aspectMenuOpen, setAspectMenuOpen] = useState(false);
 	const [autoEnhanceOpen, setAutoEnhanceOpen] = useState(false);
 	const [autoBusy, setAutoBusy] = useState(false);
 	// The AI cut pass reads the transcript, and the transcript is produced in the
@@ -1347,85 +1306,6 @@ export function V4Timeline({
 						>
 							<Crosshair size={15} />
 						</button>
-						<span className={styles.tlToolSep} aria-hidden />
-						<Popover open={aspectMenuOpen} onOpenChange={setAspectMenuOpen}>
-							<PopoverTrigger asChild>
-								<button
-									type="button"
-									className={styles.tlAspect}
-									title={t("toolbar.aspectRatio")}
-									aria-label={t("toolbar.aspectRatio")}
-								>
-									{settings.aspectRatio === "native"
-										? t("mediaStage.auto")
-										: getAspectRatioLabel(settings.aspectRatio)}
-									<ChevronDown size={10} />
-								</button>
-							</PopoverTrigger>
-							<PopoverContent
-								align="end"
-								sideOffset={6}
-								animated={false}
-								className="w-auto border-0 bg-transparent p-0 shadow-none"
-							>
-								<div
-									className={styles.recMenu}
-									style={{ position: "relative", bottom: "auto", width: 210 }}
-								>
-									<button
-										type="button"
-										className={`${styles.recMenuRow}${
-											settings.aspectRatio === "native" ? ` ${styles.active}` : ""
-										}`}
-										onClick={() => {
-											void setSettings({ aspectRatio: "native" });
-											setAspectMenuOpen(false);
-										}}
-									>
-										{t("mediaStage.auto")}
-									</button>
-									{ASPECT_RATIO_PRESETS.map((ratio) => (
-										<button
-											type="button"
-											key={ratio}
-											className={`${styles.recMenuRow}${
-												ratio === settings.aspectRatio ? ` ${styles.active}` : ""
-											}`}
-											onClick={() => {
-												void setSettings({ aspectRatio: ratio });
-												setAspectMenuOpen(false);
-											}}
-										>
-											{ratio}
-										</button>
-									))}
-									{nativeFormats.length > 0 ? (
-										<>
-											<div style={aspectSectionLabelStyle}>{t("toolbar.original")}</div>
-											{nativeFormats.map((format) => (
-												<button
-													type="button"
-													key={format.token}
-													className={`${styles.recMenuRow}${
-														format.token === settings.aspectRatio ? ` ${styles.active}` : ""
-													}`}
-													onClick={() => {
-														void setSettings({ aspectRatio: format.token });
-														setAspectMenuOpen(false);
-													}}
-												>
-													{format.token}
-													<span style={nativeBadgeStyle}>
-														{`${format.width}×${format.height}`}
-														{timelineIsMixed ? ` · ${format.clipCount}` : ""}
-													</span>
-												</button>
-											))}
-										</>
-									) : null}
-								</div>
-							</PopoverContent>
-						</Popover>
 					</div>
 				) : (
 					// Media is an ARRANGING surface: add, remove, reorder. Nothing here

@@ -97,6 +97,17 @@
 			"rec": "녹화"
 		}
 	},
+	"aspectRatio": {
+		"label": "화면 비율",
+		"auto": "자동",
+		"wide": "와이드 16:9",
+		"square": "정사각형 1:1",
+		"classic": "클래식 4:3",
+		"vertical": "세로형 9:16",
+		"tall": "긴 화면 3:4",
+		"portrait": "인물형 4:5",
+		"crop": "자르기"
+	},
 	"rec": {
 		"source": "소스",
 		"systemPicker": "공유할 대상을 시스템이 묻습니다",

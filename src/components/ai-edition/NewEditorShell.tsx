@@ -45,6 +45,7 @@ import v4 from "./v4/EditorShellV4.module.css";
 import { type EditorMode, EditorTopBar } from "./v4/EditorTopBar";
 import { type Facet, FloatingInspector } from "./v4/FloatingInspector";
 import { MediaStage } from "./v4/MediaStage";
+import { PreviewToolbar } from "./v4/PreviewToolbar";
 import { RecStage } from "./v4/RecStage";
 import { V4Timeline } from "./v4/V4Timeline";
 
@@ -1075,6 +1076,18 @@ export function NewEditorShell() {
 				: undefined,
 	};
 
+	const handleOpenCrop = () => {
+		if (clips.length === 0) return;
+		const selectedClip = tl.clipSelection
+			? clips.find((clip) => clip.id === tl.clipSelection)
+			: undefined;
+		const currentTimeSec = useProjectStore.getState().currentTimeSec;
+		const currentClip = clips.find(
+			(clip) => currentTimeSec >= clip.timelineStartSec && currentTimeSec < clip.timelineEndSec,
+		);
+		setEditClipTarget(selectedClip ?? currentClip ?? clips[0]);
+	};
+
 	return (
 		<div
 			className={v4.app}
@@ -1120,6 +1133,7 @@ export function NewEditorShell() {
 				<section className={v4.stage} aria-label={te("shell.previewStage")}>
 					{mode === "edit" ? (
 						<>
+							<PreviewToolbar canCrop={clips.length > 0} onCrop={handleOpenCrop} />
 							<div
 								style={{
 									position: "absolute",
@@ -1140,7 +1154,7 @@ export function NewEditorShell() {
 									// issue) — still reserve the inspector's real footprint (right:20 +
 									// rail:50 + gap:10 + panel:300 ≈ 380, +a small gap) so it doesn't
 									// draw its own translucent panel flush against the canvas edge.
-									padding: `16px ${inspectorOpen ? 400 : 74}px 16px 16px`,
+									padding: `60px ${inspectorOpen ? 400 : 74}px 16px 16px`,
 									boxSizing: "border-box",
 								}}
 							>
@@ -1191,8 +1205,6 @@ export function NewEditorShell() {
 									setInspectorOpen(true);
 								}}
 								onToggleOpen={() => setInspectorOpen((v) => !v)}
-								clips={tl.clips}
-								onEditClip={setEditClipTarget}
 								transcriptProps={transcriptProps}
 							/>
 						</>

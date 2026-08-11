@@ -97,6 +97,17 @@
 			"rec": "Ghi hình"
 		}
 	},
+	"aspectRatio": {
+		"label": "Tỷ lệ khung hình",
+		"auto": "Tự động",
+		"wide": "Rộng 16:9",
+		"square": "Vuông 1:1",
+		"classic": "Cổ điển 4:3",
+		"vertical": "Dọc 9:16",
+		"tall": "Cao 3:4",
+		"portrait": "Chân dung 4:5",
+		"crop": "Cắt"
+	},
 	"rec": {
 		"source": "Nguồn",
 		"systemPicker": "Hệ thống sẽ hỏi bạn muốn chia sẻ gì",

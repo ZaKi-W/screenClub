@@ -97,6 +97,17 @@
 			"rec": "Enregistrement"
 		}
 	},
+	"aspectRatio": {
+		"label": "Format",
+		"auto": "Auto",
+		"wide": "Large 16:9",
+		"square": "Carré 1:1",
+		"classic": "Classique 4:3",
+		"vertical": "Vertical 9:16",
+		"tall": "Haut 3:4",
+		"portrait": "Portrait 4:5",
+		"crop": "Rogner"
+	},
 	"rec": {
 		"source": "Source",
 		"systemPicker": "Le système vous demandera quoi partager",

@@ -1,13 +1,5 @@
 /** The fixed shapes offered in the ratio picker, in menu order. */
-export const ASPECT_RATIO_PRESETS = [
-	"16:9",
-	"9:16",
-	"1:1",
-	"4:3",
-	"4:5",
-	"16:10",
-	"10:16",
-] as const;
+export const ASPECT_RATIO_PRESETS = ["16:9", "1:1", "4:3", "9:16", "3:4", "4:5"] as const;
 
 export type AspectRatioPreset = (typeof ASPECT_RATIO_PRESETS)[number];
 

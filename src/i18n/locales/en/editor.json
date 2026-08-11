@@ -97,6 +97,17 @@
 			"rec": "Rec"
 		}
 	},
+	"aspectRatio": {
+		"label": "Aspect ratio",
+		"auto": "Auto",
+		"wide": "Wide 16:9",
+		"square": "Square 1:1",
+		"classic": "Classic 4:3",
+		"vertical": "Vertical 9:16",
+		"tall": "Tall 3:4",
+		"portrait": "Portrait 4:5",
+		"crop": "Crop"
+	},
 	"rec": {
 		"source": "Source",
 		"systemPicker": "Your system will ask what to share",

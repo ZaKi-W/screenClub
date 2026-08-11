@@ -97,6 +97,17 @@
 			"rec": "Kayıt"
 		}
 	},
+	"aspectRatio": {
+		"label": "En-boy oranı",
+		"auto": "Otomatik",
+		"wide": "Geniş 16:9",
+		"square": "Kare 1:1",
+		"classic": "Klasik 4:3",
+		"vertical": "Dikey 9:16",
+		"tall": "Uzun 3:4",
+		"portrait": "Portre 4:5",
+		"crop": "Kırp"
+	},
 	"rec": {
 		"source": "Kaynak",
 		"systemPicker": "Sisteminiz neyi paylaşacağınızı soracak",
