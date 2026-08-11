@@ -77,28 +77,6 @@
 	width: calc(var(--topbar-icon) + var(--topbar-gap) + 1px);
 	flex-shrink: 0;
 }
-.brand {
-	display: inline-flex;
-	align-items: center;
-	gap: 9px;
-	flex-shrink: 0;
-}
-/* Transparent aperture mark: no plate behind it, so it needs a touch more box
-   than a filled tile would to hold the same optical weight next to the wordmark. */
-.brand img {
-	width: 24px;
-	height: 24px;
-	object-fit: contain;
-	display: block;
-	flex-shrink: 0;
-	user-select: none;
-}
-.brand .name {
-	font-size: 15px;
-	font-weight: 600;
-	letter-spacing: -0.015em;
-	color: var(--fg-emphasis);
-}
 .iconBtn {
 	width: 32px;
 	height: 32px;
@@ -1268,6 +1246,17 @@
 	clip-path: polygon(0% 0%, 100% 0%, 100% 67%, 50% 100%, 0% 67%);
 	filter: drop-shadow(0 1px 3px var(--playhead-shadow));
 }
+.tlSplitGuideLayer {
+	z-index: 7;
+}
+.tlSplitGuide {
+	background: #ff4d4f;
+	box-shadow: 0 0 12px color-mix(in srgb, #ff4d4f 58%, transparent);
+}
+.tlSplitGuideHead {
+	background: #ff4d4f;
+	filter: drop-shadow(0 1px 3px color-mix(in srgb, #ff4d4f 45%, transparent));
+}
 /* Ruler ticks are positioned absolutely at their real time, not spread evenly
    by a flex row — that's what keeps a label under the frame it names once the
    canvas is zoomed. Tick density is picked per zoom level in
@@ -1419,6 +1408,12 @@
 	background: transparent;
 	text-align: left;
 	cursor: default;
+}
+.tlClipsSplit .tlClip {
+	cursor: url("../../../assets/scissors-cursor.svg") 16 16, crosshair;
+}
+.tlClipsSplit .tlClip > * {
+	pointer-events: none;
 }
 .tlClipsDrag::after {
 	content: "";

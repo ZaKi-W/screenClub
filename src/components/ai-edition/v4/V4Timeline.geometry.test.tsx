@@ -63,18 +63,24 @@ function clip(startSec: number, endSec: number) {
 	};
 }
 
-/** By default one 30-minute clip carrying a single one-second annotation. */
+/** By default one 30-minute clip carrying a single one-second zoom region. */
 function renderTimeline(
 	clips = [clip(0, TOTAL_SEC)],
-	annotation = { id: "ann1", startMs: 10_000, endMs: 11_000 },
+	zoom = {
+		id: "zoom1",
+		startMs: 10_000,
+		endMs: 11_000,
+		depth: 3 as const,
+		focus: { x: 0.5, y: 0.5 },
+	},
 ) {
 	const tl = {
 		clips,
 		assets: [{ id: "a1", label: "rec", durationSec: TOTAL_SEC }],
-		annotationRegions: [annotation],
+		annotationRegions: [],
 		speedRegions: [],
 		cameraFullscreenRegions: [],
-		zoomRegions: [],
+		zoomRegions: [zoom],
 		trimRanges: [],
 		selection: null,
 		multiSelection: [],
@@ -82,11 +88,8 @@ function renderTimeline(
 		clearSelection: vi.fn(),
 		selectRegion: vi.fn(),
 		selectClip: vi.fn(),
-		updateAnnotationSpan: vi.fn(async () => {
+		updateZoomSpan: vi.fn(async () => {
 			/* the drag only awaits it */
-		}),
-		addZoom: vi.fn(async () => {
-			/* the toolbar only awaits it */
 		}),
 	};
 	render(
@@ -103,7 +106,7 @@ function renderTimeline(
 		/>,
 	);
 	return {
-		pill: screen.getByTitle("toolbar.newAnnotation"),
+		pill: screen.getByTitle("1.80×"),
 		clipEls: Array.from(document.querySelectorAll<HTMLElement>("[data-clip-id]")),
 		tl,
 	};
@@ -128,7 +131,7 @@ function zoomIn(notches: number) {
 describe("V4Timeline lane pills", () => {
 	it("draws a pill exactly as wide as its region, at any zoom", () => {
 		// 1 s of 1800 s. The old `Math.max(1.5, …)` floor drew this as 1.5% — 27
-		// seconds of ruler for a one-second annotation — and did it at every zoom,
+		// seconds of ruler for a one-second region — and did it at every zoom,
 		// since the floor was a percentage of the timeline rather than of the screen.
 		const { pill } = renderTimeline();
 		const expected = (1 / TOTAL_SEC) * 100;
@@ -162,58 +165,26 @@ describe("V4Timeline lane pills", () => {
 
 	it("grows and shrinks a hairline pill from its outside handles", () => {
 		// Growing is unbounded by the pill's own size: 90 px right of a 900 px canvas
-		// is a tenth of the 1800 s timeline, so the 10–11 s annotation ends at 191 s.
+		// is a tenth of the 1800 s timeline, so the 10–11 s zoom ends at 191 s.
 		// The chrome re-flows inside the box as it crosses PILL_HANDLES_MIN_PX
 		// mid-drag, which the gesture never notices — the deltas come from the
 		// pointer and the listeners live on `window`, not on the handle.
 		const { pill, tl } = renderTimeline();
 		const [left, right] = Array.from(pill.querySelectorAll("span"));
 		dragHandle(right, 90);
-		expect(tl.updateAnnotationSpan).toHaveBeenCalledWith("ann1", 10_000, 191_000);
+		expect(tl.updateZoomSpan).toHaveBeenCalledWith("zoom1", 10_000, 191_000);
 
 		// Shrinking stops at the storage grid (1 ms), not at the old flat 200 ms
 		// floor that refused the last fifth of a second however far you zoomed in.
 		dragHandle(left, 90_000);
-		expect(tl.updateAnnotationSpan).toHaveBeenLastCalledWith("ann1", 10_999, 11_000);
+		expect(tl.updateZoomSpan).toHaveBeenLastCalledWith("zoom1", 10_999, 11_000);
 
 		// 18 s short of the timeline end: 9 px away on screen, so it stays where it
 		// was dropped. The snap radius used to be 1.2% of the timeline — a 21-second
 		// magnet here — which is what made a grown edge jump to a clip boundary it
 		// was nowhere near, the more so the longer the recording.
 		dragHandle(right, 885.5);
-		expect(tl.updateAnnotationSpan).toHaveBeenLastCalledWith("ann1", 10_000, 1_782_000);
-	});
-});
-
-describe("V4Timeline create-from-toolbar", () => {
-	// The button asks for a DURATION worth a fixed number of pixels at the current
-	// zoom, so the pill you get is always the same size on screen — which is what
-	// the flat 2 s could not do: on this 30-minute fixture zoomed out it is one
-	// pixel. (It used to look fine only because the removed 1.5% minimum width
-	// inflated it in the rendering.)
-	const durationOf = (tl: { addZoom: ReturnType<typeof vi.fn> }) =>
-		tl.addZoom.mock.calls.at(-1)?.[0] as number;
-
-	it("scales the new region's duration with the zoom", () => {
-		const { tl } = renderTimeline();
-		fireEvent.click(screen.getByTitle("buttons.addZoom"));
-		// 900px viewport / 1800 s = 0.5 px per second, so a 96px pill is 192 s.
-		expect(durationOf(tl)).toBeCloseTo(192, 3);
-
-		// Zoomed to the 50x ceiling the same 96px is worth 3.84 s: same pill on
-		// screen, a region 50x shorter.
-		zoomIn(40);
-		fireEvent.click(screen.getByTitle("buttons.addZoom"));
-		expect(durationOf(tl)).toBeCloseTo(3.84, 3);
-	});
-
-	it("never asks for a slice too short to be worth creating", () => {
-		// Past ~30x on a short timeline the pixels are worth hundredths of a
-		// second; the region would be born unusable, so the duration floors.
-		const { tl } = renderTimeline([clip(0, 3)]);
-		zoomIn(40);
-		fireEvent.click(screen.getByTitle("buttons.addZoom"));
-		expect(durationOf(tl)).toBeCloseTo(0.25, 3);
+		expect(tl.updateZoomSpan).toHaveBeenLastCalledWith("zoom1", 10_000, 1_782_000);
 	});
 });
 
@@ -229,12 +200,14 @@ describe("V4Timeline clip row", () => {
 	const startsAt = (sec: number) => `${(sec / TOTAL_SEC) * 100}%`;
 
 	it("anchors every clip to its own start time, and keeps it there under zoom", () => {
-		// The annotation starts exactly where the second clip does, so the pill and
+		// The zoom starts exactly where the second clip does, so the pill and
 		// the clip edge under it must resolve to the very same coordinate.
 		const { clipEls, pill } = renderTimeline(CLIPS, {
-			id: "ann1",
+			id: "zoom1",
 			startMs: 600_000,
 			endMs: 601_000,
+			depth: 3,
+			focus: { x: 0.5, y: 0.5 },
 		});
 		expect(clipEls.map((el) => el.style.left)).toEqual([startsAt(0), startsAt(600), startsAt(900)]);
 		expect(pill.style.left).toBe(clipEls[1].style.left);

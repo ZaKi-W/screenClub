@@ -199,7 +199,7 @@ export function isSupportedBackgroundImage(type: string, fileName: string): bool
 // in the v2 editor: gradient strings stay as-is, colors as `#hex`, and image
 // paths are restricted to `/wallpapers/...` or the user's own data: URLs from
 // the upload custom flow.
-export function BackgroundPane() {
+export function BackgroundPane({ embedded = false }: { embedded?: boolean } = {}) {
 	const ts = useScopedT("settings");
 	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
 	const [tab, setTab] = useState<"image" | "color" | "gradient">("image");
@@ -264,12 +264,8 @@ export function BackgroundPane() {
 		reader.readAsDataURL(file);
 	};
 
-	return (
-		<Pane
-			title={ts("background.title")}
-			icon={<Palette size={14} />}
-			helpText={ts("background.help")}
-		>
+	const content = (
+		<>
 			<div className={styles.paneTabs} role="tablist">
 				<button
 					type="button"
@@ -366,6 +362,16 @@ export function BackgroundPane() {
 					{hasDocument ? <GradientEditor onChange={handleGradientChange} /> : null}
 				</>
 			)}
+		</>
+	);
+	if (embedded) return content;
+	return (
+		<Pane
+			title={ts("background.title")}
+			icon={<Palette size={14} />}
+			helpText={ts("background.help")}
+		>
+			{content}
 		</Pane>
 	);
 }
@@ -1359,7 +1365,7 @@ export type { AxcutWord };
 
 // ─── Video Effects ─────────────────────────────────────────────────
 
-export function VideoEffectsPane() {
+export function VideoEffectsPane({ embedded = false }: { embedded?: boolean } = {}) {
 	const ts = useScopedT("settings");
 	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
 
@@ -1377,8 +1383,8 @@ export function VideoEffectsPane() {
 	// un effet de montage ici ne poussait rien tant que ce panneau precis n'avait pas
 	// ete ouvert. Les handlers par controle ci-dessous poussent toujours leurs diffs.
 
-	return (
-		<Pane title={ts("effects.title")} icon={<Sliders size={14} />} helpText={ts("effects.help")}>
+	const content = (
+		<>
 			<div className={styles.paneRow}>
 				<span className="label">{ts("effects.blurBg")}</span>
 				<Toggle
@@ -1455,6 +1461,28 @@ export function VideoEffectsPane() {
 					onCommit={() => void commit()}
 				/>
 			</div>
+		</>
+	);
+	if (embedded) return content;
+	return (
+		<Pane title={ts("effects.title")} icon={<Sliders size={14} />} helpText={ts("effects.help")}>
+			{content}
+		</Pane>
+	);
+}
+
+export function VideoAppearancePane() {
+	const ts = useScopedT("settings");
+	return (
+		<Pane
+			title={ts("effects.title")}
+			icon={<Sliders size={14} />}
+			helpText={`${ts("background.help")} ${ts("effects.help")}`}
+		>
+			<div className={styles.sectionLabel}>{ts("background.title")}</div>
+			<BackgroundPane embedded />
+			<div className={styles.sectionLabel}>{ts("effects.title")}</div>
+			<VideoEffectsPane embedded />
 		</Pane>
 	);
 }

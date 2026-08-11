@@ -5,6 +5,7 @@
 // free so it works in any renderer.
 
 import { useEffect, useRef } from "react";
+import type { AxcutDocument } from "../schema";
 import { useProjectStore } from "./projectStore";
 
 type Snapshot = { projectId: string; doc: unknown };
@@ -13,10 +14,7 @@ const MAX_HISTORY = 50;
 const past: Snapshot[] = [];
 const future: Snapshot[] = [];
 
-let enabled = true;
-
 export function pushHistory(snapshot: Snapshot) {
-	if (!enabled) return;
 	past.push(snapshot);
 	if (past.length > MAX_HISTORY) past.shift();
 	future.length = 0;
@@ -37,9 +35,11 @@ export function undo(): boolean {
 	}
 	const doc = state.document;
 	if (doc) future.push({ projectId: prev.projectId, doc: structuredClone(doc) });
-	enabled = false;
-	state.setDocument(prev.doc as never);
-	enabled = true;
+	useProjectStore.setState((current) => ({
+		document: structuredClone(prev.doc) as AxcutDocument,
+		revision: current.revision + 1,
+		dirty: true,
+	}));
 	return true;
 }
 
@@ -53,9 +53,11 @@ export function redo(): boolean {
 	}
 	const doc = state.document;
 	if (doc) past.push({ projectId: doc.project.id, doc: structuredClone(doc) });
-	enabled = false;
-	state.setDocument(next.doc as never);
-	enabled = true;
+	useProjectStore.setState((current) => ({
+		document: structuredClone(next.doc) as AxcutDocument,
+		revision: current.revision + 1,
+		dirty: true,
+	}));
 	return true;
 }
 
@@ -77,7 +79,7 @@ export function useUndoRedoShortcuts(onAfter: () => void) {
 				if (redo()) onAfterRef.current();
 				return;
 			}
-			if (ctrl && e.key === "z") {
+			if (ctrl && e.key.toLowerCase() === "z") {
 				e.preventDefault();
 				if (undo()) onAfterRef.current();
 				return;

@@ -29,8 +29,16 @@ describe("shortcut registry", () => {
 		expect(findConflict({ key: "b" }, "addZoom", DEFAULT_SHORTCUTS)).toBeNull();
 	});
 
+	it("only exposes zoom among the former region creation shortcuts", () => {
+		expect(SHORTCUT_ACTIONS).not.toContain("addAnnotation");
+		expect(SHORTCUT_ACTIONS).not.toContain("addSpeed");
+		expect(SHORTCUT_ACTIONS).not.toContain("addTrim");
+		expect(SHORTCUT_ACTIONS).not.toContain("addCameraFullscreen");
+		expect(SHORTCUT_ACTIONS).toContain("addZoom");
+	});
+
 	it("still reports a real collision", () => {
-		expect(findConflict({ key: "z" }, "addTrim", DEFAULT_SHORTCUTS)).toEqual({
+		expect(findConflict({ key: "z" }, "paste", DEFAULT_SHORTCUTS)).toEqual({
 			type: "configurable",
 			action: "addZoom",
 		});

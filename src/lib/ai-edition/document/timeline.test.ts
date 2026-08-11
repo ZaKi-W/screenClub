@@ -21,6 +21,7 @@ import {
 	resolvePlaybackSegments,
 	restoreFullTimeline,
 	setClipSourceRange,
+	splitClip,
 	subtractInterval,
 	timelineIntervals,
 } from "./timeline";
@@ -1321,6 +1322,108 @@ describe("removeRegion — the one shared region-delete mutator", () => {
 		});
 		const next = removeRegion(doc, "zoom", "nope");
 		expect(next.zoomRanges.map((z) => z.id)).toEqual(["z1"]);
+	});
+});
+
+describe("splitClip — non-destructive clip splitting", () => {
+	const doc = () =>
+		makeDoc({
+			timeline: {
+				...makeDoc().timeline,
+				clips: [
+					makeClip({
+						id: "clip_a",
+						sourceStartSec: 10,
+						sourceEndSec: 20,
+						timelineStartSec: 0,
+						timelineEndSec: 10,
+						cropRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+					}),
+				],
+				trimRanges: [makeTrim({ id: "trim_cross", clipId: "clip_a", startSec: 13, endSec: 17 })],
+			},
+			zoomRanges: [
+				makeZoom({
+					id: "zoom_cross",
+					clipId: "clip_a",
+					sourceStartSec: 12,
+					sourceEndSec: 18,
+					startMs: 2000,
+					endMs: 8000,
+				}),
+			],
+		});
+
+	it("creates adjacent source windows over the same asset", () => {
+		const next = splitClip(doc(), "clip_a", 4);
+		expect(next.timeline.clips).toHaveLength(2);
+		const [left, right] = next.timeline.clips;
+		expect(left).toMatchObject({
+			id: "clip_a",
+			assetId: "asset_1",
+			sourceStartSec: 10,
+			sourceEndSec: 14,
+			timelineStartSec: 0,
+			timelineEndSec: 4,
+			cropRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+		});
+		expect(right).toMatchObject({
+			assetId: "asset_1",
+			sourceStartSec: 14,
+			sourceEndSec: 20,
+			timelineStartSec: 4,
+			timelineEndSec: 10,
+			cropRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+		});
+		expect(right.id).not.toBe(left.id);
+	});
+
+	it("ventilates anchored trims and modifiers across the new boundary", () => {
+		const next = splitClip(doc(), "clip_a", 4);
+		const rightId = next.timeline.clips[1].id;
+		expect(next.zoomRanges).toHaveLength(2);
+		expect(next.zoomRanges).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: "zoom_cross",
+					clipId: "clip_a",
+					sourceStartSec: 12,
+					sourceEndSec: 14,
+					startMs: 2000,
+					endMs: 4000,
+				}),
+				expect.objectContaining({
+					clipId: rightId,
+					sourceStartSec: 14,
+					sourceEndSec: 18,
+					startMs: 4000,
+					endMs: 8000,
+				}),
+			]),
+		);
+		expect(next.timeline.trimRanges).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ clipId: "clip_a", startSec: 13, endSec: 14 }),
+				expect.objectContaining({ clipId: rightId, startSec: 14, endSec: 17 }),
+			]),
+		);
+	});
+
+	it("supports two cuts followed by ripple deletion", () => {
+		const once = splitClip(doc(), "clip_a", 3);
+		const rightId = once.timeline.clips[1].id;
+		const twice = splitClip(once, rightId, 7);
+		expect(twice.timeline.clips).toHaveLength(3);
+		const withoutMiddle = removeClip(twice, rightId);
+		expect(withoutMiddle.timeline.clips).toHaveLength(2);
+		expect(withoutMiddle.timeline.clips.map((clip) => clip.timelineStartSec)).toEqual([0, 3]);
+		expect(withoutMiddle.timeline.clips.map((clip) => clip.timelineEndSec)).toEqual([3, 6]);
+	});
+
+	it("does not create zero-length pieces at clip edges", () => {
+		const before = doc();
+		expect(splitClip(before, "clip_a", 0)).toBe(before);
+		expect(splitClip(before, "clip_a", 10)).toBe(before);
 	});
 });
 

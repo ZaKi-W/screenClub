@@ -69,6 +69,7 @@
 		"aspectRatio": "宽高比",
 		"original": "原始",
 		"timelineTools": "时间轴工具",
+		"splitClip": "分割片段",
 		"arrangeClips": "排列片段",
 		"arrangeClipsHint": "拖动下方片段以重新排序，或拖入新片段",
 		"newAnnotation": "标注",

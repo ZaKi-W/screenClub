@@ -69,6 +69,7 @@
 		"aspectRatio": "Aspect ratio",
 		"original": "Original",
 		"timelineTools": "Timeline tools",
+		"splitClip": "Split clip",
 		"arrangeClips": "Arrange clips",
 		"arrangeClipsHint": "Drag clips below to reorder or drop new ones in",
 		"newAnnotation": "Annotation",
