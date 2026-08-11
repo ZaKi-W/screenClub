@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Masquer le HUD",
+		"expandRecordingControls": "Développer les commandes d’enregistrement",
 		"closeApp": "Fermer l'application",
 		"restartRecording": "Redémarrer l'enregistrement",
 		"cancelRecording": "Annuler l'enregistrement",
@@ -93,6 +94,7 @@
 		"micHint": "Parlez pour tester votre microphone",
 		"noMicrophones": "Aucun microphone détecté",
 		"preview": "Aperçu",
-		"previewUnavailable": "Aperçu indisponible"
+		"previewUnavailable": "Aperçu indisponible",
+		"autoCollapseControls": "Réduire automatiquement les commandes pendant l’enregistrement"
 	}
 }

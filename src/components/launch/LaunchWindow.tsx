@@ -10,6 +10,7 @@ import { useScreenRecorder } from "../../hooks/useScreenRecorder";
 import { requestCameraAccess } from "../../lib/requestCameraAccess";
 import {
 	HudCameraButton,
+	HudCollapsedRecordingButton,
 	HudCursorButton,
 	HudDivider,
 	HudDragHandle,
@@ -62,6 +63,7 @@ function getAvailableScreenHeight(): number {
 /** Launches the floating recording HUD and its recorder controls. */
 export function LaunchWindow() {
 	const t = useScopedT("launch");
+	const commonT = useScopedT("common");
 	const {
 		locale,
 		setLocale,
@@ -116,6 +118,7 @@ export function LaunchWindow() {
 	const [trayLayout, setTrayLayout] = useState<"horizontal" | "vertical">(
 		() => loadUserPreferences().trayLayout,
 	);
+	const [isRecordingHudCollapsed, setIsRecordingHudCollapsed] = useState(false);
 	const [supportsCursorModeToggle, setSupportsCursorModeToggle] = useState(false);
 	const [isLinuxHud, setIsLinuxHud] = useState(false);
 	/**
@@ -229,6 +232,15 @@ export function LaunchWindow() {
 		setIsDeviceSettingsOpen(false);
 		setIsLanguageMenuOpen(false);
 	}, []);
+
+	useEffect(() => {
+		if (recording) {
+			closePopovers();
+			setIsRecordingHudCollapsed(true);
+		} else {
+			setIsRecordingHudCollapsed(false);
+		}
+	}, [closePopovers, recording]);
 
 	useEffect(() => {
 		if (!isPopoverOpen) return;
@@ -802,166 +814,190 @@ export function LaunchWindow() {
 					ref={setHudBarEl}
 					data-hud-interactive="true"
 					data-tray-layout={trayLayout}
-					className={`${styles.hudBar} ${isVertical ? styles.hudBarVertical : styles.hudBarHorizontal}`}
+					data-hud-collapsed={isRecordingHudCollapsed}
+					className={`${styles.hudBar} ${
+						isRecordingHudCollapsed
+							? styles.hudBarCollapsed
+							: isVertical
+								? styles.hudBarVertical
+								: styles.hudBarHorizontal
+					}`}
 					onPointerEnter={enableHudMouseEvents}
 					onPointerDown={enableHudMouseEvents}
 					onMouseEnter={enableHudMouseEvents}
 					onMouseLeave={handlePointerLeave}
 				>
-					<HudDragHandle
-						vertical={isVertical}
-						nativeDrag={isLinuxHud}
-						onPointerDown={handleHudDragPointerDown}
-						onPointerMove={handleHudDragPointerMove}
-						onPointerEnd={handleHudDragPointerEnd}
-					/>
+					{isRecordingHudCollapsed ? (
+						<HudCollapsedRecordingButton
+							saving={saving}
+							label={commonT("actions.stopRecording")}
+							onStop={handleRecordClick}
+						/>
+					) : (
+						<>
+							<HudDragHandle
+								vertical={isVertical}
+								nativeDrag={isLinuxHud}
+								onPointerDown={handleHudDragPointerDown}
+								onPointerMove={handleHudDragPointerMove}
+								onPointerEnd={handleHudDragPointerEnd}
+							/>
 
-					<HudDivider vertical={isVertical} />
+							<HudDivider vertical={isVertical} />
 
-					<HudTrayLayoutButton
-						vertical={isVertical}
-						label={isVertical ? t("tooltips.useHorizontalTray") : t("tooltips.useVerticalTray")}
-						onClick={toggleTrayLayout}
-					/>
+							<HudTrayLayoutButton
+								vertical={isVertical}
+								label={isVertical ? t("tooltips.useHorizontalTray") : t("tooltips.useVerticalTray")}
+								onClick={toggleTrayLayout}
+							/>
 
-					{/* No source button on Linux: `SelectSources` has no parameter
+							{/* No source button on Linux: `SelectSources` has no parameter
 					    naming a source, so nothing this picker returned could reach
 					    the capture. It raised a second portal dialog of its own —
 					    via `desktopCapturer.getSources()` — whose grant was then
 					    discarded, which is why picking a window here changed
 					    nothing. The compositor's picker is the only one that
 					    decides, and it appears when recording starts. */}
-					{!portalOwnsSource && (
-						<HudSourceButton
-							vertical={isVertical}
-							label={selectedSource}
-							disabled={controlsLocked}
-							onClick={openSourceSelector}
-						/>
-					)}
+							{!portalOwnsSource && (
+								<HudSourceButton
+									vertical={isVertical}
+									label={selectedSource}
+									disabled={controlsLocked}
+									onClick={openSourceSelector}
+								/>
+							)}
 
-					<HudDivider vertical={isVertical} />
+							<HudDivider vertical={isVertical} />
 
-					{/* System audio / mic / camera / cursor — each its own standalone
+							{/* System audio / mic / camera / cursor — each its own standalone
 					    transparent icon button (no shared group pill), matching the
 					    design exactly: rest color is muted gray, active/enabled color
 					    is the accent green. */}
-					<HudSystemAudioButton
-						enabled={systemAudioEnabled}
-						disabled={controlsLocked}
-						label={
-							systemAudioEnabled ? t("audio.disableSystemAudio") : t("audio.enableSystemAudio")
-						}
-						onClick={toggleSystemAudio}
-					/>
-					{/* The gear configures the two toggles beside it, so the three sit
+							<HudSystemAudioButton
+								enabled={systemAudioEnabled}
+								disabled={controlsLocked}
+								label={
+									systemAudioEnabled ? t("audio.disableSystemAudio") : t("audio.enableSystemAudio")
+								}
+								onClick={toggleSystemAudio}
+							/>
+							{/* The gear configures the two toggles beside it, so the three sit
 					    closer together than the bar's normal control spacing — proximity
 					    is the design's own grouping device, no extra furniture needed. */}
-					<div
-						className={`${styles.hudControlGroup} ${isVertical ? styles.hudControlGroupVertical : ""}`}
-					>
-						<HudMicButton
-							enabled={microphoneEnabled}
-							disabled={controlsLocked}
-							label={microphoneEnabled ? t("audio.disableMicrophone") : t("audio.enableMicrophone")}
-							onClick={toggleMicrophone}
-						/>
-						<HudCameraButton
-							enabled={webcamEnabled}
-							disabled={controlsLocked}
-							label={webcamEnabled ? t("webcam.disableWebcam") : t("webcam.enableWebcam")}
-							onClick={toggleWebcam}
-						/>
-						<HudSettingsButton
-							buttonRef={settingsTriggerRef}
-							disabled={controlsLocked}
-							expanded={isDeviceSettingsOpen}
-							label={t("deviceSettings.title")}
-							onClick={toggleDeviceSettings}
-						/>
-					</div>
-					{supportsCursorModeToggle && (
-						<HudCursorButton
-							editableOverlay={cursorCaptureMode === "editable-overlay"}
-							disabled={controlsLocked}
-							label={
-								cursorCaptureMode === "editable-overlay"
-									? t("cursor.useSystemCursor")
-									: t("cursor.useEditableCursor")
-							}
-							onClick={toggleCursorMode}
-						/>
+							<div
+								className={`${styles.hudControlGroup} ${isVertical ? styles.hudControlGroupVertical : ""}`}
+							>
+								<HudMicButton
+									enabled={microphoneEnabled}
+									disabled={controlsLocked}
+									label={
+										microphoneEnabled ? t("audio.disableMicrophone") : t("audio.enableMicrophone")
+									}
+									onClick={toggleMicrophone}
+								/>
+								<HudCameraButton
+									enabled={webcamEnabled}
+									disabled={controlsLocked}
+									label={webcamEnabled ? t("webcam.disableWebcam") : t("webcam.enableWebcam")}
+									onClick={toggleWebcam}
+								/>
+								<HudSettingsButton
+									buttonRef={settingsTriggerRef}
+									disabled={controlsLocked}
+									expanded={isDeviceSettingsOpen}
+									label={t("deviceSettings.title")}
+									onClick={toggleDeviceSettings}
+								/>
+							</div>
+							{supportsCursorModeToggle && (
+								<HudCursorButton
+									editableOverlay={cursorCaptureMode === "editable-overlay"}
+									disabled={controlsLocked}
+									label={
+										cursorCaptureMode === "editable-overlay"
+											? t("cursor.useSystemCursor")
+											: t("cursor.useEditableCursor")
+									}
+									onClick={toggleCursorMode}
+								/>
+							)}
+
+							<HudDivider vertical={isVertical} />
+
+							<HudRecordButton
+								recording={recording}
+								paused={paused}
+								saving={saving}
+								elapsedSeconds={elapsedSeconds}
+								label={recordLabel}
+								savingLabel={t("recording.saving")}
+								onClick={handleRecordClick}
+							/>
+
+							{!recording && (
+								<HudStudioButton
+									disabled={saving}
+									label={t("tooltips.openStudio")}
+									onClick={openStudio}
+								/>
+							)}
+
+							{recording && (
+								<HudRecordingControls
+									vertical={isVertical}
+									paused={paused}
+									saving={saving}
+									canPause={canPauseRecording}
+									pauseLabel={paused ? t("tooltips.resumeRecording") : t("tooltips.pauseRecording")}
+									restartLabel={t("tooltips.restartRecording")}
+									cancelLabel={t("tooltips.cancelRecording")}
+									onTogglePause={togglePaused}
+									onRestart={restartRecording}
+									onCancel={cancelRecording}
+								/>
+							)}
+
+							{!isLinuxHud && (
+								<HudNotesButton
+									disabled={saving}
+									label={t("tooltips.openNotes")}
+									onClick={openNotes}
+								/>
+							)}
+
+							<HudDivider vertical={isVertical} />
+
+							{/* Right sidebar controls */}
+							<div
+								className={`flex items-center gap-[5px] ${isVertical ? "flex-col" : ""} ${styles.electronNoDrag}`}
+							>
+								<HudLanguageButton
+									buttonRef={languageTriggerRef}
+									vertical={isVertical}
+									code={languageCode}
+									label={activeLanguageLabel}
+									disabled={saving}
+									expanded={isLanguageMenuOpen}
+									onClick={toggleLanguageMenu}
+								/>
+
+								<HudDivider vertical={isVertical} />
+
+								<HudWindowControls
+									vertical={isVertical}
+									disabled={saving}
+									closeDisabled={recording || saving}
+									hideLabel={t("tooltips.hideHUD")}
+									closeLabel={t("tooltips.closeApp")}
+									onHide={sendHudOverlayHide}
+									onClose={sendHudOverlayClose}
+								/>
+							</div>
+						</>
 					)}
-
-					<HudDivider vertical={isVertical} />
-
-					<HudRecordButton
-						recording={recording}
-						paused={paused}
-						saving={saving}
-						elapsedSeconds={elapsedSeconds}
-						label={recordLabel}
-						savingLabel={t("recording.saving")}
-						onClick={handleRecordClick}
-					/>
-
-					{!recording && (
-						<HudStudioButton
-							disabled={saving}
-							label={t("tooltips.openStudio")}
-							onClick={openStudio}
-						/>
-					)}
-
-					{recording && (
-						<HudRecordingControls
-							vertical={isVertical}
-							paused={paused}
-							saving={saving}
-							canPause={canPauseRecording}
-							pauseLabel={paused ? t("tooltips.resumeRecording") : t("tooltips.pauseRecording")}
-							restartLabel={t("tooltips.restartRecording")}
-							cancelLabel={t("tooltips.cancelRecording")}
-							onTogglePause={togglePaused}
-							onRestart={restartRecording}
-							onCancel={cancelRecording}
-						/>
-					)}
-
-					{!isLinuxHud && (
-						<HudNotesButton disabled={saving} label={t("tooltips.openNotes")} onClick={openNotes} />
-					)}
-
-					<HudDivider vertical={isVertical} />
-
-					{/* Right sidebar controls */}
-					<div
-						className={`flex items-center gap-[5px] ${isVertical ? "flex-col" : ""} ${styles.electronNoDrag}`}
-					>
-						<HudLanguageButton
-							buttonRef={languageTriggerRef}
-							vertical={isVertical}
-							code={languageCode}
-							label={activeLanguageLabel}
-							disabled={saving}
-							expanded={isLanguageMenuOpen}
-							onClick={toggleLanguageMenu}
-						/>
-
-						<HudDivider vertical={isVertical} />
-
-						<HudWindowControls
-							vertical={isVertical}
-							disabled={saving}
-							hideLabel={t("tooltips.hideHUD")}
-							closeLabel={t("tooltips.closeApp")}
-							onHide={sendHudOverlayHide}
-							onClose={sendHudOverlayClose}
-						/>
-					</div>
 				</div>
 
-				{(isPopoverOpen || hasNotices) && (
+				{!recording && (isPopoverOpen || hasNotices) && (
 					// column-reverse: first child sits closest to the bar.
 					<div className={styles.hudAbove}>
 						{isDeviceSettingsOpen && (

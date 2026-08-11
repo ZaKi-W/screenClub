@@ -17,6 +17,7 @@ struct RecordingRequest: Decodable {
 		let sourceId: String
 		let displayId: UInt32?
 		let windowId: UInt32?
+		let excludedWindowIds: [UInt32]?
 		let bounds: Rectangle?
 	}
 
@@ -161,7 +162,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 		let content = try await SCShareableContent.excludingDesktopWindows(
 			false,
-			onScreenWindowsOnly: true
+			onScreenWindowsOnly: false
 		)
 		let target = try makeCaptureTarget(from: content)
 		outputWidth = target.width
@@ -369,8 +370,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			}
 			let width = Int(CGDisplayPixelsWide(display.displayID))
 			let height = Int(CGDisplayPixelsHigh(display.displayID))
+			let excludedWindowIds = Set(request.source.excludedWindowIds ?? [])
+			let excludedWindows = content.windows.filter { excludedWindowIds.contains($0.windowID) }
 			return CaptureTarget(
-				filter: SCContentFilter(display: display, excludingWindows: []),
+				filter: SCContentFilter(display: display, excludingWindows: excludedWindows),
 				width: clampCaptureDimension(width, fallback: request.video.width),
 				height: clampCaptureDimension(height, fallback: request.video.height),
 				captureFrame: display.frame

@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Скрыть HUD",
+		"expandRecordingControls": "Развернуть элементы управления записью",
 		"closeApp": "Закрыть приложение",
 		"restartRecording": "Перезапустить запись",
 		"cancelRecording": "Отменить запись",
@@ -93,6 +94,7 @@
 		"micHint": "Скажите что-нибудь, чтобы проверить микрофон",
 		"noMicrophones": "Микрофон не найден",
 		"preview": "Предпросмотр",
-		"previewUnavailable": "Предпросмотр недоступен"
+		"previewUnavailable": "Предпросмотр недоступен",
+		"autoCollapseControls": "Автоматически сворачивать элементы управления во время записи"
 	}
 }

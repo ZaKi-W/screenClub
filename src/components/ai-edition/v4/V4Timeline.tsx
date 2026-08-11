@@ -54,6 +54,7 @@ import {
 	type AutoZoomSuggestion,
 	buildAutoZoomSuggestionsForClips,
 } from "@/lib/ai-edition/timeline/zoom-suggestions";
+import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { nativeBridgeClient } from "@/native/client";
 import { ASPECT_RATIO_PRESETS, getAspectRatioLabel } from "@/utils/aspectRatioUtils";
 import { TransportBar } from "../TransportBar";
@@ -1297,24 +1298,30 @@ export function V4Timeline({
 											</span>
 										</span>
 									</button>
-									<button
-										type="button"
-										className={styles.recMenuRow}
-										onClick={runAiEnhance}
-										disabled={smartCutsBlocked}
-										title={transcriptGate.reason === "failed" ? transcriptGate.message : undefined}
-										style={smartCutsBlocked ? { opacity: 0.55, cursor: "not-allowed" } : undefined}
-									>
-										{transcriptGate.state === "pending" ? (
-											<Loader2 size={15} className="animate-spin" style={{ flexShrink: 0 }} />
-										) : (
-											<Sparkles size={15} style={{ flexShrink: 0 }} />
-										)}
-										<span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-											<span style={{ fontWeight: 600 }}>{t("toolbar.smartZoomsAndCuts")}</span>
-											<span style={{ fontSize: 11, color: "var(--muted)" }}>{smartCutsHint}</span>
-										</span>
-									</button>
+									{TRANSCRIPTION_FEATURE_ENABLED ? (
+										<button
+											type="button"
+											className={styles.recMenuRow}
+											onClick={runAiEnhance}
+											disabled={smartCutsBlocked}
+											title={
+												transcriptGate.reason === "failed" ? transcriptGate.message : undefined
+											}
+											style={
+												smartCutsBlocked ? { opacity: 0.55, cursor: "not-allowed" } : undefined
+											}
+										>
+											{transcriptGate.state === "pending" ? (
+												<Loader2 size={15} className="animate-spin" style={{ flexShrink: 0 }} />
+											) : (
+												<Sparkles size={15} style={{ flexShrink: 0 }} />
+											)}
+											<span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+												<span style={{ fontWeight: 600 }}>{t("toolbar.smartZoomsAndCuts")}</span>
+												<span style={{ fontSize: 11, color: "var(--muted)" }}>{smartCutsHint}</span>
+											</span>
+										</button>
+									) : null}
 								</div>
 							</PopoverContent>
 						</Popover>

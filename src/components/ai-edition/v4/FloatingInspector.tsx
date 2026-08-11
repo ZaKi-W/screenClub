@@ -39,6 +39,7 @@ import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
 import { formatSeconds } from "@/lib/ai-edition/timeline/format";
 import { coalescedTrimGroups } from "@/lib/ai-edition/timeline/trim-mapping";
+import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { CaptionsPane } from "../CaptionsPane";
 import { ColorField } from "../ColorField";
 import {
@@ -61,8 +62,12 @@ const FACETS: Array<{ id: Facet; labelKey: string; icon: typeof ImageIcon }> = [
 	{ id: "effects", labelKey: "effects.title", icon: SlidersHorizontal },
 	{ id: "layout", labelKey: "layout.title", icon: LayoutIcon },
 	{ id: "cursor", labelKey: "cursor.title", icon: MousePointer2 },
-	{ id: "captions", labelKey: "facets.captions", icon: CaptionsIcon },
-	{ id: "transcript", labelKey: "facets.transcript", icon: FileText },
+	...(TRANSCRIPTION_FEATURE_ENABLED
+		? [
+				{ id: "captions" as const, labelKey: "facets.captions", icon: CaptionsIcon },
+				{ id: "transcript" as const, labelKey: "facets.transcript", icon: FileText },
+			]
+		: []),
 ];
 
 type TranscriptProps = ComponentProps<typeof TranscriptPane>;
@@ -101,6 +106,10 @@ export function FloatingInspector({
 	const [clipPickerOpen, setClipPickerOpen] = useState(false);
 	const selection = tl.selection;
 	const effectiveOpen = open || selection !== null;
+	const visibleFacet =
+		!TRANSCRIPTION_FEATURE_ENABLED && (facet === "captions" || facet === "transcript")
+			? "effects"
+			: facet;
 	return (
 		<div className={styles.inspectorWrap}>
 			{effectiveOpen ? (
@@ -108,7 +117,11 @@ export function FloatingInspector({
 					{selection ? (
 						<SelectionPane tl={tl} onClose={() => tl.clearSelection()} />
 					) : (
-						<FacetBody facet={facet} onCollapse={onToggleOpen} transcriptProps={transcriptProps} />
+						<FacetBody
+							facet={visibleFacet}
+							onCollapse={onToggleOpen}
+							transcriptProps={transcriptProps}
+						/>
 					)}
 				</div>
 			) : null}
@@ -119,7 +132,7 @@ export function FloatingInspector({
 						type="button"
 						title={ts(labelKey)}
 						aria-label={ts(labelKey)}
-						aria-pressed={!selection && open && facet === id}
+						aria-pressed={!selection && open && visibleFacet === id}
 						onClick={() => {
 							// Switching facets while an element is selected should show
 							// the facet, not leave the selection pane on top of it.

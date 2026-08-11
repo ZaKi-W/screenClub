@@ -7,9 +7,12 @@
 
 import { ArrowRight, Info, Sparkles } from "lucide-react";
 import { useScopedT } from "@/contexts/I18nContext";
+import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import styles from "./NewEditorShell.module.css";
 
-const FEATURE_KEYS = ["feature1", "feature2", "feature3"] as const;
+const FEATURE_KEYS = TRANSCRIPTION_FEATURE_ENABLED
+	? (["feature1", "feature2", "feature3"] as const)
+	: (["feature3"] as const);
 
 interface ChatWelcomeProps {
 	/** Open the provider settings modal so the user can pick + connect one. */
@@ -38,10 +41,12 @@ export function ChatWelcome({ onOpenProviderSettings }: ChatWelcomeProps) {
 				<ArrowRight size={14} />
 			</button>
 
-			<p className={styles.chatWelcomeDisclaimer}>
-				<Info size={12} className={styles.chatWelcomeDisclaimerIcon} aria-hidden="true" />
-				<span>{t("chat.welcome.disclaimer")}</span>
-			</p>
+			{TRANSCRIPTION_FEATURE_ENABLED ? (
+				<p className={styles.chatWelcomeDisclaimer}>
+					<Info size={12} className={styles.chatWelcomeDisclaimerIcon} aria-hidden="true" />
+					<span>{t("chat.welcome.disclaimer")}</span>
+				</p>
+			) : null}
 		</div>
 	);
 }

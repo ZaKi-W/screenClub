@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "إخفاء واجهة العرض",
+		"expandRecordingControls": "توسيع عناصر التحكم في التسجيل",
 		"closeApp": "إغلاق التطبيق",
 		"restartRecording": "إعادة تشغيل التسجيل",
 		"cancelRecording": "إلغاء التسجيل",
@@ -93,6 +94,7 @@
 		"micHint": "تحدّث لاختبار الميكروفون",
 		"noMicrophones": "لم يتم العثور على ميكروفون",
 		"preview": "معاينة",
-		"previewUnavailable": "المعاينة غير متاحة"
+		"previewUnavailable": "المعاينة غير متاحة",
+		"autoCollapseControls": "طي عناصر التحكم تلقائيًا أثناء التسجيل"
 	}
 }

@@ -16,6 +16,7 @@
 		"window": "Window",
 		"quit": "Quit",
 		"stopRecording": "Stop Recording",
+		"showRecordingControls": "Show Recording Controls",
 		"undo": "Undo",
 		"redo": "Redo",
 		"cut": "Cut",

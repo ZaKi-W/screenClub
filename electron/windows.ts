@@ -46,12 +46,10 @@ const CONTENT_PROTECTION_FORCED = process.env["OPENSCREEN_FORCE_CONTENT_PROTECTI
  * older macOS — where it may well work — would be a privacy regression made on
  * no evidence.
  *
- * NOTE: this leaves the HUD capturable on macOS 26. Apple already made that
- * partly true regardless — ScreenCaptureKit ignores `sharingType`, so any
- * SCK-based recorder (including *ours*, see
- * `electron/native/screencapturekit/`) captures these windows anyway. The
- * durable fix is to exclude our own windows via `SCContentFilter`'s
- * `excludingWindows:`, which that helper currently passes as `[]`.
+ * NOTE: ScreenCaptureKit ignores `sharingType`, so native display capture must
+ * explicitly exclude our HUD and Notes windows. The OpenScreen helper does that
+ * with `SCContentFilter(display:excludingWindows:)`; other recording apps may
+ * still capture these windows on macOS 26.
  */
 const CONTENT_PROTECTION_BREAKS_DISPLAY = (() => {
 	if (process.platform !== "darwin") return false;

@@ -11,6 +11,7 @@ export type NativeMacRecordingRequest = {
 		sourceId: string;
 		displayId?: number;
 		windowId?: number;
+		excludedWindowIds?: number[];
 		bounds?: Rectangle;
 	};
 	video: {

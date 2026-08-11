@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Hide HUD",
+		"expandRecordingControls": "Expand recording controls",
 		"closeApp": "Close App",
 		"restartRecording": "Restart recording",
 		"cancelRecording": "Cancel recording",
@@ -93,6 +94,7 @@
 		"micHint": "Speak to check your microphone",
 		"noMicrophones": "No microphone found",
 		"preview": "Preview",
-		"previewUnavailable": "Preview unavailable"
+		"previewUnavailable": "Preview unavailable",
+		"autoCollapseControls": "Automatically collapse controls while recording"
 	}
 }

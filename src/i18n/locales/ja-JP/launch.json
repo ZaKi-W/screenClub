@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "HUDを隠す",
+		"expandRecordingControls": "録画コントロールを展開",
 		"closeApp": "アプリを閉じる",
 		"restartRecording": "録画を再開",
 		"cancelRecording": "録画をキャンセル",
@@ -93,6 +94,7 @@
 		"micHint": "マイクをテストするには話してください",
 		"noMicrophones": "マイクが見つかりません",
 		"preview": "プレビュー",
-		"previewUnavailable": "プレビューを利用できません"
+		"previewUnavailable": "プレビューを利用できません",
+		"autoCollapseControls": "録画中にコントロールを自動的に折りたたむ"
 	}
 }
