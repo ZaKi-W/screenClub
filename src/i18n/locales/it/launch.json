@@ -87,6 +87,13 @@
 		"dismiss": "Ho capito",
 		"dontShowAgain": "Non mostrare più"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Conto alla rovescia",
+		"threeSeconds": "3 secondi",
+		"fiveSeconds": "5 secondi",
+		"tenSeconds": "10 secondi",
+		"advanced": "Avanzate"
+	},
 	"deviceSettings": {
 		"title": "Impostazioni dispositivi",
 		"done": "Fatto",

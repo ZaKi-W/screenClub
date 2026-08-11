@@ -1,4 +1,5 @@
 import type { Rectangle } from "electron";
+import type { CaptureAreaRect } from "./captureArea";
 import type { CursorCaptureMode } from "./recordingSession";
 
 export type NativeMacSourceType = "display" | "window";
@@ -13,6 +14,7 @@ export type NativeMacRecordingRequest = {
 		windowId?: number;
 		excludedWindowIds?: number[];
 		bounds?: Rectangle;
+		cropRect?: CaptureAreaRect;
 	};
 	video: {
 		fps: number;

@@ -87,6 +87,13 @@
 		"dismiss": "Compris",
 		"dontShowAgain": "Ne plus afficher"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Compte à rebours",
+		"threeSeconds": "3 secondes",
+		"fiveSeconds": "5 secondes",
+		"tenSeconds": "10 secondes",
+		"advanced": "Avancé"
+	},
 	"deviceSettings": {
 		"title": "Paramètres des périphériques",
 		"done": "Terminé",

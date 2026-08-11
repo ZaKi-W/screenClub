@@ -87,6 +87,13 @@
 		"dismiss": "Entendido",
 		"dontShowAgain": "No volver a mostrar"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Cuenta atrás de grabación",
+		"threeSeconds": "3 segundos",
+		"fiveSeconds": "5 segundos",
+		"tenSeconds": "10 segundos",
+		"advanced": "Avanzado"
+	},
 	"deviceSettings": {
 		"title": "Ajustes de dispositivos",
 		"done": "Listo",

@@ -87,6 +87,13 @@
 		"dismiss": "Đã hiểu",
 		"dontShowAgain": "Không hiển thị lại"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Đếm ngược ghi hình",
+		"threeSeconds": "3 giây",
+		"fiveSeconds": "5 giây",
+		"tenSeconds": "10 giây",
+		"advanced": "Nâng cao"
+	},
 	"deviceSettings": {
 		"title": "Cài đặt thiết bị",
 		"done": "Xong",

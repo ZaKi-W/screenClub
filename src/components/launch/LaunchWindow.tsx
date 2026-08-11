@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
 import { loadUserPreferences, saveUserPreferences } from "@/lib/userPreferences";
@@ -9,33 +9,20 @@ import { usePortalOwnsSource } from "../../hooks/usePortalOwnsSource";
 import { useScreenRecorder } from "../../hooks/useScreenRecorder";
 import { requestCameraAccess } from "../../lib/requestCameraAccess";
 import {
-	HudCameraButton,
+	HudCaptureModeButton,
 	HudCollapsedRecordingButton,
-	HudCursorButton,
+	HudDismissButton,
 	HudDivider,
-	HudDragHandle,
-	HudLanguageButton,
-	HudLanguageMenu,
-	HudMicButton,
-	HudNotesButton,
 	HudNotice,
-	HudRecordButton,
-	HudRecordingControls,
 	HudSettingsButton,
-	HudSourceButton,
-	HudStudioButton,
-	HudSystemAudioButton,
-	HudTrayLayoutButton,
-	HudWindowControls,
+	HudStatusToggleButton,
 } from "./HudControls";
-import { HudDeviceSettings, type HudDeviceSettingsLabels } from "./HudDeviceSettings";
 import {
 	computeHudBarMaxHeight,
-	computeHudModalMaxHeight,
-	computeHudPopoverMaxHeight,
-	computeHudWindowSize,
 	HUD_BAR_BOTTOM,
-	HUD_GROWTH_RESERVE,
+	HUD_COLLAPSED_WINDOW_HEIGHT,
+	HUD_COLLAPSED_WINDOW_WIDTH,
+	HUD_COMPACT_EDGE_SLACK,
 	HUD_POPOVER_GAP,
 	HUD_STACK_GAP,
 } from "./hudGeometry";
@@ -73,11 +60,6 @@ export function LaunchWindow() {
 		resolveSystemLocaleSuggestion,
 	} = useI18n();
 	const suggestedLanguageName = systemLocaleSuggestion ? getLocaleName(systemLocaleSuggestion) : "";
-	const activeLanguageLabel = getLocaleName(locale).split(/\s+/)[0] || locale.toUpperCase();
-	// Short mono-font code shown on the button itself (matches the design's
-	// "EN"/"FR" treatment) — activeLanguageLabel (the full localized name)
-	// stays as the tooltip/aria-label text.
-	const languageCode = locale.split("-")[0].toUpperCase();
 
 	const {
 		recording,
@@ -103,24 +85,23 @@ export function LaunchWindow() {
 		setWebcamDeviceName,
 		cursorCaptureMode,
 		setCursorCaptureMode,
+		captureArea,
+		setCaptureArea,
 		softwareEncoderFallbackNoticeVisible,
 		dismissSoftwareEncoderFallbackNotice,
 	} = useScreenRecorder();
 
-	// Choosing a device and switching one on are deliberately separate concerns.
-	// The mic and camera buttons are plain on/off toggles that use whatever device
-	// is currently selected (the system default until the user says otherwise);
-	// picking a different device — and checking it actually works — happens in the
-	// settings panel. Overloading one button with both jobs is what made turning a
-	// camera on take two clicks.
-	const [isDeviceSettingsOpen, setIsDeviceSettingsOpen] = useState(false);
-	const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
+	const [pendingNativeInputMenu, setPendingNativeInputMenu] = useState<
+		"camera" | "microphone" | "system-audio" | null
+	>(null);
+	const [isNativeSettingsMenuOpen, setIsNativeSettingsMenuOpen] = useState(false);
 	const [trayLayout, setTrayLayout] = useState<"horizontal" | "vertical">(
 		() => loadUserPreferences().trayLayout,
 	);
 	const [isRecordingHudCollapsed, setIsRecordingHudCollapsed] = useState(false);
 	const [supportsCursorModeToggle, setSupportsCursorModeToggle] = useState(false);
 	const [isLinuxHud, setIsLinuxHud] = useState(false);
+	const [isMacHud, setIsMacHud] = useState(false);
 	/**
 	 * Narrower than [`isLinuxHud`] on purpose: without the helper the recorder
 	 * falls back to Chromium's capture, which DOES take a source id, so the
@@ -129,14 +110,10 @@ export function LaunchWindow() {
 	const portalOwnsSource = usePortalOwnsSource();
 
 	const isVertical = trayLayout === "vertical";
-	const isPopoverOpen = isLanguageMenuOpen || isDeviceSettingsOpen;
 	const controlsLocked = recording || saving;
 
-	const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
-	const languageTriggerRef = useRef<HTMLButtonElement | null>(null);
 	const hudAnchorRef = useRef<HTMLDivElement | null>(null);
 	const hudBarRef = useRef<HTMLDivElement | null>(null);
-	const popoverRef = useRef<HTMLDivElement | null>(null);
 	const hudNoticesRef = useRef<HTMLDivElement | null>(null);
 
 	// The camera list is enumerated from mount rather than on first open. It costs
@@ -149,7 +126,6 @@ export function LaunchWindow() {
 		selectedDeviceId: selectedCameraId,
 		setSelectedDeviceId: setSelectedCameraId,
 		isLoading: isCameraDevicesLoading,
-		error: cameraDevicesError,
 	} = useCameraDevices(true);
 	// The microphone list stays lazy: enumerating it asks for mic permission,
 	// which would light the OS "in use" indicator just for opening the HUD.
@@ -157,7 +133,8 @@ export function LaunchWindow() {
 		devices: micDevices,
 		selectedDeviceId: selectedMicId,
 		setSelectedDeviceId: setSelectedMicId,
-	} = useMicrophoneDevices(microphoneEnabled || isDeviceSettingsOpen);
+		isLoading: isMicDevicesLoading,
+	} = useMicrophoneDevices(microphoneEnabled || pendingNativeInputMenu === "microphone");
 
 	useEffect(() => {
 		if (selectedMicId && selectedMicId !== "default") {
@@ -202,12 +179,14 @@ export function LaunchWindow() {
 						platform === "win32" || platform === "darwin" || platform === "linux",
 					);
 					setIsLinuxHud(platform === "linux");
+					setIsMacHud(platform === "darwin");
 				}
 			})
 			.catch(() => {
 				if (!cancelled) {
 					setSupportsCursorModeToggle(false);
 					setIsLinuxHud(false);
+					setIsMacHud(false);
 				}
 			});
 
@@ -229,8 +208,8 @@ export function LaunchWindow() {
 	// One dismiss handler for both floating surfaces — they're mutually exclusive,
 	// so a single pointerdown/Escape listener covers the pair instead of two.
 	const closePopovers = useCallback(() => {
-		setIsDeviceSettingsOpen(false);
-		setIsLanguageMenuOpen(false);
+		setPendingNativeInputMenu(null);
+		setIsNativeSettingsMenuOpen(false);
 	}, []);
 
 	useEffect(() => {
@@ -241,34 +220,6 @@ export function LaunchWindow() {
 			setIsRecordingHudCollapsed(false);
 		}
 	}, [closePopovers, recording]);
-
-	useEffect(() => {
-		if (!isPopoverOpen) return;
-
-		const handlePointerDown = (event: PointerEvent) => {
-			const target = event.target as Node;
-			const insideTrigger =
-				settingsTriggerRef.current?.contains(target) ||
-				languageTriggerRef.current?.contains(target);
-			if (!insideTrigger && !popoverRef.current?.contains(target)) {
-				closePopovers();
-			}
-		};
-
-		const handleEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				closePopovers();
-			}
-		};
-
-		window.addEventListener("pointerdown", handlePointerDown);
-		window.addEventListener("keydown", handleEscape);
-
-		return () => {
-			window.removeEventListener("pointerdown", handlePointerDown);
-			window.removeEventListener("keydown", handleEscape);
-		};
-	}, [closePopovers, isPopoverOpen]);
 
 	// ---------------------------------------------------------------------------
 	// Overlay window sizing
@@ -304,67 +255,47 @@ export function LaunchWindow() {
 	const measureHudSize = useCallback(() => {
 		const barEl = hudBarRef.current;
 		if (!barEl || !window.electronAPI?.setHudOverlaySize) return;
-		// While the user is dragging, a resize would re-anchor the window from its
-		// own bounds and fight the position the drag is applying frame by frame.
-		// Content is re-measured once the drag ends instead.
 		if (isDraggingHudRef.current) return;
+		if (isRecordingHudCollapsed) {
+			const allocated = hudAllocatedSizeRef.current;
+			if (
+				allocated.width === HUD_COLLAPSED_WINDOW_WIDTH &&
+				allocated.height === HUD_COLLAPSED_WINDOW_HEIGHT
+			) {
+				return;
+			}
+			allocated.width = HUD_COLLAPSED_WINDOW_WIDTH;
+			allocated.height = HUD_COLLAPSED_WINDOW_HEIGHT;
+			allocated.orientation = trayLayout;
+			window.electronAPI.setHudOverlaySize(HUD_COLLAPSED_WINDOW_WIDTH, HUD_COLLAPSED_WINDOW_HEIGHT);
+			return;
+		}
 
-		const availableHeight = getAvailableScreenHeight();
 		const barRect = barEl.getBoundingClientRect();
 		const barWidth = barRect.width || barEl.scrollWidth;
 		const barHeight = barRect.height || barEl.scrollHeight;
+		if (barWidth <= 0 || barHeight <= 0) return;
 		const noticeEl = hudNoticesRef.current;
 		const noticeHeight = noticeEl
 			? noticeEl.getBoundingClientRect().height || noticeEl.scrollHeight
 			: 0;
 
-		// The two floating surfaces get their own CSS caps (a 470px-tall language
-		// list would look absurd), but the *window* always reserves room for the
-		// taller of them. Sizing the reserve to whichever happens to be open would
-		// mean the window grows when the panel opens — and since the stack is
-		// bottom-anchored, growing upward moves every bit of content down in window
-		// coordinates, which the renderer repaints a frame or two after the native
-		// resize lands. That gap is visible as exactly the position judder this
-		// whole architecture exists to remove. So: reserve the maximum, always.
-		const popoverMaxHeight = computeHudPopoverMaxHeight(barHeight, availableHeight);
-		const modalMaxHeight = computeHudModalMaxHeight(barHeight, availableHeight);
-		const anchorEl = hudAnchorRef.current;
-		anchorEl?.style.setProperty("--hud-popover-max-h", `${popoverMaxHeight}px`);
-		anchorEl?.style.setProperty("--hud-modal-max-h", `${modalMaxHeight}px`);
-
-		const { required, granted } = computeHudWindowSize({
-			barWidth,
-			barHeight,
-			noticeHeight,
-			availableHeight,
-			stackMaxHeight: Math.max(popoverMaxHeight, modalMaxHeight),
-		});
-
+		const noticeRect = noticeEl?.getBoundingClientRect();
+		const noticeWidth = noticeEl ? noticeRect?.width || noticeEl.scrollWidth : 0;
+		const width =
+			Math.max(Math.ceil(barWidth), Math.ceil(noticeWidth)) + HUD_COMPACT_EDGE_SLACK * 2;
+		const height =
+			HUD_BAR_BOTTOM +
+			Math.ceil(barHeight) +
+			(noticeHeight > 0 ? HUD_POPOVER_GAP + Math.ceil(noticeHeight) : 0) +
+			HUD_COMPACT_EDGE_SLACK;
 		const allocated = hudAllocatedSizeRef.current;
-		// A different orientation is a different shape entirely (wide-short vs
-		// narrow-tall), so the previous allocation says nothing useful.
-		const orientationChanged = allocated.orientation !== trayLayout;
-		// Grow the moment the content stops fitting. Shrink only once the content
-		// has fallen a whole reserve below what was granted — that asymmetry is the
-		// hysteresis: the bar can grow into its reserve (recording controls, a
-		// longer source name) and back out again without a single native resize,
-		// while a one-off bad reading (an unstyled first paint in dev, say) can't
-		// leave the overlay permanently oversized.
-		const needsResize =
-			orientationChanged ||
-			required.width > allocated.width ||
-			required.height > allocated.height ||
-			granted.width + HUD_GROWTH_RESERVE < allocated.width ||
-			granted.height + HUD_GROWTH_RESERVE < allocated.height;
-		if (!needsResize) {
-			return;
-		}
-
+		if (allocated.width === width && allocated.height === height) return;
+		allocated.width = width;
+		allocated.height = height;
 		allocated.orientation = trayLayout;
-		allocated.width = granted.width;
-		allocated.height = granted.height;
-		window.electronAPI.setHudOverlaySize(granted.width, granted.height);
-	}, [trayLayout]);
+		window.electronAPI.setHudOverlaySize(width, height);
+	}, [isRecordingHudCollapsed, trayLayout]);
 
 	// One persistent observer; elements wire themselves up via callback refs as
 	// they mount/unmount. Only the bar and the notice column are observed — the
@@ -400,9 +331,6 @@ export function LaunchWindow() {
 		(el: HTMLDivElement | null) => observeHudElement(el, hudNoticesRef),
 		[observeHudElement],
 	);
-	const setPopoverEl = useCallback((el: HTMLDivElement | null) => {
-		popoverRef.current = el;
-	}, []);
 
 	const hudIgnoreMouseEventsRef = useRef<boolean | undefined>(undefined);
 	const setHudMouseEventsEnabled = useCallback(
@@ -424,32 +352,31 @@ export function LaunchWindow() {
 		};
 	}, [setHudMouseEventsEnabled]);
 
-	// A popover reaches beyond the bar, and the gap between the two would otherwise
-	// flip the window back to click-through mid-travel — so hold the overlay
-	// interactive for as long as one is open, and hand control back to the
-	// pointer-move tracking once it closes.
-	useEffect(() => {
-		setHudMouseEventsEnabled(isPopoverOpen);
-	}, [isPopoverOpen, setHudMouseEventsEnabled]);
-
-	const defaultSourceName = t("sourceSelector.defaultSourceName");
-	const [selectedSource, setSelectedSource] = useState(defaultSourceName);
+	const [selectedSourceKind, setSelectedSourceKind] = useState<"screen" | "window" | "area" | null>(
+		null,
+	);
 	const [hasSelectedSource, setHasSelectedSource] = useState(false);
 	const recordAfterSourceSelectionRef = useRef(false);
+	const captureAreaRef = useRef(captureArea);
+	captureAreaRef.current = captureArea;
 
-	const applySelectedSource = useCallback(
-		(source: ProcessedDesktopSource | null) => {
-			if (source) {
-				setSelectedSource(source.name);
-				setHasSelectedSource(true);
-				return;
-			}
+	const applySelectedSource = useCallback((source: ProcessedDesktopSource | null) => {
+		if (source) {
+			const displayId = Number(source.display_id);
+			setSelectedSourceKind(
+				source.id.startsWith("window:")
+					? "window"
+					: captureAreaRef.current?.displayId === displayId
+						? "area"
+						: "screen",
+			);
+			setHasSelectedSource(true);
+			return;
+		}
 
-			setSelectedSource(defaultSourceName);
-			setHasSelectedSource(false);
-		},
-		[defaultSourceName],
-	);
+		setSelectedSourceKind(null);
+		setHasSelectedSource(false);
+	}, []);
 
 	// The main process pushes every change through `onSelectedSourceChanged`, so
 	// this only needs one read to seed the initial value (plus one on focus, in
@@ -502,16 +429,88 @@ export function LaunchWindow() {
 		};
 	}, [applySelectedSource, recording, toggleRecording]);
 
-	const openSourceSelector = useCallback(async () => {
+	const openSourceSelector = useCallback(async (preferredKind?: "screen" | "window") => {
 		if (window.electronAPI) {
 			return await openSourceSelectorWithPermissionRetry({
-				openSourceSelector: () => window.electronAPI.openSourceSelector(),
+				openSourceSelector: () => window.electronAPI.openSourceSelector(preferredKind),
 				requestScreenAccess: () => window.electronAPI.requestScreenAccess(),
 			});
 		}
 
 		return { opened: false, reason: "electron-api-unavailable" };
 	}, []);
+	const openSourceSelectorAndStart = useCallback(
+		async (preferredKind: "screen" | "window") => {
+			recordAfterSourceSelectionRef.current = true;
+			try {
+				const result = await openSourceSelector(preferredKind);
+				if (result.opened) return;
+				recordAfterSourceSelectionRef.current = false;
+				if (result.reason === "portal-owns-selection" && !recording) {
+					toggleRecording();
+				}
+			} catch (error) {
+				recordAfterSourceSelectionRef.current = false;
+				console.warn("Failed to open the source selector:", error);
+			}
+		},
+		[openSourceSelector, recording, toggleRecording],
+	);
+	const openScreenSourceSelector = useCallback(() => {
+		captureAreaRef.current = null;
+		setCaptureArea(null);
+		setSelectedSourceKind((kind) => (kind === "area" ? "screen" : kind));
+		void openSourceSelectorAndStart("screen");
+	}, [openSourceSelectorAndStart, setCaptureArea]);
+	const openWindowSourceSelector = useCallback(() => {
+		captureAreaRef.current = null;
+		setCaptureArea(null);
+		setSelectedSourceKind((kind) => (kind === "area" ? "screen" : kind));
+		void openSourceSelectorAndStart("window");
+	}, [openSourceSelectorAndStart, setCaptureArea]);
+	const openAreaSelector = useCallback(async () => {
+		if (controlsLocked || !isMacHud) return;
+		closePopovers();
+		try {
+			const access = await window.electronAPI.requestScreenAccess();
+			if (!access.granted) {
+				console.warn("Screen Recording permission is required to select an area.");
+				return;
+			}
+			const selection = await window.electronAPI.openAreaSelector();
+			if (!selection) return;
+			const sources = await window.electronAPI.getSources({
+				types: ["screen"],
+				thumbnailSize: { width: 1, height: 1 },
+			});
+			const source = sources.find(
+				(candidate) => Number(candidate.display_id) === selection.displayId,
+			);
+			if (!source) {
+				console.warn("Area selection display is no longer available.");
+				return;
+			}
+			captureAreaRef.current = selection;
+			setCaptureArea(selection);
+			recordAfterSourceSelectionRef.current = true;
+			await window.electronAPI.selectSource(source);
+			if (recordAfterSourceSelectionRef.current) {
+				recordAfterSourceSelectionRef.current = false;
+				toggleRecording();
+			}
+			applySelectedSource(source);
+			setSelectedSourceKind("area");
+		} catch (error) {
+			console.warn("Failed to select a recording area:", error);
+		}
+	}, [
+		applySelectedSource,
+		closePopovers,
+		controlsLocked,
+		isMacHud,
+		setCaptureArea,
+		toggleRecording,
+	]);
 
 	const handleRecordButtonClick = useCallback(
 		(sourceSelectedOverride?: boolean) => {
@@ -583,9 +582,6 @@ export function LaunchWindow() {
 	const sendHudOverlayHide = useCallback(() => {
 		window.electronAPI?.hudOverlayHide?.();
 	}, []);
-	const sendHudOverlayClose = useCallback(() => {
-		window.electronAPI?.hudOverlayClose?.();
-	}, []);
 	const openStudio = useCallback(() => {
 		if (!saving) window.electronAPI.switchToEditor();
 	}, [saving]);
@@ -593,38 +589,10 @@ export function LaunchWindow() {
 		if (!saving) window.electronAPI.openNotes();
 	}, [saving]);
 
-	/** Switches the HUD between horizontal and vertical tray layouts. */
-	const toggleTrayLayout = useCallback(() => {
-		// Popovers are laid out relative to the bar, so leaving one open across an
-		// orientation flip means resizing and re-flowing in the same frame. Closing
-		// first keeps the flip to a single, clean size change.
-		closePopovers();
-		setTrayLayout((previous) => {
-			const nextLayout = previous === "horizontal" ? "vertical" : "horizontal";
-			saveUserPreferences({ trayLayout: nextLayout });
-			return nextLayout;
-		});
-	}, [closePopovers]);
-
-	const toggleSystemAudio = useCallback(() => {
-		if (controlsLocked) return;
-		setSystemAudioEnabled(!systemAudioEnabled);
-	}, [controlsLocked, setSystemAudioEnabled, systemAudioEnabled]);
-
-	const toggleCursorMode = useCallback(() => {
-		if (controlsLocked) return;
-		setCursorCaptureMode(cursorCaptureMode === "editable-overlay" ? "system" : "editable-overlay");
-	}, [controlsLocked, cursorCaptureMode, setCursorCaptureMode]);
-
-	const toggleMicrophone = useCallback(() => {
-		if (controlsLocked) return;
-		setMicrophoneEnabled(!microphoneEnabled);
-	}, [controlsLocked, microphoneEnabled, setMicrophoneEnabled]);
-
-	const toggleWebcam = useCallback(() => {
-		if (controlsLocked) return;
-		void setWebcamEnabled(!webcamEnabled);
-	}, [controlsLocked, setWebcamEnabled, webcamEnabled]);
+	const setTrayLayoutPreference = useCallback((layout: "horizontal" | "vertical") => {
+		saveUserPreferences({ trayLayout: layout });
+		setTrayLayout(layout);
+	}, []);
 
 	// Selecting a device never switches it on. If the device is already live the
 	// recorder re-acquires on the id change; if it isn't, this just records which
@@ -647,46 +615,197 @@ export function LaunchWindow() {
 		[setSelectedCameraId, setWebcamDeviceId, setWebcamDeviceName],
 	);
 
-	const toggleDeviceSettings = useCallback(() => {
-		if (controlsLocked) return;
-		setIsLanguageMenuOpen(false);
-		setIsDeviceSettingsOpen((open) => !open);
-	}, [controlsLocked]);
-
-	const closeDeviceSettings = useCallback(() => {
-		setIsDeviceSettingsOpen(false);
-	}, []);
-
-	const toggleLanguageMenu = useCallback(() => {
-		if (saving) return;
-		setIsDeviceSettingsOpen(false);
-		setIsLanguageMenuOpen((open) => !open);
-	}, [saving]);
-
-	const handleSelectLocale = useCallback(
-		(nextLocale: string) => {
-			setLocale(nextLocale as Parameters<typeof setLocale>[0]);
-			resolveSystemLocaleSuggestion();
-			setIsLanguageMenuOpen(false);
+	const handleChooseMicDevice = useCallback(
+		(deviceId: string) => {
+			const device = micDevices.find((candidate) => candidate.deviceId === deviceId);
+			if (!device) return;
+			handleSelectMicDevice(device);
+			setMicrophoneEnabled(true);
 		},
-		[resolveSystemLocaleSuggestion, setLocale],
+		[handleSelectMicDevice, micDevices, setMicrophoneEnabled],
 	);
 
-	const enableHudMouseEvents = useCallback(() => {
-		setHudMouseEventsEnabled(true);
-	}, [setHudMouseEventsEnabled]);
+	const handleChooseCameraDevice = useCallback(
+		(deviceId: string) => {
+			const device = cameraDevices.find((candidate) => candidate.deviceId === deviceId);
+			if (!device) return;
+			handleSelectCameraDevice(device);
+			void setWebcamEnabled(true);
+		},
+		[cameraDevices, handleSelectCameraDevice, setWebcamEnabled],
+	);
 
-	// ---------------------------------------------------------------------------
-	// Dragging
-	//
-	// Deltas are absolute (total travel since pointerdown), not incremental: the
-	// main process pins the window's origin at drag start and every move is
-	// `origin + delta`. Accumulating per-frame deltas instead meant every rounded
-	// setPosition compounded, and a dropped message drifted permanently. Absolute
-	// deltas are self-correcting, and there's no requestAnimationFrame in the path
-	// — pointermove is already delivered at most once per frame, so the rAF only
-	// ever added a frame of latency to a gesture the user is watching.
-	// ---------------------------------------------------------------------------
+	const openCameraNativeMenu = useCallback(async () => {
+		if (controlsLocked) return;
+		closePopovers();
+		setPendingNativeInputMenu("camera");
+		try {
+			const result = await window.electronAPI.showHudNativeInputMenu({
+				kind: "camera",
+				items: cameraDevices.map((device) => ({ id: device.deviceId, label: device.label })),
+				activeId: webcamDeviceId || selectedCameraId,
+				enabled: webcamEnabled,
+				enableLabel: t("webcam.enableWebcam"),
+				disableLabel: t("webcam.disableWebcam"),
+				emptyLabel: isCameraDevicesLoading ? t("webcam.searching") : t("webcam.noneFound"),
+			});
+			if (result?.action === "select") handleChooseCameraDevice(result.id);
+			if (result?.action === "disable") void setWebcamEnabled(false);
+		} catch (error) {
+			console.warn("Failed to open the native camera menu:", error);
+		} finally {
+			setPendingNativeInputMenu(null);
+		}
+	}, [
+		cameraDevices,
+		closePopovers,
+		controlsLocked,
+		handleChooseCameraDevice,
+		isCameraDevicesLoading,
+		selectedCameraId,
+		setWebcamEnabled,
+		t,
+		webcamDeviceId,
+		webcamEnabled,
+	]);
+
+	const micMenuSawLoadingRef = useRef(false);
+	const micNativeMenuOpenRef = useRef(false);
+	const openMicrophoneNativeMenu = useCallback(() => {
+		if (controlsLocked) return;
+		closePopovers();
+		micMenuSawLoadingRef.current = false;
+		setPendingNativeInputMenu("microphone");
+	}, [closePopovers, controlsLocked]);
+
+	useEffect(() => {
+		if (pendingNativeInputMenu !== "microphone") return;
+		if (isMicDevicesLoading) {
+			micMenuSawLoadingRef.current = true;
+			return;
+		}
+		// On first open the device hook has not run yet. Wait for its loading cycle
+		// instead of flashing a native "no microphone" menu before permission and
+		// enumeration have even started. Existing devices can be shown immediately.
+		if (!micMenuSawLoadingRef.current && micDevices.length === 0) return;
+		if (micNativeMenuOpenRef.current) return;
+
+		micNativeMenuOpenRef.current = true;
+		void window.electronAPI
+			.showHudNativeInputMenu({
+				kind: "microphone",
+				items: micDevices.map((device) => ({ id: device.deviceId, label: device.label })),
+				activeId: microphoneDeviceId || selectedMicId,
+				enabled: microphoneEnabled,
+				enableLabel: t("audio.enableMicrophone"),
+				disableLabel: t("audio.disableMicrophone"),
+				emptyLabel: t("deviceSettings.noMicrophones"),
+			})
+			.then((result) => {
+				if (result?.action === "select") handleChooseMicDevice(result.id);
+				if (result?.action === "disable") setMicrophoneEnabled(false);
+			})
+			.catch((error) => {
+				console.warn("Failed to open the native microphone menu:", error);
+			})
+			.finally(() => {
+				micNativeMenuOpenRef.current = false;
+				setPendingNativeInputMenu(null);
+			});
+	}, [
+		handleChooseMicDevice,
+		isMicDevicesLoading,
+		micDevices,
+		microphoneDeviceId,
+		microphoneEnabled,
+		pendingNativeInputMenu,
+		selectedMicId,
+		setMicrophoneEnabled,
+		t,
+	]);
+
+	const openSystemAudioNativeMenu = useCallback(async () => {
+		if (controlsLocked) return;
+		closePopovers();
+		setPendingNativeInputMenu("system-audio");
+		try {
+			const result = await window.electronAPI.showHudNativeInputMenu({
+				kind: "system-audio",
+				items: [],
+				enabled: systemAudioEnabled,
+				enableLabel: t("audio.enableSystemAudio"),
+				disableLabel: t("audio.disableSystemAudio"),
+				emptyLabel: "",
+			});
+			if (result?.action === "enable") setSystemAudioEnabled(true);
+			if (result?.action === "disable") setSystemAudioEnabled(false);
+		} catch (error) {
+			console.warn("Failed to open the native system-audio menu:", error);
+		} finally {
+			setPendingNativeInputMenu(null);
+		}
+	}, [closePopovers, controlsLocked, setSystemAudioEnabled, systemAudioEnabled, t]);
+
+	const openNativeSettingsMenu = useCallback(async () => {
+		if (controlsLocked) return;
+		setPendingNativeInputMenu(null);
+		setIsNativeSettingsMenuOpen(true);
+		try {
+			const result = await window.electronAPI.showHudNativeSettingsMenu({
+				showNotes: !isLinuxHud,
+				showCursorMode: supportsCursorModeToggle,
+				editableCursor: cursorCaptureMode === "editable-overlay",
+				verticalLayout: isVertical,
+				countdownSeconds: loadUserPreferences().recordingCountdownSeconds,
+				activeLocale: locale,
+				locales: AVAILABLE_LOCALES.map((id) => ({ id, label: getLocaleName(id) })),
+				labels: {
+					notes: t("tooltips.openNotes"),
+					countdown: t("nativeMenu.recordingCountdown"),
+					countdownThreeSeconds: t("nativeMenu.threeSeconds"),
+					countdownFiveSeconds: t("nativeMenu.fiveSeconds"),
+					countdownTenSeconds: t("nativeMenu.tenSeconds"),
+					advanced: t("nativeMenu.advanced"),
+					editableCursor: t("cursor.useEditableCursor"),
+					systemCursor: t("cursor.useSystemCursor"),
+					horizontalLayout: t("tooltips.useHorizontalTray"),
+					verticalLayout: t("tooltips.useVerticalTray"),
+					language: t("language"),
+					openStudio: t("tooltips.openStudio"),
+				},
+			});
+			if (result?.action === "notes") openNotes();
+			if (result?.action === "studio") openStudio();
+			if (result?.action === "cursor") setCursorCaptureMode(result.mode);
+			if (result?.action === "layout") setTrayLayoutPreference(result.layout);
+			if (result?.action === "countdown") {
+				saveUserPreferences({ recordingCountdownSeconds: result.seconds });
+			}
+			if (result?.action === "locale") {
+				setLocale(result.locale as Parameters<typeof setLocale>[0]);
+				resolveSystemLocaleSuggestion();
+			}
+		} catch (error) {
+			console.warn("Failed to open the native HUD settings menu:", error);
+		} finally {
+			setIsNativeSettingsMenuOpen(false);
+		}
+	}, [
+		controlsLocked,
+		cursorCaptureMode,
+		isLinuxHud,
+		isVertical,
+		locale,
+		openNotes,
+		openStudio,
+		resolveSystemLocaleSuggestion,
+		setCursorCaptureMode,
+		setLocale,
+		setTrayLayoutPreference,
+		supportsCursorModeToggle,
+		t,
+	]);
+
 	const dragOriginRef = useRef<{ x: number; y: number } | null>(null);
 	const lastDragDeltaRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
@@ -729,23 +848,37 @@ export function LaunchWindow() {
 		[measureHudSize],
 	);
 
+	const enableHudMouseEvents = useCallback(() => {
+		setHudMouseEventsEnabled(true);
+	}, [setHudMouseEventsEnabled]);
+
+	const handleHudBarPointerDown = useCallback(
+		(event: React.PointerEvent<HTMLDivElement>) => {
+			const target = event.target as Element | null;
+			if (
+				event.button !== 0 ||
+				target?.closest("button, [role='menu'], [role='dialog'], [data-hud-popover-trigger='true']")
+			) {
+				enableHudMouseEvents();
+				return;
+			}
+			handleHudDragPointerDown(event);
+		},
+		[enableHudMouseEvents, handleHudDragPointerDown],
+	);
+
 	const handleRootPointerMove = useCallback(
 		(event: React.PointerEvent<HTMLDivElement>) => {
-			// The pointer is captured by the drag handle anyway; skip the DOM walk.
 			if (isDraggingHudRef.current) return;
 			const target = event.target as HTMLElement | null;
-			setHudMouseEventsEnabled(
-				isPopoverOpen || Boolean(target?.closest("[data-hud-interactive='true']")),
-			);
+			setHudMouseEventsEnabled(Boolean(target?.closest("[data-hud-interactive='true']")));
 		},
-		[isPopoverOpen, setHudMouseEventsEnabled],
+		[setHudMouseEventsEnabled],
 	);
 
 	const handlePointerLeave = useCallback(() => {
-		if (!isPopoverOpen) {
-			setHudMouseEventsEnabled(false);
-		}
-	}, [isPopoverOpen, setHudMouseEventsEnabled]);
+		setHudMouseEventsEnabled(false);
+	}, [setHudMouseEventsEnabled]);
 
 	const dismissSoftwareFallbackForever = useCallback(() => {
 		dismissSoftwareEncoderFallbackNotice(true);
@@ -754,42 +887,18 @@ export function LaunchWindow() {
 		dismissSoftwareEncoderFallbackNotice();
 	}, [dismissSoftwareEncoderFallbackNotice]);
 
-	// On Linux the ScreenCast portal owns the choice, so there is no in-app
-	// selection to name and none to demand: the idle label says what pressing
-	// record will do, and the recording label stays neutral because the portal
-	// reports a KIND, never a window title. Naming a source we were never told
-	// is what put a window's name on a full-screen recording.
-	const recordLabel = saving
-		? t("recording.saving")
-		: portalOwnsSource
-			? recording
-				? t("recording.inProgress")
-				: t("recording.systemPicker")
-			: hasSelectedSource || recording
-				? selectedSource
-				: t("recording.selectSource");
-
-	// Stable identity, or the panel's memo boundary would break on every parent
-	// render — including the once-a-second one during a recording.
-	const deviceSettingsLabels = useMemo<HudDeviceSettingsLabels>(
-		() => ({
-			title: t("deviceSettings.title"),
-			done: t("deviceSettings.done"),
-			microphone: t("audio.inputDevice"),
-			camera: t("webcam.cameraDevice"),
-			micLevel: t("deviceSettings.micLevel"),
-			micHint: t("deviceSettings.micHint"),
-			noMicrophones: t("deviceSettings.noMicrophones"),
-			searching: t("webcam.searching"),
-			noCameras: t("webcam.noneFound"),
-			cameraUnavailable: t("webcam.unavailable"),
-			preview: t("deviceSettings.preview"),
-			previewUnavailable: t("deviceSettings.previewUnavailable"),
-		}),
-		[t],
-	);
-
 	const hasNotices = Boolean(systemLocaleSuggestion) || softwareEncoderFallbackNoticeVisible;
+	const cameraStatusLabel = webcamEnabled
+		? cameraDevices.find((device) => device.deviceId === (webcamDeviceId || selectedCameraId))
+				?.label || t("webcam.camera")
+		: `${t("webcam.camera")} · ${t("audio.off")}`;
+	const microphoneStatusLabel = microphoneEnabled
+		? micDevices.find((device) => device.deviceId === (microphoneDeviceId || selectedMicId))
+				?.label || t("audio.microphone")
+		: `${t("audio.microphone")} · ${t("audio.off")}`;
+	const systemAudioStatusLabel = `${t("audio.systemAudio")} · ${t(
+		systemAudioEnabled ? "audio.on" : "audio.off",
+	)}`;
 
 	return (
 		// Avoid w-screen/h-screen: 100vw can exceed the inner layout width when scrollbars
@@ -800,8 +909,8 @@ export function LaunchWindow() {
 			// anything is painted there. On Windows/macOS that stayed hidden because
 			// `setIgnoreMouseEvents` makes the transparent area input-transparent at the OS
 			// level; on Linux that call is a no-op, so pressing empty space next to the bar
-			// dragged the HUD from a spot the user was aiming *past*. The drag region
-			// belongs on the grab handle, which is where it now lives.
+			// dragged the HUD from a spot the user was aiming *past*. The drag surface is
+			// therefore limited to the painted bar; controls opt out so clicks still work.
 			className="h-full w-full min-w-0 max-w-full overflow-x-hidden overflow-y-hidden bg-transparent"
 			onPointerMove={handleRootPointerMove}
 			onPointerLeave={handlePointerLeave}
@@ -812,10 +921,11 @@ export function LaunchWindow() {
 			<div ref={hudAnchorRef} className={styles.hudAnchor}>
 				<div
 					ref={setHudBarEl}
+					data-testid="hud-drag-handle"
 					data-hud-interactive="true"
 					data-tray-layout={trayLayout}
 					data-hud-collapsed={isRecordingHudCollapsed}
-					className={`${styles.hudBar} ${
+					className={`${styles.hudBar} ${isLinuxHud ? styles.electronDrag : styles.electronNoDrag} ${
 						isRecordingHudCollapsed
 							? styles.hudBarCollapsed
 							: isVertical
@@ -823,210 +933,135 @@ export function LaunchWindow() {
 								: styles.hudBarHorizontal
 					}`}
 					onPointerEnter={enableHudMouseEvents}
-					onPointerDown={enableHudMouseEvents}
+					onPointerDown={handleHudBarPointerDown}
+					onPointerMove={handleHudDragPointerMove}
+					onPointerUp={handleHudDragPointerEnd}
+					onPointerCancel={handleHudDragPointerEnd}
 					onMouseEnter={enableHudMouseEvents}
 					onMouseLeave={handlePointerLeave}
 				>
 					{isRecordingHudCollapsed ? (
 						<HudCollapsedRecordingButton
 							saving={saving}
+							paused={paused}
+							canPause={canPauseRecording}
+							elapsedSeconds={elapsedSeconds}
 							label={commonT("actions.stopRecording")}
+							pauseLabel={paused ? t("tooltips.resumeRecording") : t("tooltips.pauseRecording")}
+							restartLabel={t("tooltips.restartRecording")}
+							cancelLabel={t("tooltips.cancelRecording")}
 							onStop={handleRecordClick}
+							onTogglePause={togglePaused}
+							onRestart={restartRecording}
+							onCancel={cancelRecording}
 						/>
 					) : (
 						<>
-							<HudDragHandle
-								vertical={isVertical}
-								nativeDrag={isLinuxHud}
-								onPointerDown={handleHudDragPointerDown}
-								onPointerMove={handleHudDragPointerMove}
-								onPointerEnd={handleHudDragPointerEnd}
+							<HudDismissButton
+								label={t("tooltips.hideHUD")}
+								disabled={saving}
+								onClick={sendHudOverlayHide}
 							/>
 
 							<HudDivider vertical={isVertical} />
 
-							<HudTrayLayoutButton
-								vertical={isVertical}
-								label={isVertical ? t("tooltips.useHorizontalTray") : t("tooltips.useVerticalTray")}
-								onClick={toggleTrayLayout}
-							/>
-
-							{/* No source button on Linux: `SelectSources` has no parameter
-					    naming a source, so nothing this picker returned could reach
-					    the capture. It raised a second portal dialog of its own —
-					    via `desktopCapturer.getSources()` — whose grant was then
-					    discarded, which is why picking a window here changed
-					    nothing. The compositor's picker is the only one that
-					    decides, and it appears when recording starts. */}
 							{!portalOwnsSource && (
-								<HudSourceButton
-									vertical={isVertical}
-									label={selectedSource}
+								<div className={`flex items-center gap-1 ${isVertical ? "flex-col" : ""}`}>
+									<HudCaptureModeButton
+										kind="screen"
+										label={commonT("recordingSource.screen")}
+										active={selectedSourceKind === "screen"}
+										disabled={controlsLocked}
+										compact={isVertical}
+										onClick={openScreenSourceSelector}
+									/>
+									<HudCaptureModeButton
+										kind="window"
+										label={commonT("recordingSource.window")}
+										active={selectedSourceKind === "window"}
+										disabled={controlsLocked}
+										compact={isVertical}
+										onClick={openWindowSourceSelector}
+									/>
+									{isMacHud && (
+										<HudCaptureModeButton
+											kind="area"
+											label={commonT("recordingSource.area")}
+											active={selectedSourceKind === "area"}
+											disabled={controlsLocked}
+											compact={isVertical}
+											onClick={openAreaSelector}
+										/>
+									)}
+								</div>
+							)}
+							{portalOwnsSource && (
+								<HudCaptureModeButton
+									kind="screen"
+									label={t("recording.systemPicker")}
+									active={false}
 									disabled={controlsLocked}
-									onClick={openSourceSelector}
+									compact={isVertical}
+									onClick={handleRecordClick}
 								/>
 							)}
 
 							<HudDivider vertical={isVertical} />
 
-							{/* System audio / mic / camera / cursor — each its own standalone
-					    transparent icon button (no shared group pill), matching the
-					    design exactly: rest color is muted gray, active/enabled color
-					    is the accent green. */}
-							<HudSystemAudioButton
-								enabled={systemAudioEnabled}
-								disabled={controlsLocked}
-								label={
-									systemAudioEnabled ? t("audio.disableSystemAudio") : t("audio.enableSystemAudio")
-								}
-								onClick={toggleSystemAudio}
-							/>
-							{/* The gear configures the two toggles beside it, so the three sit
-					    closer together than the bar's normal control spacing — proximity
-					    is the design's own grouping device, no extra furniture needed. */}
-							<div
-								className={`${styles.hudControlGroup} ${isVertical ? styles.hudControlGroupVertical : ""}`}
-							>
-								<HudMicButton
+							<div className={`flex items-center gap-1 ${isVertical ? "flex-col" : ""}`}>
+								<HudStatusToggleButton
+									kind="camera"
+									enabled={webcamEnabled}
+									disabled={controlsLocked}
+									label={webcamEnabled ? t("webcam.disableWebcam") : t("webcam.enableWebcam")}
+									statusLabel={cameraStatusLabel}
+									compact={isVertical}
+									expanded={pendingNativeInputMenu === "camera"}
+									onClick={openCameraNativeMenu}
+								/>
+								<HudStatusToggleButton
+									kind="microphone"
 									enabled={microphoneEnabled}
 									disabled={controlsLocked}
 									label={
 										microphoneEnabled ? t("audio.disableMicrophone") : t("audio.enableMicrophone")
 									}
-									onClick={toggleMicrophone}
+									statusLabel={microphoneStatusLabel}
+									compact={isVertical}
+									expanded={pendingNativeInputMenu === "microphone"}
+									onClick={openMicrophoneNativeMenu}
 								/>
-								<HudCameraButton
-									enabled={webcamEnabled}
-									disabled={controlsLocked}
-									label={webcamEnabled ? t("webcam.disableWebcam") : t("webcam.enableWebcam")}
-									onClick={toggleWebcam}
-								/>
-								<HudSettingsButton
-									buttonRef={settingsTriggerRef}
-									disabled={controlsLocked}
-									expanded={isDeviceSettingsOpen}
-									label={t("deviceSettings.title")}
-									onClick={toggleDeviceSettings}
-								/>
-							</div>
-							{supportsCursorModeToggle && (
-								<HudCursorButton
-									editableOverlay={cursorCaptureMode === "editable-overlay"}
+								<HudStatusToggleButton
+									kind="system-audio"
+									enabled={systemAudioEnabled}
 									disabled={controlsLocked}
 									label={
-										cursorCaptureMode === "editable-overlay"
-											? t("cursor.useSystemCursor")
-											: t("cursor.useEditableCursor")
+										systemAudioEnabled
+											? t("audio.disableSystemAudio")
+											: t("audio.enableSystemAudio")
 									}
-									onClick={toggleCursorMode}
-								/>
-							)}
-
-							<HudDivider vertical={isVertical} />
-
-							<HudRecordButton
-								recording={recording}
-								paused={paused}
-								saving={saving}
-								elapsedSeconds={elapsedSeconds}
-								label={recordLabel}
-								savingLabel={t("recording.saving")}
-								onClick={handleRecordClick}
-							/>
-
-							{!recording && (
-								<HudStudioButton
-									disabled={saving}
-									label={t("tooltips.openStudio")}
-									onClick={openStudio}
-								/>
-							)}
-
-							{recording && (
-								<HudRecordingControls
-									vertical={isVertical}
-									paused={paused}
-									saving={saving}
-									canPause={canPauseRecording}
-									pauseLabel={paused ? t("tooltips.resumeRecording") : t("tooltips.pauseRecording")}
-									restartLabel={t("tooltips.restartRecording")}
-									cancelLabel={t("tooltips.cancelRecording")}
-									onTogglePause={togglePaused}
-									onRestart={restartRecording}
-									onCancel={cancelRecording}
-								/>
-							)}
-
-							{!isLinuxHud && (
-								<HudNotesButton
-									disabled={saving}
-									label={t("tooltips.openNotes")}
-									onClick={openNotes}
-								/>
-							)}
-
-							<HudDivider vertical={isVertical} />
-
-							{/* Right sidebar controls */}
-							<div
-								className={`flex items-center gap-[5px] ${isVertical ? "flex-col" : ""} ${styles.electronNoDrag}`}
-							>
-								<HudLanguageButton
-									buttonRef={languageTriggerRef}
-									vertical={isVertical}
-									code={languageCode}
-									label={activeLanguageLabel}
-									disabled={saving}
-									expanded={isLanguageMenuOpen}
-									onClick={toggleLanguageMenu}
-								/>
-
-								<HudDivider vertical={isVertical} />
-
-								<HudWindowControls
-									vertical={isVertical}
-									disabled={saving}
-									closeDisabled={recording || saving}
-									hideLabel={t("tooltips.hideHUD")}
-									closeLabel={t("tooltips.closeApp")}
-									onHide={sendHudOverlayHide}
-									onClose={sendHudOverlayClose}
+									statusLabel={systemAudioStatusLabel}
+									compact={isVertical}
+									expanded={pendingNativeInputMenu === "system-audio"}
+									onClick={openSystemAudioNativeMenu}
 								/>
 							</div>
+
+							<HudDivider vertical={isVertical} />
+
+							<HudSettingsButton
+								disabled={controlsLocked}
+								expanded={isNativeSettingsMenuOpen}
+								label={t("deviceSettings.title")}
+								onClick={openNativeSettingsMenu}
+							/>
 						</>
 					)}
 				</div>
 
-				{!recording && (isPopoverOpen || hasNotices) && (
+				{!recording && hasNotices && (
 					// column-reverse: first child sits closest to the bar.
 					<div className={styles.hudAbove}>
-						{isDeviceSettingsOpen && (
-							<HudDeviceSettings
-								micDevices={micDevices}
-								cameraDevices={cameraDevices}
-								activeMicId={microphoneDeviceId || selectedMicId}
-								activeCameraId={webcamDeviceId || selectedCameraId}
-								cameraLoading={isCameraDevicesLoading}
-								cameraError={cameraDevicesError}
-								labels={deviceSettingsLabels}
-								onSelectMic={handleSelectMicDevice}
-								onSelectCamera={handleSelectCameraDevice}
-								onClose={closeDeviceSettings}
-								panelRef={setPopoverEl}
-							/>
-						)}
-
-						{isLanguageMenuOpen && (
-							<HudLanguageMenu
-								locales={AVAILABLE_LOCALES}
-								activeLocale={locale}
-								getName={getLocaleName as (loc: string) => string}
-								onSelect={handleSelectLocale}
-								panelRef={setPopoverEl}
-								onEnsureInteractive={enableHudMouseEvents}
-							/>
-						)}
-
 						{hasNotices && (
 							<div
 								ref={setHudNoticesEl}

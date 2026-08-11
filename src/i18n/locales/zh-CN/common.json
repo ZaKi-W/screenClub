@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "窗口",
 		"screen": "屏幕",
+		"area": "区域",
 		"virtual": "虚拟显示器",
 		"unknown": "屏幕录制"
 	}

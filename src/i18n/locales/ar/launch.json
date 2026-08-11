@@ -87,6 +87,13 @@
 		"dismiss": "حسنًا",
 		"dontShowAgain": "عدم الإظهار مرة أخرى"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "العد التنازلي للتسجيل",
+		"threeSeconds": "3 ثوانٍ",
+		"fiveSeconds": "5 ثوانٍ",
+		"tenSeconds": "10 ثوانٍ",
+		"advanced": "متقدم"
+	},
 	"deviceSettings": {
 		"title": "إعدادات الأجهزة",
 		"done": "تم",

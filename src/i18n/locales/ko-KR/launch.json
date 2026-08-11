@@ -87,6 +87,13 @@
 		"dismiss": "확인",
 		"dontShowAgain": "다시 표시하지 않음"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "녹화 카운트다운",
+		"threeSeconds": "3초",
+		"fiveSeconds": "5초",
+		"tenSeconds": "10초",
+		"advanced": "고급"
+	},
 	"deviceSettings": {
 		"title": "장치 설정",
 		"done": "완료",

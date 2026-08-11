@@ -1654,7 +1654,7 @@ async function resolveMediaLinksForVideo(videoPath: string): Promise<{
 
 export function registerIpcHandlers(
 	createEditorWindow: () => void,
-	createSourceSelectorWindow: () => BrowserWindow,
+	createSourceSelectorWindow: (preferredSourceKind?: "screen" | "window") => BrowserWindow,
 	createCountdownOverlayWindow: () => BrowserWindow,
 	createNotesWindowWrapper: () => BrowserWindow,
 	getMainWindow: () => BrowserWindow | null,
@@ -1856,7 +1856,9 @@ export function registerIpcHandlers(
 		return access;
 	});
 
-	ipcMain.handle("open-source-selector", async () => {
+	ipcMain.handle("open-source-selector", async (_event, requestedKind?: unknown) => {
+		const preferredSourceKind =
+			requestedKind === "screen" || requestedKind === "window" ? requestedKind : undefined;
 		// Nothing to open on Linux WHEN THE NATIVE HELPER IS THERE. The selector's
 		// own `desktopCapturer.getSources()` raises a portal dialog — a SECOND
 		// one, for a session that is thrown away — and whatever it returns cannot
@@ -1905,7 +1907,7 @@ export function registerIpcHandlers(
 			sourceSelectorWin.focus();
 			return { opened: true };
 		}
-		createSourceSelectorWindow();
+		createSourceSelectorWindow(preferredSourceKind);
 		return { opened: true };
 	});
 

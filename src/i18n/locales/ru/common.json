@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "Окно",
 		"screen": "Экран",
+		"area": "Область",
 		"virtual": "Виртуальный экран",
 		"unknown": "Запись экрана"
 	}

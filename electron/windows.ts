@@ -1,6 +1,13 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { BrowserWindow, ipcMain, screen } from "electron";
+import { BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions, screen } from "electron";
+import type { CaptureAreaSelection } from "../src/lib/captureArea";
+import type {
+	HudNativeInputMenuRequest,
+	HudNativeInputMenuResult,
+	HudNativeSettingsMenuRequest,
+	HudNativeSettingsMenuResult,
+} from "../src/lib/hudNativeMenu";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -89,6 +96,8 @@ const ASSET_BASE_DIR = process.defaultApp
 export const ASSET_BASE_URL_ARG = `--asset-base-url=${pathToFileURL(`${ASSET_BASE_DIR}${path.sep}`).toString()}`;
 
 let hudOverlayWindow: BrowserWindow | null = null;
+let areaSelectorWindow: BrowserWindow | null = null;
+let resolveAreaSelection: ((selection: CaptureAreaSelection | null) => void) | null = null;
 
 // Origin the current drag gesture started from. The renderer sends the pointer's
 // *total* travel since pointerdown rather than per-frame deltas, so every move is
@@ -100,6 +109,276 @@ ipcMain.on("hud-overlay-hide", () => {
 	if (hudOverlayWindow && !hudOverlayWindow.isDestroyed()) {
 		hudOverlayWindow.minimize();
 	}
+});
+
+function parseHudNativeInputMenuRequest(value: unknown): HudNativeInputMenuRequest | null {
+	if (!value || typeof value !== "object") return null;
+	const candidate = value as Partial<HudNativeInputMenuRequest>;
+	const kind = candidate.kind;
+	if (
+		(kind !== "camera" && kind !== "microphone" && kind !== "system-audio") ||
+		typeof candidate.enabled !== "boolean" ||
+		typeof candidate.enableLabel !== "string" ||
+		typeof candidate.disableLabel !== "string" ||
+		typeof candidate.emptyLabel !== "string" ||
+		!Array.isArray(candidate.items)
+	) {
+		return null;
+	}
+
+	const items = candidate.items
+		.filter(
+			(item): item is { id: string; label: string } =>
+				Boolean(item) &&
+				typeof item === "object" &&
+				typeof item.id === "string" &&
+				typeof item.label === "string",
+		)
+		.slice(0, 100)
+		.map((item) => ({ id: item.id.slice(0, 512), label: item.label.slice(0, 512) }));
+
+	return {
+		kind,
+		items,
+		activeId: typeof candidate.activeId === "string" ? candidate.activeId : undefined,
+		enabled: candidate.enabled,
+		enableLabel: candidate.enableLabel.slice(0, 512),
+		disableLabel: candidate.disableLabel.slice(0, 512),
+		emptyLabel: candidate.emptyLabel.slice(0, 512),
+	};
+}
+
+ipcMain.handle(
+	"hud-show-native-input-menu",
+	(_event, rawRequest: unknown): Promise<HudNativeInputMenuResult> => {
+		const request = parseHudNativeInputMenuRequest(rawRequest);
+		if (!request || !hudOverlayWindow || hudOverlayWindow.isDestroyed()) {
+			return Promise.resolve(null);
+		}
+		const menuWindow = hudOverlayWindow;
+
+		return new Promise((resolve) => {
+			let settled = false;
+			const finish = (result: HudNativeInputMenuResult) => {
+				if (settled) return;
+				settled = true;
+				resolve(result);
+			};
+
+			const template: MenuItemConstructorOptions[] = [];
+			if (request.kind === "system-audio") {
+				template.push({
+					label: request.enableLabel,
+					type: "checkbox",
+					checked: request.enabled,
+					click: () => finish({ action: "enable" }),
+				});
+			} else if (request.items.length > 0) {
+				template.push(
+					...request.items.map<MenuItemConstructorOptions>((item) => ({
+						label: item.label,
+						type: "checkbox",
+						checked: request.enabled && item.id === request.activeId,
+						click: () => finish({ action: "select", id: item.id }),
+					})),
+				);
+			} else {
+				template.push({ label: request.emptyLabel, enabled: false });
+			}
+
+			template.push(
+				{ type: "separator" },
+				{
+					label: request.disableLabel,
+					type: "checkbox",
+					checked: !request.enabled,
+					click: () => finish({ action: "disable" }),
+				},
+			);
+
+			Menu.buildFromTemplate(template).popup({
+				window: menuWindow,
+				callback: () => finish(null),
+			});
+		});
+	},
+);
+
+ipcMain.handle(
+	"hud-show-native-settings-menu",
+	(_event, request: HudNativeSettingsMenuRequest): Promise<HudNativeSettingsMenuResult> => {
+		if (!request || !hudOverlayWindow || hudOverlayWindow.isDestroyed()) {
+			return Promise.resolve(null);
+		}
+		const menuWindow = hudOverlayWindow;
+
+		return new Promise((resolve) => {
+			let settled = false;
+			const finish = (result: HudNativeSettingsMenuResult) => {
+				if (settled) return;
+				settled = true;
+				resolve(result);
+			};
+			const advancedSubmenu: MenuItemConstructorOptions[] = [];
+			if (request.showCursorMode) {
+				advancedSubmenu.push(
+					{
+						label: request.labels.editableCursor,
+						type: "radio",
+						checked: request.editableCursor,
+						click: () => finish({ action: "cursor", mode: "editable-overlay" }),
+					},
+					{
+						label: request.labels.systemCursor,
+						type: "radio",
+						checked: !request.editableCursor,
+						click: () => finish({ action: "cursor", mode: "system" }),
+					},
+					{ type: "separator" },
+				);
+			}
+			advancedSubmenu.push(
+				{
+					label: request.labels.horizontalLayout,
+					type: "radio",
+					checked: !request.verticalLayout,
+					click: () => finish({ action: "layout", layout: "horizontal" }),
+				},
+				{
+					label: request.labels.verticalLayout,
+					type: "radio",
+					checked: request.verticalLayout,
+					click: () => finish({ action: "layout", layout: "vertical" }),
+				},
+				{ type: "separator" },
+				{
+					label: request.labels.language,
+					submenu: request.locales.map((locale) => ({
+						label: locale.label,
+						type: "radio" as const,
+						checked: locale.id === request.activeLocale,
+						click: () => finish({ action: "locale", locale: locale.id }),
+					})),
+				},
+			);
+
+			const template: MenuItemConstructorOptions[] = [
+				...(request.showNotes
+					? [{ label: request.labels.notes, click: () => finish({ action: "notes" as const }) }]
+					: []),
+				{
+					label: request.labels.countdown,
+					submenu: (
+						[
+							[3, request.labels.countdownThreeSeconds],
+							[5, request.labels.countdownFiveSeconds],
+							[10, request.labels.countdownTenSeconds],
+						] as const
+					).map(([seconds, label]) => ({
+						label,
+						type: "radio" as const,
+						checked: request.countdownSeconds === seconds,
+						click: () => finish({ action: "countdown", seconds }),
+					})),
+				},
+				{ label: request.labels.advanced, submenu: advancedSubmenu },
+				{ type: "separator" },
+				{ label: request.labels.openStudio, click: () => finish({ action: "studio" }) },
+			];
+
+			Menu.buildFromTemplate(template).popup({
+				window: menuWindow,
+				callback: () => finish(null),
+			});
+		});
+	},
+);
+
+function finishAreaSelection(selection: CaptureAreaSelection | null) {
+	const resolve = resolveAreaSelection;
+	resolveAreaSelection = null;
+	resolve?.(selection);
+	if (areaSelectorWindow && !areaSelectorWindow.isDestroyed()) {
+		areaSelectorWindow.close();
+	}
+	areaSelectorWindow = null;
+	if (hudOverlayWindow && !hudOverlayWindow.isDestroyed()) {
+		hudOverlayWindow.show();
+		hudOverlayWindow.focus();
+	}
+}
+
+ipcMain.on("hud-area-selector-confirm", (_event, selection: CaptureAreaSelection) => {
+	if (
+		!selection ||
+		!Number.isFinite(selection.displayId) ||
+		!selection.rect ||
+		!Number.isFinite(selection.rect.x) ||
+		!Number.isFinite(selection.rect.y) ||
+		!Number.isFinite(selection.rect.width) ||
+		!Number.isFinite(selection.rect.height) ||
+		selection.rect.width < 2 ||
+		selection.rect.height < 2
+	) {
+		return;
+	}
+	finishAreaSelection(selection);
+});
+
+ipcMain.on("hud-area-selector-cancel", () => finishAreaSelection(null));
+
+ipcMain.handle("hud-open-area-selector", (): Promise<CaptureAreaSelection | null> => {
+	if (process.platform !== "darwin") return Promise.resolve(null);
+	if (areaSelectorWindow && !areaSelectorWindow.isDestroyed()) {
+		areaSelectorWindow.focus();
+		return Promise.resolve(null);
+	}
+
+	const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+	const { bounds } = display;
+	const win = new BrowserWindow({
+		x: bounds.x,
+		y: bounds.y,
+		width: bounds.width,
+		height: bounds.height,
+		frame: false,
+		transparent: true,
+		backgroundColor: "#00000000",
+		resizable: false,
+		movable: false,
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		hasShadow: false,
+		fullscreenable: false,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.mjs"),
+			additionalArguments: [ASSET_BASE_URL_ARG],
+			nodeIntegration: false,
+			contextIsolation: true,
+			backgroundThrottling: false,
+		},
+	});
+	areaSelectorWindow = win;
+	if (hudOverlayWindow && !hudOverlayWindow.isDestroyed()) hudOverlayWindow.hide();
+	win.setAlwaysOnTop(true, "screen-saver");
+	win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+	win.on("closed", () => {
+		if (areaSelectorWindow === win) areaSelectorWindow = null;
+		const resolve = resolveAreaSelection;
+		resolveAreaSelection = null;
+		resolve?.(null);
+		if (hudOverlayWindow && !hudOverlayWindow.isDestroyed()) hudOverlayWindow.show();
+	});
+	const query = { windowType: "area-selector", displayId: String(display.id) };
+	if (VITE_DEV_SERVER_URL) {
+		void win.loadURL(`${VITE_DEV_SERVER_URL}?${new URLSearchParams(query).toString()}`);
+	} else {
+		void win.loadFile(path.join(RENDERER_DIST, "index.html"), { query });
+	}
+
+	return new Promise((resolve) => {
+		resolveAreaSelection = resolve;
+	});
 });
 
 ipcMain.on("hud-overlay-ignore-mouse-events", (_event, ignore: boolean) => {
@@ -236,9 +515,9 @@ export function createHudOverlayWindow(): BrowserWindow {
 		width: windowWidth,
 		height: windowHeight,
 		// Min/max are intentionally loose: the renderer resizes to fit content via
-		// "hud-overlay-set-size" (above), needed for the vertical tray to grow taller.
-		minWidth: 120,
-		minHeight: 80,
+		// "hud-overlay-set-size" (above), including the compact recording stop button.
+		minWidth: 1,
+		minHeight: 1,
 		x: x,
 		y: y,
 		frame: false,
@@ -410,7 +689,9 @@ export function createEditorWindow(query: Record<string, string> = {}): BrowserW
  * Floating source-selector window for picking a screen or window to record.
  * Frameless, transparent, and follows the user across macOS Spaces.
  */
-export function createSourceSelectorWindow(): BrowserWindow {
+export function createSourceSelectorWindow(
+	preferredSourceKind?: "screen" | "window",
+): BrowserWindow {
 	const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
 	const win = new BrowserWindow({
@@ -439,11 +720,15 @@ export function createSourceSelectorWindow(): BrowserWindow {
 		win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 	}
 
+	const routing = {
+		windowType: "source-selector",
+		...(preferredSourceKind ? { preferredSourceKind } : {}),
+	};
 	if (VITE_DEV_SERVER_URL) {
-		win.loadURL(VITE_DEV_SERVER_URL + "?windowType=source-selector");
+		win.loadURL(`${VITE_DEV_SERVER_URL}?${new URLSearchParams(routing).toString()}`);
 	} else {
 		win.loadFile(path.join(RENDERER_DIST, "index.html"), {
-			query: { windowType: "source-selector" },
+			query: routing,
 		});
 	}
 

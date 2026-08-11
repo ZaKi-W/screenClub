@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	calculateEffectiveSourceDimensions,
 	calculateMp4ExportSettings,
+	calculatePresetMp4ExportSettings,
 	wouldUpscale,
 } from "./mp4ExportSettings";
 
@@ -179,5 +180,36 @@ describe("calculateMp4ExportSettings", () => {
 			height: 1080,
 			bitrate: 20_000_000,
 		});
+	});
+});
+
+describe("calculatePresetMp4ExportSettings", () => {
+	it("renders a 4:3 4K project at 2880x2160", () => {
+		expect(
+			calculatePresetMp4ExportSettings({
+				resolution: "4k",
+				compression: "studio",
+				fps: 60,
+				aspectRatioValue: 4 / 3,
+			}),
+		).toEqual({ width: 2880, height: 2160, bitrate: 90_000_000 });
+	});
+
+	it("keeps compression independent from resolution", () => {
+		const studio = calculatePresetMp4ExportSettings({
+			resolution: "1080p",
+			compression: "studio",
+			fps: 60,
+			aspectRatioValue: 16 / 9,
+		});
+		const web = calculatePresetMp4ExportSettings({
+			resolution: "1080p",
+			compression: "web",
+			fps: 60,
+			aspectRatioValue: 16 / 9,
+		});
+
+		expect(studio).toEqual({ width: 1920, height: 1080, bitrate: 30_000_000 });
+		expect(web).toEqual({ width: 1920, height: 1080, bitrate: 12_000_000 });
 	});
 });

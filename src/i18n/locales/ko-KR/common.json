@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "창",
 		"screen": "화면",
+		"area": "영역",
 		"virtual": "가상 디스플레이",
 		"unknown": "화면 녹화"
 	}

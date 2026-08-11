@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "Janela",
 		"screen": "Tela",
+		"area": "Área",
 		"virtual": "Tela virtual",
 		"unknown": "Gravação de tela"
 	}

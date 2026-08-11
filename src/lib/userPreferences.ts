@@ -2,7 +2,13 @@ import {
 	DEFAULT_EDITOR_LAYOUT_SETTINGS,
 	DEFAULT_EXPORT_SETTINGS,
 } from "@/components/video-editor/editorDefaults";
-import type { ExportFormat, ExportQuality } from "@/lib/exporter";
+import type {
+	ExportCompressionPreset,
+	ExportFormat,
+	ExportQuality,
+	ExportResolution,
+	ExportVideoCodec,
+} from "@/lib/exporter";
 import { type AspectRatio, isAspectRatio } from "@/utils/aspectRatioUtils";
 
 const PREFS_KEY = "openscreen_user_preferences";
@@ -16,12 +22,22 @@ export interface UserPreferences {
 	exportQuality: ExportQuality;
 	/** Default export format */
 	exportFormat: ExportFormat;
+	/** Remembered MP4 output size preset */
+	exportResolution: ExportResolution;
+	/** Remembered purpose-based compression preset */
+	exportCompression: ExportCompressionPreset;
+	/** Remembered MP4 frame rate */
+	exportFrameRate: 24 | 30 | 60;
+	/** Remembered MP4 codec (kept in advanced settings) */
+	exportCodec: ExportVideoCodec;
 	/** Folder used for the most recent successful export, if any */
 	exportFolder: string | null;
 	/** Folder of the most recently opened project, if any */
 	projectFolder: string | null;
 	/** Recording HUD control layout */
 	trayLayout: "horizontal" | "vertical";
+	/** Countdown shown before a recording starts */
+	recordingCountdownSeconds: 3 | 5 | 10;
 	/** Force the Windows native recorder to use the software H.264 encoder */
 	preferSoftwareEncoder: boolean;
 	/** Stop showing the notice that recording fell back to software encoding */
@@ -33,9 +49,14 @@ export const DEFAULT_PREFS: UserPreferences = {
 	aspectRatio: DEFAULT_EDITOR_LAYOUT_SETTINGS.aspectRatio,
 	exportQuality: DEFAULT_EXPORT_SETTINGS.quality,
 	exportFormat: DEFAULT_EXPORT_SETTINGS.format,
+	exportResolution: "4k",
+	exportCompression: "studio",
+	exportFrameRate: 60,
+	exportCodec: "h264",
 	exportFolder: null,
 	projectFolder: null,
 	trayLayout: "horizontal",
+	recordingCountdownSeconds: 3,
 	preferSoftwareEncoder: false,
 	hideSoftwareEncoderFallbackNotice: false,
 };
@@ -79,6 +100,27 @@ export function loadUserPreferences(): UserPreferences {
 			raw.exportFormat === "gif" || raw.exportFormat === "mp4"
 				? (raw.exportFormat as ExportFormat)
 				: DEFAULT_PREFS.exportFormat,
+		exportResolution:
+			raw.exportResolution === "720p" ||
+			raw.exportResolution === "1080p" ||
+			raw.exportResolution === "4k"
+				? (raw.exportResolution as ExportResolution)
+				: DEFAULT_PREFS.exportResolution,
+		exportCompression:
+			raw.exportCompression === "studio" ||
+			raw.exportCompression === "social" ||
+			raw.exportCompression === "web" ||
+			raw.exportCompression === "web-low"
+				? (raw.exportCompression as ExportCompressionPreset)
+				: DEFAULT_PREFS.exportCompression,
+		exportFrameRate:
+			raw.exportFrameRate === 24 || raw.exportFrameRate === 30 || raw.exportFrameRate === 60
+				? raw.exportFrameRate
+				: DEFAULT_PREFS.exportFrameRate,
+		exportCodec:
+			raw.exportCodec === "h264" || raw.exportCodec === "h265"
+				? raw.exportCodec
+				: DEFAULT_PREFS.exportCodec,
 		exportFolder:
 			typeof raw.exportFolder === "string" && raw.exportFolder.length > 0
 				? raw.exportFolder
@@ -91,6 +133,12 @@ export function loadUserPreferences(): UserPreferences {
 			raw.trayLayout === "horizontal" || raw.trayLayout === "vertical"
 				? raw.trayLayout
 				: DEFAULT_PREFS.trayLayout,
+		recordingCountdownSeconds:
+			raw.recordingCountdownSeconds === 3 ||
+			raw.recordingCountdownSeconds === 5 ||
+			raw.recordingCountdownSeconds === 10
+				? raw.recordingCountdownSeconds
+				: DEFAULT_PREFS.recordingCountdownSeconds,
 		preferSoftwareEncoder:
 			typeof raw.preferSoftwareEncoder === "boolean"
 				? raw.preferSoftwareEncoder

@@ -87,6 +87,13 @@
 		"dismiss": "Понятно",
 		"dontShowAgain": "Больше не показывать"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Обратный отсчёт",
+		"threeSeconds": "3 секунды",
+		"fiveSeconds": "5 секунд",
+		"tenSeconds": "10 секунд",
+		"advanced": "Дополнительно"
+	},
 	"deviceSettings": {
 		"title": "Настройки устройств",
 		"done": "Готово",

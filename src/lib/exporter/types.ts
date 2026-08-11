@@ -30,6 +30,12 @@ export interface VideoFrameData {
 
 export type ExportQuality = "medium" | "good" | "source";
 
+/** Screen Studio-style output tiers. The short side follows the project aspect ratio. */
+export type ExportResolution = "720p" | "1080p" | "4k";
+
+/** Purpose-based compression presets; separate from output resolution. */
+export type ExportCompressionPreset = "studio" | "social" | "web" | "web-low";
+
 // GIF Export Types
 export type ExportFormat = "mp4" | "gif";
 

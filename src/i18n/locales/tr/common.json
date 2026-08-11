@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "Pencere",
 		"screen": "Ekran",
+		"area": "Alan",
 		"virtual": "Sanal ekran",
 		"unknown": "Ekran kaydı"
 	}

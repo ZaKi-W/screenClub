@@ -87,6 +87,13 @@
 		"dismiss": "Got it",
 		"dontShowAgain": "Don't show again"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Recording countdown",
+		"threeSeconds": "3 seconds",
+		"fiveSeconds": "5 seconds",
+		"tenSeconds": "10 seconds",
+		"advanced": "Advanced"
+	},
 	"deviceSettings": {
 		"title": "Device settings",
 		"done": "Done",
