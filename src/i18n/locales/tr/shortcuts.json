@@ -16,7 +16,6 @@
 	"registrationFailed": "Kısayol kaydedilemedi. Başka bir uygulama tarafından kullanılıyor olabilir. Farklı bir tuş deneyin.",
 	"actions": {
 		"openApp": "Uygulamayı Aç",
-		"addZoom": "Yakınlaştırma Ekle",
 		"addTrim": "Kırpma Ekle",
 		"addSpeed": "Hız Ekle",
 		"addAnnotation": "Açıklama Ekle",

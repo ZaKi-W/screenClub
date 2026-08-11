@@ -16,7 +16,6 @@
 	"registrationFailed": "단축키 등록에 실패했습니다. 다른 앱에서 사용 중일 수 있습니다. 다른 키를 시도하세요.",
 	"actions": {
 		"openApp": "앱 열기",
-		"addZoom": "줌 추가",
 		"addTrim": "트림 추가",
 		"addSpeed": "속도 추가",
 		"addAnnotation": "주석 추가",

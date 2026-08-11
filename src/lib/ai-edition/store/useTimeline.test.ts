@@ -664,8 +664,8 @@ describe("useTimeline is not re-rendered by playhead ticks", () => {
 		expect((trim?.endSec ?? 0) - (trim?.startSec ?? 0)).toBeCloseTo(1.25, 6);
 	});
 
-	// The timeline's toolbar passes a duration worth a fixed number of pixels at
-	// the current zoom; every other entry point keeps the 2 s above.
+	// The timeline lane passes a duration worth a fixed number of pixels at the
+	// current zoom; every other entry point keeps the 2 s above.
 	it("honours a caller-supplied duration", async () => {
 		const { result } = renderTimeline();
 		act(() => {
@@ -677,6 +677,17 @@ describe("useTimeline is not re-rendered by playhead ticks", () => {
 		expect(useProjectStore.getState().document?.zoomRanges.at(-1)).toMatchObject({
 			startMs: 4200,
 			endMs: 4600,
+		});
+	});
+
+	it("honours the timeline position supplied by a lane click", async () => {
+		const { result } = renderTimeline();
+		await act(async () => {
+			await result.current.addZoom(0.4, 7.25);
+		});
+		expect(useProjectStore.getState().document?.zoomRanges.at(-1)).toMatchObject({
+			startMs: 7250,
+			endMs: 7650,
 		});
 	});
 });

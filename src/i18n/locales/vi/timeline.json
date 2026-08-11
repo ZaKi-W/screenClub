@@ -1,6 +1,5 @@
 {
 	"buttons": {
-		"addZoom": "Thêm Thu phóng (Z)",
 		"suggestZooms": "Đề xuất Thu phóng từ Con trỏ",
 		"autoZoomOn": "Đề xuất thu phóng tự động đang bật — nhấp để loại bỏ các thu phóng được đề xuất",
 		"autoZoomOff": "Đề xuất thu phóng tự động đang tắt — nhấp để đề xuất thu phóng từ con trỏ",
@@ -12,7 +11,7 @@
 		"addCameraFullscreen": "Thêm Camera Toàn màn hình (C)"
 	},
 	"hints": {
-		"pressZoom": "Nhấn Z để thêm thu phóng",
+		"clickZoom": "Nhấp để thêm thu phóng",
 		"pressTrim": "Nhấn T để thêm cắt",
 		"pressAnnotation": "Nhấn A để thêm chú thích",
 		"pressSpeed": "Nhấn S để thêm tốc độ",

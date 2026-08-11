@@ -16,7 +16,6 @@
 	"registrationFailed": "Échec de l'enregistrement du raccourci. Il est peut-être utilisé par une autre application. Essayez une autre touche.",
 	"actions": {
 		"openApp": "Ouvrir l'application",
-		"addZoom": "Ajouter un zoom",
 		"addTrim": "Ajouter une coupe",
 		"addSpeed": "Ajouter une vitesse",
 		"addAnnotation": "Ajouter une annotation",

@@ -1,6 +1,5 @@
 export const SHORTCUT_ACTIONS = [
 	"openApp",
-	"addZoom",
 	"deleteSelected",
 	"playPause",
 	"copySelected",
@@ -104,7 +103,6 @@ export function findConflict(
 
 export const DEFAULT_SHORTCUTS: ShortcutsConfig = {
 	openApp: { key: "o", ctrl: true, shift: true },
-	addZoom: { key: "z" },
 	deleteSelected: { key: "d", ctrl: true },
 	playPause: { key: " " },
 	copySelected: { key: "c", ctrl: true },
@@ -113,7 +111,6 @@ export const DEFAULT_SHORTCUTS: ShortcutsConfig = {
 
 export const SHORTCUT_LABELS: Record<ShortcutAction, string> = {
 	openApp: "Open App",
-	addZoom: "Add Zoom",
 	deleteSelected: "Delete Selected",
 	playPause: "Play / Pause",
 	copySelected: "Copy Selected",

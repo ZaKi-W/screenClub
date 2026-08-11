@@ -16,7 +16,6 @@
 	"registrationFailed": "Error al registrar el atajo. Puede estar en uso por otra aplicación. Prueba otra tecla.",
 	"actions": {
 		"openApp": "Abrir aplicación",
-		"addZoom": "Agregar zoom",
 		"addTrim": "Agregar recorte",
 		"addSpeed": "Agregar velocidad",
 		"addAnnotation": "Agregar anotación",

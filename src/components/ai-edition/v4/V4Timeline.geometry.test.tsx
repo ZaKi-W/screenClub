@@ -91,6 +91,9 @@ function renderTimeline(
 		updateZoomSpan: vi.fn(async () => {
 			/* the drag only awaits it */
 		}),
+		addZoom: vi.fn(async (_durationSec: number, _startSec: number) => {
+			/* lane click only awaits it */
+		}),
 	};
 	render(
 		<V4Timeline
@@ -128,7 +131,45 @@ function zoomIn(notches: number) {
 	}
 }
 
+function timelineNavigationElements() {
+	const tracks = document.querySelector<HTMLElement>("[class*=tlTracks]");
+	const canvas = tracks?.firstElementChild as HTMLElement | null;
+	if (!tracks || !canvas) throw new Error("Timeline navigation elements were not rendered");
+	return { tracks, canvas };
+}
+
 describe("V4Timeline lane pills", () => {
+	it("renders the zoom lane below the video clip row", () => {
+		const { pill, clipEls } = renderTimeline();
+		const clipsRow = clipEls[0]?.parentElement;
+		const zoomLane = pill.parentElement;
+		expect(clipsRow).not.toBeNull();
+		expect(zoomLane).not.toBeNull();
+		expect(clipsRow?.compareDocumentPosition(zoomLane as Node) ?? 0).toBe(
+			Node.DOCUMENT_POSITION_FOLLOWING,
+		);
+	});
+
+	it("adds a zoom at the clicked position on the zoom lane", () => {
+		const { pill, tl } = renderTimeline();
+		const zoomLane = pill.parentElement;
+		expect(zoomLane).not.toBeNull();
+
+		fireEvent.pointerDown(zoomLane as HTMLElement, { clientX: VIEWPORT_PX / 2 });
+		fireEvent.click(zoomLane as HTMLElement, { clientX: VIEWPORT_PX / 2 });
+
+		expect(tl.addZoom).toHaveBeenCalledOnce();
+		expect(tl.addZoom.mock.calls[0]?.[1]).toBeCloseTo(TOTAL_SEC / 2, 6);
+	});
+
+	it("does not add another zoom when an existing zoom pill is clicked", () => {
+		const { pill, tl } = renderTimeline();
+
+		fireEvent.click(pill, { clientX: VIEWPORT_PX / 2 });
+
+		expect(tl.addZoom).not.toHaveBeenCalled();
+	});
+
 	it("draws a pill exactly as wide as its region, at any zoom", () => {
 		// 1 s of 1800 s. The old `Math.max(1.5, …)` floor drew this as 1.5% — 27
 		// seconds of ruler for a one-second region — and did it at every zoom,
@@ -185,6 +226,40 @@ describe("V4Timeline lane pills", () => {
 		// was nowhere near, the more so the longer the recording.
 		dragHandle(right, 885.5);
 		expect(tl.updateZoomSpan).toHaveBeenLastCalledWith("zoom1", 10_000, 1_782_000);
+	});
+});
+
+describe("V4Timeline wheel navigation", () => {
+	it("pans a zoomed timeline with a mouse wheel", () => {
+		renderTimeline();
+		zoomIn(4);
+		const { tracks, canvas } = timelineNavigationElements();
+		const before = canvas.style.transform;
+
+		fireEvent.wheel(tracks, { deltaY: 120, clientX: VIEWPORT_PX / 2 });
+
+		expect(canvas.style.transform).not.toBe(before);
+	});
+
+	it("pans a zoomed timeline with a horizontal trackpad swipe", () => {
+		renderTimeline();
+		zoomIn(4);
+		const { tracks, canvas } = timelineNavigationElements();
+		const before = canvas.style.transform;
+
+		fireEvent.wheel(tracks, { deltaX: 80, deltaY: 2, clientX: VIEWPORT_PX / 2 });
+
+		expect(canvas.style.transform).not.toBe(before);
+	});
+
+	it("keeps Command+wheel available for zooming", () => {
+		renderTimeline();
+		const { tracks, canvas } = timelineNavigationElements();
+		const before = canvas.style.width;
+
+		fireEvent.wheel(tracks, { metaKey: true, deltaY: -100, clientX: VIEWPORT_PX / 2 });
+
+		expect(canvas.style.width).not.toBe(before);
 	});
 });
 

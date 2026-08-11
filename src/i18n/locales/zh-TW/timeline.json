@@ -1,6 +1,5 @@
 {
 	"buttons": {
-		"addZoom": "新增縮放 (Z)",
 		"suggestZooms": "根據游標建議縮放",
 		"autoZoomOn": "自動縮放建議已開啟 — 點擊可移除建議的縮放",
 		"autoZoomOff": "自動縮放建議已關閉 — 點擊可根據游標建議縮放",
@@ -12,7 +11,7 @@
 		"addCameraFullscreen": "新增全螢幕攝影機 (C)"
 	},
 	"hints": {
-		"pressZoom": "按 Z 新增縮放",
+		"clickZoom": "點擊新增縮放",
 		"pressTrim": "按 T 新增剪輯",
 		"pressAnnotation": "按 A 新增標註",
 		"pressSpeed": "按 S 新增速度",
