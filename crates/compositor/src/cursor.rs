@@ -3,23 +3,22 @@
 //! le motion blur du curseur vient gratuitement du supersampling temporel.
 
 use anyhow::{Context, Result};
+use std::sync::OnceLock;
 
-// Paramètres de suivi auto — parité stricte avec
-// `src/lib/zoomMath/constants.ts` (AUTO_FOLLOW_PARAMS), partagés
-// là-bas entre preview et export pour que la caméra suive le curseur à l'identique.
-const AUTO_FOLLOW_MIN_FACTOR: f32 = 0.1;
-const AUTO_FOLLOW_MAX_FACTOR: f32 = 0.25;
-const AUTO_FOLLOW_RAMP_DISTANCE: f32 = 0.15;
-const AUTO_FOLLOW_REFERENCE_MS: f32 = 1000.0 / 40.0;
+use crate::scene::ScreenAnimationStyle;
 
 #[derive(Clone)]
 pub struct CursorTrack {
     /// (t_secondes, cx, cy) normalisés dans le cadre screen, triés.
     samples: Vec<(f32, f32, f32)>,
-    /// Même piste après lissage exponentiel adaptatif — ce que le suivi auto du zoom doit
-    /// consommer. `samples` reste la piste BRUTE : le rendu du curseur lui-même et le click
-    /// bounce doivent coller à la position réelle, seule la caméra est amortie.
-    follow_samples: Vec<(f32, f32, f32)>,
+    /// Réponses de caméra déterministes, dérivées de la piste brute avec les mêmes ressorts
+    /// que l'animation d'écran. `samples` reste la piste BRUTE : le curseur et le click bounce
+    /// collent à la position réelle, seule la caméra est amortie.
+    rapid_follow_samples: OnceLock<Vec<(f32, f32, f32)>>,
+    focused_follow_samples: OnceLock<Vec<(f32, f32, f32)>>,
+    balanced_follow_samples: OnceLock<Vec<(f32, f32, f32)>>,
+    smooth_follow_samples: OnceLock<Vec<(f32, f32, f32)>>,
+    cinematic_follow_samples: OnceLock<Vec<(f32, f32, f32)>>,
     /// instants de clic (secondes) dans la fenêtre.
     clicks: Vec<f32>,
     /// CHANGEMENTS d'état du curseur : (instant, `"arrow"` / `"text"` / `"pointer"` / …), triés.
@@ -50,51 +49,66 @@ fn sample_at(samples: &[(f32, f32, f32)], t: f32) -> Option<(f32, f32)> {
     Some((a.1 + (b.1 - a.1) * f, a.2 + (b.2 - a.2) * f))
 }
 
-/// Port de `advanceFollowFocus` (`cursorFollowUtils.ts`) : lissage exponentiel dont le facteur
-/// croît avec la distance à la cible (loin = rattrape vite, près = décélère), corrigé en temps
-/// pour être indépendant de la cadence.
-///
-/// La version TS est **séquentielle** : elle avance un `prev` d'une frame à l'autre. Rejouer ça
-/// par frame ici ferait dépendre l'image du chemin parcouru pour l'atteindre — deux rendus du
-/// même instant divergeraient selon qu'on y arrive en lecture ou par un seek, et la preview ne
-/// correspondrait plus à l'export. On applique donc le même filtre UNE fois, sur les
-/// échantillons de télémétrie eux-mêmes : le résultat est identique en lecture linéaire et reste
-/// une pure fonction de `t`.
-fn smooth_follow_samples(samples: &[(f32, f32, f32)]) -> Vec<(f32, f32, f32)> {
-    let mut smoothed: Vec<(f32, f32, f32)> = Vec::with_capacity(samples.len());
-    let mut prev: Option<(f32, f32, f32)> = None;
-    for &(t, x, y) in samples {
-        let Some((prev_t, px, py)) = prev else {
-            smoothed.push((t, x, y));
-            prev = Some((t, x, y));
-            continue;
-        };
-        let dt_ms = (t - prev_t) * 1000.0;
-        if !(dt_ms > 0.0) {
-            // Horodatages dupliqués : on garde la valeur déjà lissée plutôt que de diviser par 0.
-            smoothed.push((t, px, py));
-            prev = Some((t, px, py));
+/// Pré-calcule la réponse d'un ressort à 240 Hz, mais ne conserve que les timestamps originaux.
+/// Le sous-échantillonnage fixe rend le résultat indépendant de la cadence de télémétrie sans
+/// multiplier durablement la mémoire. Comme la piste est calculée une fois, `follow_at(t)` reste
+/// une fonction pure : lecture, seek, preview et export produisent la même position.
+fn spring_follow_samples(
+    samples: &[(f32, f32, f32)],
+    style: ScreenAnimationStyle,
+) -> Vec<(f32, f32, f32)> {
+    let Some(&(first_t, first_x, first_y)) = samples.first() else {
+        return Vec::new();
+    };
+    const MAX_STEP_S: f32 = 1.0 / 240.0;
+    let (stiffness, damping, mass) = style.spring_params();
+    let mut out = Vec::with_capacity(samples.len());
+    out.push((first_t, first_x, first_y));
+    let (mut x, mut y, mut vx, mut vy) = (first_x, first_y, 0.0f32, 0.0f32);
+
+    for pair in samples.windows(2) {
+        let (prev_t, prev_target_x, prev_target_y) = pair[0];
+        let (t, target_x, target_y) = pair[1];
+        let elapsed = t - prev_t;
+        if elapsed <= 0.0 || !elapsed.is_finite() {
+            out.push((t, x, y));
             continue;
         }
-        let (dx, dy) = (x - px, y - py);
-        let distance = (dx * dx + dy * dy).sqrt();
-        let ramp = (distance / AUTO_FOLLOW_RAMP_DISTANCE).min(1.0);
-        let base = AUTO_FOLLOW_MIN_FACTOR + (AUTO_FOLLOW_MAX_FACTOR - AUTO_FOLLOW_MIN_FACTOR) * ramp;
-        let factor = 1.0 - (1.0 - base).powf(dt_ms / AUTO_FOLLOW_REFERENCE_MS);
-        let (nx, ny) = (px + dx * factor, py + dy * factor);
-        smoothed.push((t, nx, ny));
-        prev = Some((t, nx, ny));
+        let steps = (elapsed / MAX_STEP_S).ceil().max(1.0) as usize;
+        let dt = elapsed / steps as f32;
+        for step in 1..=steps {
+            let progress = step as f32 / steps as f32;
+            let tx = prev_target_x + (target_x - prev_target_x) * progress;
+            let ty = prev_target_y + (target_y - prev_target_y) * progress;
+            let ax = (-stiffness * (x - tx) - damping * vx) / mass;
+            let ay = (-stiffness * (y - ty) - damping * vy) / mass;
+            vx += ax * dt;
+            vy += ay * dt;
+            x += vx * dt;
+            y += vy * dt;
+        }
+        out.push((t, x, y));
     }
-    smoothed
+    out
 }
 
 impl CursorTrack {
-    /// Seul point de construction : garantit que `follow_samples` est toujours dérivé des
-    /// échantillons courants. Une piste re-lissée (`smoothed`) recalcule donc aussi son suivi,
-    /// pour que la caméra suive la trajectoire que l'utilisateur voit réellement.
+    /// Seul point de construction : garantit que les pistes caméra sont toujours dérivées
+    /// des échantillons courants. Une piste re-lissée recalcule donc aussi son suivi.
     fn new(samples: Vec<(f32, f32, f32)>, clicks: Vec<f32>, types: Vec<(f32, String)>) -> CursorTrack {
-        let follow_samples = smooth_follow_samples(&samples);
-        CursorTrack { samples, follow_samples, clicks, types }
+        let focused_follow_samples = OnceLock::new();
+        let _ = focused_follow_samples
+            .set(spring_follow_samples(&samples, ScreenAnimationStyle::Focused));
+        CursorTrack {
+            samples,
+            rapid_follow_samples: OnceLock::new(),
+            focused_follow_samples,
+            balanced_follow_samples: OnceLock::new(),
+            smooth_follow_samples: OnceLock::new(),
+            cinematic_follow_samples: OnceLock::new(),
+            clicks,
+            types,
+        }
     }
 
     /// État du curseur au temps `t` : la dernière transition à `t` ou avant. `None` avant la
@@ -145,11 +159,24 @@ impl CursorTrack {
         Ok(CursorTrack::new(samples, clicks, types))
     }
 
-    /// Position lissée au temps `t`, pour le suivi auto du zoom. La télémétrie brute est
-    /// échantillonnée trop finement pour piloter une caméra directement : la suivre au sample
-    /// près donne un pan nerveux. Voir `smooth_follow_samples`.
-    pub fn follow_at(&self, t: f32) -> Option<(f32, f32)> {
-        sample_at(&self.follow_samples, t)
+    /// Position de caméra au temps `t`. Focused rattrape la cible plus vite ; Smooth conserve
+    /// davantage d'inertie. Les deux pistes restent déterministes et seek-safe.
+    pub fn follow_at(&self, t: f32, style: ScreenAnimationStyle) -> Option<(f32, f32)> {
+        let (cache, follow_style) = match style {
+            ScreenAnimationStyle::Rapid => (&self.rapid_follow_samples, style),
+            ScreenAnimationStyle::Focused => (&self.focused_follow_samples, style),
+            ScreenAnimationStyle::Balanced => (&self.balanced_follow_samples, style),
+            ScreenAnimationStyle::Smooth => (&self.smooth_follow_samples, style),
+            ScreenAnimationStyle::Cinematic => (&self.cinematic_follow_samples, style),
+            // Classic changes the zoom envelope itself. Its camera follow deliberately keeps
+            // Focused's stable response so only one variable changes during comparison.
+            ScreenAnimationStyle::Classic => (
+                &self.focused_follow_samples,
+                ScreenAnimationStyle::Focused,
+            ),
+        };
+        let samples = cache.get_or_init(|| spring_follow_samples(&self.samples, follow_style));
+        sample_at(samples, t)
     }
 
     /// Position (cx, cy) BRUTE au temps `t` (interpolation linéaire), ou None si hors piste.
@@ -290,5 +317,20 @@ mod tests {
         let smoothed = track.smoothed(0.4);
         assert_eq!(smoothed.type_at(0.1), Some("arrow"));
         assert_eq!(smoothed.type_at(0.7), Some("text"));
+    }
+
+    #[test]
+    fn focused_camera_tracks_a_cursor_change_faster_than_smooth() {
+        let track = CursorTrack::new(
+            vec![(0.0, 0.1, 0.5), (0.1, 0.1, 0.5), (0.2, 0.9, 0.5), (0.4, 0.9, 0.5)],
+            vec![],
+            vec![],
+        );
+
+        let focused = track.follow_at(0.4, ScreenAnimationStyle::Focused).unwrap();
+        let smooth = track.follow_at(0.4, ScreenAnimationStyle::Smooth).unwrap();
+        assert!(focused.0 > smooth.0, "Focused doit rejoindre la cible plus vite");
+        assert!((focused.1 - 0.5).abs() < 1e-6);
+        assert!((smooth.1 - 0.5).abs() < 1e-6);
     }
 }

@@ -1,4 +1,5 @@
 import { clamp01 } from "@/utils/math";
+import { SCREEN_ANIMATION_SPRINGS, type ScreenAnimationStyle } from "./constants";
 
 function sampleCubicBezier(a1: number, a2: number, t: number) {
 	const oneMinusT = 1 - t;
@@ -49,6 +50,33 @@ export function cubicBezier(x1: number, y1: number, x2: number, y2: number, t: n
 
 export function easeOutScreenStudio(t: number) {
 	return cubicBezier(0.16, 1, 0.3, 1, t);
+}
+
+/**
+ * Normalized camera response for the selected preset.
+ *
+ * x(t) = 1 - e^(-ωt)(1 + ωt), with ω = sqrt(k / m). The response is normalized at the
+ * authored settle time so it reaches exactly 1 at the region boundary. Cinematic uses a
+ * symmetric smootherstep and Classic deliberately preserves the previous front-loaded Bezier.
+ */
+export function screenSpringProgress(
+	progress: number,
+	style: ScreenAnimationStyle = "focused",
+): number {
+	const u = clamp01(progress);
+	if (u <= 0) return 0;
+	if (u >= 1 - 1e-9) return 1;
+	const preset = SCREEN_ANIMATION_SPRINGS[style];
+	if (preset.curve === "classic-bezier") {
+		return easeOutScreenStudio(u);
+	}
+	if (preset.curve === "smootherstep") {
+		return u * u * u * (u * (u * 6 - 15) + 10);
+	}
+	const omega = Math.sqrt(preset.stiffness / preset.mass);
+	const durationSec = preset.durationMs / 1000;
+	const response = (seconds: number) => 1 - Math.exp(-omega * seconds) * (1 + omega * seconds);
+	return clamp01(response(u * durationSec) / response(durationSec));
 }
 
 /**

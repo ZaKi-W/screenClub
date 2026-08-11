@@ -415,9 +415,15 @@ export function VirtualPreview({
 		const transform =
 			zoomRegions.length === 0
 				? IDENTITY_ZOOM_TRANSFORM
-				: computeZoomPreviewTransform(zoomRegions, virtualTimeSec * 1000, undefined, playbackRate);
+				: computeZoomPreviewTransform(
+						zoomRegions,
+						virtualTimeSec * 1000,
+						undefined,
+						playbackRate,
+						settings.screenAnimationStyle,
+					);
 		frame.style.transform = `translate(${transform.translateXPercent}%, ${transform.translateYPercent}%) scale(${transform.scale})`;
-	}, [zoomRegions, virtualTimeSec]);
+	}, [settings.screenAnimationStyle, zoomRegions, virtualTimeSec]);
 
 	const seekToVirtualTime = useCallback(
 		(nextVirtualTimeSec: number, preservePlayback = false, forceResume = false) => {

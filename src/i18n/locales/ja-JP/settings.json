@@ -71,6 +71,43 @@
 		"on": "オン",
 		"help": "録画フレームのスタイル設定: 背景ぼかし、ドロップシャドウ、モーションブラー、角丸、動画まわりの余白。"
 	},
+	"animation": {
+		"title": "アニメーション",
+		"help": "再生と書き出し時の画面ズーム、カーソル移動、モーションブラーの反応を調整します。",
+		"screen": {
+			"title": "画面アニメーションスタイル",
+			"rapid": "高速",
+			"focused": "フォーカス",
+			"balanced": "バランス",
+			"smooth": "スムーズ",
+			"cinematic": "シネマティック",
+			"classic": "クラシック",
+			"rapidDescription": "すばやく目標に到達する、きびきびとした反応です。",
+			"focusedDescription": "すばやく安定し、内容を追いやすく読みやすくします。",
+			"balancedDescription": "反応の速さと柔らかさを両立し、日常的な録画に適しています。",
+			"smoothDescription": "フォーカスポイント間をより柔らかなカメラ反応で移動します。",
+			"cinematicDescription": "ゆっくりと重みのあるカメラ反応で、落ち着いた動きを作ります。",
+			"classicDescription": "ばね感のない、なじみのあるイーズイン・アウトを使用します。"
+		},
+		"cursor": {
+			"title": "カーソルアニメーションスタイル",
+			"smooth": "スムーズ",
+			"medium": "標準",
+			"rapid": "高速",
+			"none": "なし"
+		},
+		"motionBlur": {
+			"title": "モーションブラー",
+			"description": "カーソルや画面の移動中に映画的なモーションブラーを加えます。",
+			"amount": "強度",
+			"advanced": "モーションブラーの詳細設定",
+			"screen": "画面ブラー",
+			"cursor": "カーソルブラー",
+			"cursorMovement": "カーソルの移動",
+			"screenZooming": "画面のズーム",
+			"screenMoving": "画面の移動"
+		}
+	},
 	"background": {
 		"title": "背景",
 		"image": "画像",

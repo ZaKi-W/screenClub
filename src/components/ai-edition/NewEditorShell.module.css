@@ -1060,6 +1060,84 @@
 .sliderCell.full { grid-column: 1 / -1; }
 .sliderCell input[type=range]:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ─── animation controls ───────────────────────────────────────── */
+.animationSection {
+	display: grid;
+	gap: 10px;
+	padding: 14px var(--sp-4);
+	border-bottom: 1px solid var(--border-soft);
+}
+.animationSection:last-child { border-bottom: 0; }
+.animationSectionTitle {
+	font: 600 12px var(--font-display);
+	color: var(--fg);
+}
+.animationPresetGrid {
+	display: grid;
+	gap: 8px;
+}
+.animationPresetGrid.twoColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.animationPresetGrid.fourColumns { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.animationPresetCard {
+	min-width: 0;
+	min-height: 72px;
+	padding: 10px 6px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--bg);
+	color: var(--muted);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	font: 600 11px var(--font-body);
+	cursor: pointer;
+	transition: border-color 150ms ease, background 150ms ease, color 150ms ease,
+		box-shadow 150ms ease;
+}
+.animationPresetCard:hover {
+	border-color: var(--border-hi);
+	background: var(--surface-2);
+	color: var(--fg-2);
+}
+.animationPresetCard.isActive {
+	border-color: var(--brand);
+	background: color-mix(in oklab, var(--brand), transparent 92%);
+	color: var(--fg);
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--brand), transparent 76%);
+}
+.animationPresetCard:disabled { opacity: 0.5; cursor: not-allowed; }
+.animationDescription {
+	margin: 0;
+	font: 400 11.5px/1.5 var(--font-body);
+	color: var(--muted);
+}
+.animationSliderWrap { min-width: 0; }
+.animationAdvancedToggle {
+	width: 100%;
+	padding: 10px 2px 4px;
+	border: 0;
+	background: transparent;
+	color: var(--fg-2);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font: 600 11.5px var(--font-body);
+	cursor: pointer;
+}
+.animationAdvancedToggle svg {
+	color: var(--muted);
+	transition: transform 150ms ease;
+}
+.animationAdvancedToggle svg.isExpanded { transform: rotate(180deg); }
+.animationAdvancedBody {
+	display: grid;
+	gap: 8px;
+	padding-top: 2px;
+}
+
 /* ─── cursor style grid ────────────────────────────────────────── */
 .cursorGrid {
 	display: grid;

@@ -72,6 +72,43 @@
 		"on": "開",
 		"help": "錄製畫面的外框樣式：背景模糊、陰影、動態模糊、圓角半徑，以及影片四周的內距。"
 	},
+	"animation": {
+		"title": "動畫",
+		"help": "控制播放和匯出時畫面縮放、游標移動與動態模糊的反應方式。",
+		"screen": {
+			"title": "畫面動畫樣式",
+			"rapid": "迅速",
+			"focused": "聚焦",
+			"balanced": "均衡",
+			"smooth": "平滑",
+			"cinematic": "電影感",
+			"classic": "經典",
+			"rapidDescription": "快速到達目標，鏡頭反應俐落。",
+			"focusedDescription": "動畫會快速穩定，讓內容更容易跟隨和閱讀。",
+			"balancedDescription": "在反應速度和柔和度之間取得平衡，適合日常錄製。",
+			"smoothDescription": "使用更柔和的鏡頭反應，在不同焦點之間流暢移動。",
+			"cinematicDescription": "鏡頭反應更慢、更有重量感，營造從容的運動效果。",
+			"classicDescription": "使用熟悉的緩入緩出曲線，沒有彈簧感。"
+		},
+		"cursor": {
+			"title": "游標動畫樣式",
+			"smooth": "平滑",
+			"medium": "適中",
+			"rapid": "快速",
+			"none": "無"
+		},
+		"motionBlur": {
+			"title": "動態模糊",
+			"description": "游標或畫面移動時套用電影感動態模糊。",
+			"amount": "強度",
+			"advanced": "進階動態模糊設定",
+			"screen": "畫面模糊",
+			"cursor": "游標模糊",
+			"cursorMovement": "游標移動",
+			"screenZooming": "畫面縮放",
+			"screenMoving": "畫面移動"
+		}
+	},
 	"background": {
 		"title": "背景",
 		"image": "圖片",

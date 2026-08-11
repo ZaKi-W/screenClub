@@ -466,14 +466,29 @@ impl Player {
     /// silencieusement de plus en plus au fil de la lecture dès que le fichier n'est pas
     /// exactement à 60fps (30/59.94/etc. sont courants), au lieu de suivre le pts réel du
     /// décodeur — exactement la cause du "zoom désynchronisé de la timeline" observé.
-    unsafe fn sync_time(&self, comp: &Compositor) {
-        let t = self.sdec.cur_time_sec() as f32;
+    unsafe fn sync_time_at(&self, comp: &Compositor, t: f32) {
         comp.set_cursor_time(Some(t));
         comp.set_timeline_time(Some(t));
     }
 
+    unsafe fn sync_time(&self, comp: &Compositor) {
+        self.sync_time_at(comp, self.sdec.cur_time_sec() as f32);
+    }
+
     /// Recompose la frame courante (déjà décodée) — rafraîchit après un changement de param.
     pub unsafe fn recompose(&self, comp: &Compositor, cfg: &Cfg) -> Result<bool> {
+        self.recompose_at_time(comp, cfg, self.sdec.cur_time_sec() as f32)
+    }
+
+    /// Recompose la texture vidéo tenue au temps logique demandé. Les captures écran VFR
+    /// n'émettent aucune nouvelle frame pendant un plan statique ; le zoom et le curseur doivent
+    /// pourtant continuer à 60 Hz au lieu d'attendre le prochain PTS vidéo réel.
+    pub unsafe fn recompose_at_time(
+        &self,
+        comp: &Compositor,
+        cfg: &Cfg,
+        timeline_time_sec: f32,
+    ) -> Result<bool> {
         if !self.has_current_frame {
             return Ok(false);
         }
@@ -482,7 +497,7 @@ impl Player {
         if sf.is_null() || wf.is_null() {
             return Ok(false);
         }
-        self.sync_time(comp);
+        self.sync_time_at(comp, timeline_time_sec);
         let f = self.idx.saturating_sub(1);
         comp.compose_frame(sf, wf, f as f32, cfg)?;
         Ok(true)
@@ -504,7 +519,10 @@ impl Player {
         }
         self.has_current_frame = true;
         self.use_current_on_next_step = false;
-        self.sync_time(comp);
+        // Le seek choisit la dernière texture vidéo disponible à `target_sec`, mais les effets
+        // temporels se calculent à la position demandée exacte — pas au PTS éventuellement
+        // antérieur de cette texture (écart particulièrement visible sur une capture VFR).
+        self.sync_time_at(comp, target_sec as f32);
         // "idx" ne sert plus qu'au fallback fixture (jamais lu si une scène est posée) — dérivé
         // du temps réel pour rester cohérent si jamais consulté.
         self.idx = (target_sec * self.sdec.fps()).round().max(0.0) as u32;
@@ -849,6 +867,22 @@ impl LiveView {
                 "cursorSmoothing" => p.cursor_smoothing = v.clamp(0.0, 1.0),
                 "cursorMotionBlur" => p.cursor_motion_blur = v.clamp(0.0, 1.0),
                 _ => {}
+            }
+        }
+        // Les valeurs séparées vivent dans le contrat de scène (le fallback historique reste
+        // `mblur_taps`). Les appliquer aussi ici rend le slider avancé immédiat, avant même que
+        // React repousse la SceneDescription complète.
+        if matches!(key, "motionBlurZoom" | "motionBlurPan") {
+            if let Ok(mut scene) = self.shared.scene.lock() {
+                if let Some(scene) = scene.as_mut() {
+                    let amount = (value as f32).clamp(0.0, 1.0);
+                    match key {
+                        "motionBlurZoom" => scene.effects.motion_blur_zoom = Some(amount),
+                        "motionBlurPan" => scene.effects.motion_blur_pan = Some(amount),
+                        _ => unreachable!(),
+                    }
+                    self.shared.scene_dirty.store(true, Ordering::Relaxed);
+                }
             }
         }
     }
@@ -1210,6 +1244,9 @@ fn preview_render_size(scene: Option<&Scene>, pw: u32, ph: u32) -> (u32, u32) {
     Compositor::normalize_render_size((ow * scale).round() as u32, (oh * scale).round() as u32)
 }
 
+/// Camera/cursor presentation cadence, independent from the recording's VFR media cadence.
+const PREVIEW_PRESENT_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / 60);
+
 /// Boucle de rendu (thread dédié) : décode → compose → resize → readback → publie
 /// dans `Shared::latest_frame`.
 unsafe fn render_thread(
@@ -1265,6 +1302,7 @@ unsafe fn render_thread(
     cfg.layout_anim = false;
 
     let mut last = Instant::now();
+    let mut last_present = Instant::now() - PREVIEW_PRESENT_INTERVAL;
     let mut acc = 0.0f64;
     let mut first = true;
     let mut last_preview_size: (u32, u32) = (0, 0);
@@ -1603,6 +1641,23 @@ unsafe fn render_thread(
             // pause : recompose la frame courante (param / scène / clip / résolution changés).
             let _ = player.recompose(&comp, &cfg);
             stepped = true;
+        }
+
+        // A screen recording is commonly VFR: when nothing changes in the captured app, the
+        // decoder legitimately holds the same AVFrame for tens or hundreds of milliseconds.
+        // Camera effects are not media frames, though. Present the held texture at a continuous
+        // 60 Hz logical time so a 450 ms zoom always contains about 27 visual states instead of
+        // jumping only when the source happens to emit another frame.
+        if shared.playing.load(Ordering::Relaxed) {
+            if stepped {
+                last_present = now;
+            } else if now.duration_since(last_present) >= PREVIEW_PRESENT_INTERVAL {
+                let logical_source_time = (player.screen_time_sec() + acc) as f32;
+                if player.recompose_at_time(&comp, &cfg, logical_source_time)? {
+                    stepped = true;
+                    last_present = now;
+                }
+            }
         }
 
         if stepped || first {

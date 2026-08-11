@@ -6,7 +6,9 @@
 //! tilt perspective — ce module ne fait que le calcul temporel, pas le rendu GPU).
 
 use crate::cursor::CursorTrack;
-use crate::scene::{SceneCameraFullscreenRegion, SceneSpeedRegion, SceneZoomRegion};
+use crate::scene::{
+    SceneCameraFullscreenRegion, SceneSpeedRegion, SceneZoomRegion, ScreenAnimationStyle,
+};
 
 /// Quantification commune vidéo/audio : le web retranche exactement 1 ms avant `ceil`.
 pub const SPEED_FRAME_EPSILON_SEC: f64 = 0.001;
@@ -110,10 +112,8 @@ fn push_speed_segment(
     spans.push(SpeedSegment { start_sec, end_sec, speed, frame_count: frames });
 }
 
-// mêmes fenêtres de transition que le web (TRANSITION_WINDOW_MS etc., converties en secondes).
+// mêmes fenêtres de transition que le web (constants.ts, converties en secondes).
 const TRANSITION_WINDOW_S: f32 = 1.01505;
-const ZOOM_IN_TRANSITION_WINDOW_S: f32 = TRANSITION_WINDOW_S * 1.5;
-const ZOOM_IN_OVERLAP_S: f32 = 0.5;
 const FULLSCREEN_LEAD_OUT_WINDOW_S: f32 = TRANSITION_WINDOW_S * 1.5;
 // port de `CHAINED_ZOOM_PAN_GAP_MS` / `CONNECTED_ZOOM_PAN_DURATION_MS` (TS).
 const CHAINED_ZOOM_PAN_GAP_S: f32 = 1.5;
@@ -162,7 +162,31 @@ fn cubic_bezier(x1: f32, y1: f32, x2: f32, y2: f32, t: f32) -> f32 {
     sample_cubic_bezier(y1, y2, solved_t)
 }
 
-/// Port de `easeOutScreenStudio` (TS) : cubic-bezier(0.16, 1, 0.3, 1).
+/// Réponse indicielle d'un ressort à amortissement critique, normalisée pour atteindre
+/// exactement 1 à la fin de la fenêtre éditée. La vitesse au départ est nulle, donc le zoom ne
+/// "saute" plus de la première frame comme l'ancien ease-out très chargé en début de courbe.
+fn screen_animation_progress(t: f32, style: ScreenAnimationStyle) -> f32 {
+    let u = clamp01(t);
+    if u <= 0.0 {
+        return 0.0;
+    }
+    if u >= 1.0 - 1e-6 {
+        return 1.0;
+    }
+    if style == ScreenAnimationStyle::Classic {
+        return ease_out_screen_studio(u);
+    }
+    if style == ScreenAnimationStyle::Cinematic {
+        return u * u * u * (u * (u * 6.0 - 15.0) + 10.0);
+    }
+    let (stiffness, _damping, mass) = style.spring_params();
+    let omega = (stiffness / mass).sqrt();
+    let duration = style.zoom_transition_window_sec();
+    let response = |seconds: f32| 1.0 - (-omega * seconds).exp() * (1.0 + omega * seconds);
+    clamp01(response(u * duration) / response(duration).max(1e-6))
+}
+
+/// Legacy ease kept for the independent Full Camera transition.
 fn ease_out_screen_studio(t: f32) -> f32 {
     cubic_bezier(0.16, 1.0, 0.3, 1.0, t)
 }
@@ -171,28 +195,28 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-/// Port de `computeRegionStrength` (TS, `zoomRegionUtils.ts`) : 0 hors fenêtre, ease-in avant
-/// `startSec` (le zoom anticipe légèrement), plein régime pendant la région, ease-out après
-/// `endSec`. Les temps reçus sont les temps source échantillonnés par le pipeline, donc ces
-/// enveloppes restent alignées quand une speed region répète ou saute des frames.
-fn zoom_region_strength(region: &SceneZoomRegion, t: f32) -> f32 {
+/// Port de `computeRegionStrength` (TS, `zoomRegionUtils.ts`) : le zoom commence exactement à
+/// `startSec`, atteint sa force maximale après la durée du style choisi, puis commence à revenir
+/// exactement à `endSec` avec la même durée. Les temps reçus sont les temps source échantillonnés par le
+/// pipeline, donc ces enveloppes restent alignées quand une speed region répète ou saute des
+/// frames.
+fn zoom_region_strength(region: &SceneZoomRegion, t: f32, style: ScreenAnimationStyle) -> f32 {
     let start = region.start_sec as f32;
     let end = region.end_sec as f32;
-    let zoom_in_end = start + ZOOM_IN_OVERLAP_S;
-    let lead_in_start = zoom_in_end - ZOOM_IN_TRANSITION_WINDOW_S;
-    let lead_out_end = end + TRANSITION_WINDOW_S;
-    if t < lead_in_start || t > lead_out_end {
+    let transition_window_s = style.zoom_transition_window_sec().max(0.001);
+    let lead_out_end = end + transition_window_s;
+    if t <= start || t >= lead_out_end {
         return 0.0;
     }
-    if t < zoom_in_end {
-        let progress = (t - lead_in_start) / ZOOM_IN_TRANSITION_WINDOW_S;
-        return ease_out_screen_studio(progress);
-    }
     if t <= end {
-        return 1.0;
+        let progress = clamp01((t - start) / transition_window_s);
+        return screen_animation_progress(progress, style);
     }
-    let progress = clamp01((t - end) / TRANSITION_WINDOW_S);
-    1.0 - ease_out_screen_studio(progress)
+    // Une région très courte peut finir avant la fin des 450 ms d'entrée. Repartir de la force
+    // réellement atteinte évite un saut à 100 % au bord de fin.
+    let strength_at_end = screen_animation_progress(clamp01((end - start) / transition_window_s), style);
+    let zoom_out_progress = clamp01((t - end) / transition_window_s);
+    strength_at_end * (1.0 - screen_animation_progress(zoom_out_progress, style))
 }
 
 /// État de zoom complet au temps `t` : échelle, focus, ET tilt 3D (degrés X/Y/Z — rendu en
@@ -204,11 +228,6 @@ pub struct ZoomState {
 }
 
 const IDENTITY_ZOOM: ZoomState = ZoomState { scale: 1.0, focus: [0.5, 0.5], rotation: [0.0, 0.0, 0.0] };
-
-/// Port de `easeConnectedPan` (TS) : cubic-bezier(0.1, 0, 0.2, 1).
-fn ease_connected_pan(t: f32) -> f32 {
-    cubic_bezier(0.1, 0.0, 0.2, 1.0, t)
-}
 
 /// Port de `getRotation3D`/`ROTATION_3D_PRESETS` (TS, `types.ts`) — degrés (rotationX, Y, Z).
 /// Angles des présets, en degrés X/Y/Z.
@@ -292,13 +311,18 @@ pub fn arrow_local_geometry(
 /// Focus effectif d'une région à `t` : sa position fixe, sauf en mode "auto" où elle suit la
 /// télémétrie curseur (port de `getResolvedFocus`, sans le clamp — le crop-window de
 /// `compositor.rs` clampe déjà après coup, cf. `su0.clamp(...)`, donc redondant ici).
-fn resolve_focus(region: &SceneZoomRegion, t: f32, cursor: Option<&CursorTrack>) -> [f32; 2] {
+fn resolve_focus(
+    region: &SceneZoomRegion,
+    t: f32,
+    cursor: Option<&CursorTrack>,
+    animation_style: ScreenAnimationStyle,
+) -> [f32; 2] {
     if region.focus_mode.as_deref() == Some("auto") {
         if let Some(track) = cursor {
             // `follow_at`, pas `at` : la caméra suit la piste LISSÉE. Suivre la télémétrie brute
             // donne un pan nerveux — l'étage de lissage de `cursorFollowUtils.ts` manquait au
             // portage.
-            if let Some((cx, cy)) = track.follow_at(t) {
+            if let Some((cx, cy)) = track.follow_at(t, animation_style) {
                 return [cx, cy];
             }
         }
@@ -331,6 +355,15 @@ fn connected_pairs(regions: &[SceneZoomRegion]) -> Vec<(usize, usize, f32, f32)>
 /// hold), sinon la région "dominante" indépendante la plus forte (ties → la plus récente).
 /// Hors de toute région → identité (échelle 1, focus centre, tilt nul).
 pub fn zoom_state_at(regions: &[SceneZoomRegion], t: f32, cursor: Option<&CursorTrack>) -> ZoomState {
+    zoom_state_at_with_style(regions, t, cursor, ScreenAnimationStyle::Focused)
+}
+
+pub fn zoom_state_at_with_style(
+    regions: &[SceneZoomRegion],
+    t: f32,
+    cursor: Option<&CursorTrack>,
+    animation_style: ScreenAnimationStyle,
+) -> ZoomState {
     if regions.is_empty() {
         return IDENTITY_ZOOM;
     }
@@ -341,10 +374,13 @@ pub fn zoom_state_at(regions: &[SceneZoomRegion], t: f32, cursor: Option<&Cursor
         if t < t_start || t > t_end {
             continue;
         }
-        let progress = ease_connected_pan(clamp01((t - t_start) / (t_end - t_start).max(1e-3)));
+        let progress = screen_animation_progress(
+            clamp01((t - t_start) / (t_end - t_start).max(1e-3)),
+            animation_style,
+        );
         let (cur, next) = (&regions[ci], &regions[ni]);
-        let cur_focus = resolve_focus(cur, t, cursor);
-        let next_focus = resolve_focus(next, t, cursor);
+        let cur_focus = resolve_focus(cur, t, cursor, animation_style);
+        let next_focus = resolve_focus(next, t, cursor, animation_style);
         return ZoomState {
             scale: lerp(cur.scale, next.scale, progress),
             focus: [lerp(cur_focus[0], next_focus[0], progress), lerp(cur_focus[1], next_focus[1], progress)],
@@ -359,7 +395,7 @@ pub fn zoom_state_at(regions: &[SceneZoomRegion], t: f32, cursor: Option<&Cursor
         if t > t_end && t < next.start_sec as f32 {
             return ZoomState {
                 scale: next.scale,
-                focus: resolve_focus(next, t, cursor),
+                focus: resolve_focus(next, t, cursor, animation_style),
                 rotation: rotation3d_for(&next.rotation),
             };
         }
@@ -375,7 +411,7 @@ pub fn zoom_state_at(regions: &[SceneZoomRegion], t: f32, cursor: Option<&Cursor
         if outgoing_past_end || incoming_before_transition_end {
             continue;
         }
-        let s = zoom_region_strength(r, t);
+        let s = zoom_region_strength(r, t, animation_style);
         if s <= 0.0 {
             continue;
         }
@@ -390,7 +426,7 @@ pub fn zoom_state_at(regions: &[SceneZoomRegion], t: f32, cursor: Option<&Cursor
     match best {
         Some((i, strength)) => {
             let r = &regions[i];
-            let focus = resolve_focus(r, t, cursor);
+            let focus = resolve_focus(r, t, cursor, animation_style);
             let scale = lerp(1.0, r.scale, strength);
             // La référence (`zoomTransform.ts`) fait converger le point de focus vers le centre
             // de l'écran LINÉAIREMENT : screen(f) = 0.5 + (f - 0.5)(1 - strength). Passer
@@ -618,16 +654,92 @@ mod zoom_focus_tests {
     use crate::scene::SceneZoomRegion;
 
     fn region(scale: f32, focus_x: f32) -> SceneZoomRegion {
+        region_span(2.0, 8.0, scale, focus_x)
+    }
+
+    fn region_span(start_sec: f64, end_sec: f64, scale: f32, focus_x: f32) -> SceneZoomRegion {
         SceneZoomRegion {
             id: "z1".into(),
             clip_index: None,
-            start_sec: 2.0,
-            end_sec: 8.0,
+            start_sec,
+            end_sec,
             scale,
             focus_x,
             focus_y: 0.5,
             focus_mode: Some("manual".into()),
             rotation: None,
+        }
+    }
+
+    #[test]
+    fn zoom_ramps_begin_at_region_edges_and_use_matching_450ms_windows() {
+        let r = region_span(3.0, 4.0, 2.5, 0.5);
+
+        assert_eq!(zoom_region_strength(&r, 2.999, ScreenAnimationStyle::Focused), 0.0);
+        assert_eq!(zoom_region_strength(&r, 3.0, ScreenAnimationStyle::Focused), 0.0);
+        assert!(zoom_region_strength(&r, 3.2, ScreenAnimationStyle::Focused) > 0.0);
+        assert_eq!(zoom_region_strength(&r, 3.45, ScreenAnimationStyle::Focused), 1.0);
+        assert_eq!(zoom_region_strength(&r, 4.0, ScreenAnimationStyle::Focused), 1.0);
+        assert!(zoom_region_strength(&r, 4.2, ScreenAnimationStyle::Focused) < 1.0);
+        assert_eq!(zoom_region_strength(&r, 4.45, ScreenAnimationStyle::Focused), 0.0);
+    }
+
+    #[test]
+    fn short_zoom_reverses_from_the_strength_reached_at_its_end() {
+        let r = region_span(3.0, 3.25, 2.5, 0.5);
+        let strength_at_end = zoom_region_strength(&r, 3.25, ScreenAnimationStyle::Focused);
+
+        assert!(strength_at_end > 0.0 && strength_at_end < 1.0);
+        assert!(zoom_region_strength(&r, 3.251, ScreenAnimationStyle::Focused) < strength_at_end);
+        assert_eq!(zoom_region_strength(&r, 3.7, ScreenAnimationStyle::Focused), 0.0);
+    }
+
+    #[test]
+    fn spring_launches_with_near_zero_velocity_instead_of_front_loading() {
+        let r = region_span(3.0, 4.0, 2.5, 0.5);
+        let first_ms = zoom_region_strength(&r, 3.001, ScreenAnimationStyle::Focused);
+        let first_50_ms = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Focused);
+
+        assert!(first_ms < 0.001, "first millisecond should be effectively still: {first_ms}");
+        assert!(first_50_ms > 0.1 && first_50_ms < 0.3, "50 ms response: {first_50_ms}");
+    }
+
+    #[test]
+    fn smooth_style_uses_a_longer_symmetric_transition() {
+        let r = region_span(3.0, 4.0, 2.5, 0.5);
+        let focused = zoom_state_at_with_style(&[r.clone()], 3.45, None, ScreenAnimationStyle::Focused);
+        let smooth = zoom_state_at_with_style(&[r], 3.45, None, ScreenAnimationStyle::Smooth);
+
+        assert!((focused.scale - 2.5).abs() < 0.0001);
+        assert!(smooth.scale > 1.0 && smooth.scale < focused.scale);
+    }
+
+    #[test]
+    fn six_presets_have_distinct_launch_shapes_and_exact_edges() {
+        let r = region_span(3.0, 5.0, 2.5, 0.5);
+        let rapid = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Rapid);
+        let focused = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Focused);
+        let balanced = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Balanced);
+        let smooth = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Smooth);
+        let cinematic = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Cinematic);
+        let classic = zoom_region_strength(&r, 3.05, ScreenAnimationStyle::Classic);
+
+        assert!(classic > rapid);
+        assert!(rapid > focused);
+        assert!(focused > balanced);
+        assert!(balanced > smooth);
+        assert!(smooth > cinematic);
+        for style in [
+            ScreenAnimationStyle::Rapid,
+            ScreenAnimationStyle::Focused,
+            ScreenAnimationStyle::Balanced,
+            ScreenAnimationStyle::Smooth,
+            ScreenAnimationStyle::Cinematic,
+            ScreenAnimationStyle::Classic,
+        ] {
+            let duration = style.zoom_transition_window_sec();
+            assert_eq!(zoom_region_strength(&r, 3.0 + duration, style), 1.0);
+            assert_eq!(zoom_region_strength(&r, 5.0 + duration, style), 0.0);
         }
     }
 

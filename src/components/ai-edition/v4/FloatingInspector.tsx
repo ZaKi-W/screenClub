@@ -1,4 +1,5 @@
 import {
+	Activity,
 	Captions as CaptionsIcon,
 	ChevronRight,
 	FileText,
@@ -40,6 +41,7 @@ import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { CaptionsPane } from "../CaptionsPane";
 import { ColorField } from "../ColorField";
 import {
+	AnimationPane,
 	CursorPane,
 	LayoutPane,
 	SliderCell,
@@ -51,12 +53,20 @@ import styles from "./EditorShellV4.module.css";
 
 type TimelineApi = ReturnType<typeof useTimeline>;
 
-export type Facet = "background" | "effects" | "layout" | "cursor" | "captions" | "transcript";
+export type Facet =
+	| "background"
+	| "effects"
+	| "layout"
+	| "cursor"
+	| "animation"
+	| "captions"
+	| "transcript";
 
 const FACETS: Array<{ id: Facet; labelKey: string; icon: typeof SlidersHorizontal }> = [
 	{ id: "effects", labelKey: "effects.title", icon: SlidersHorizontal },
 	{ id: "layout", labelKey: "layout.title", icon: LayoutIcon },
 	{ id: "cursor", labelKey: "cursor.title", icon: MousePointer2 },
+	{ id: "animation", labelKey: "animation.title", icon: Activity },
 	...(TRANSCRIPTION_FEATURE_ENABLED
 		? [
 				{ id: "captions" as const, labelKey: "facets.captions", icon: CaptionsIcon },
@@ -970,6 +980,7 @@ function FacetBody({
 	if (facet === "effects") return wrap(collapse, <VideoAppearancePane />);
 	if (facet === "layout") return wrap(collapse, <LayoutPane />);
 	if (facet === "cursor") return wrap(collapse, <CursorPane />);
+	if (facet === "animation") return wrap(collapse, <AnimationPane />);
 	if (facet === "transcript") return wrap(collapse, <TranscriptPane {...transcriptProps} />);
 	return wrap(collapse, <CaptionsPane />);
 }

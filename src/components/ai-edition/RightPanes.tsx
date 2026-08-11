@@ -6,14 +6,23 @@
 // self-sufficient).
 
 import {
+	Activity,
+	Ban,
+	ChevronDown,
+	Clapperboard,
 	FileText,
+	Focus,
+	Gauge,
 	HelpCircle,
 	Layout as LayoutIcon,
 	Loader2,
 	MousePointerClick,
 	Palette,
+	RotateCcw,
 	Sliders,
+	Spline,
 	Trash2,
+	Zap,
 } from "lucide-react";
 import {
 	type ChangeEvent,
@@ -41,6 +50,12 @@ import type {
 	AxcutTrimRange,
 	AxcutWord,
 } from "@/lib/ai-edition/schema";
+import {
+	CURSOR_ANIMATION_SMOOTHING,
+	type CursorAnimationStyle,
+	cursorAnimationStyleForSmoothing,
+	type ScreenAnimationStyle,
+} from "@/lib/ai-edition/store/editorSettings";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import {
@@ -1365,6 +1380,217 @@ export type { AxcutWord };
 
 // ─── Video Effects ─────────────────────────────────────────────────
 
+const SCREEN_ANIMATION_OPTIONS: Array<{
+	value: ScreenAnimationStyle;
+	labelKey: string;
+	descriptionKey: string;
+	icon: typeof Focus;
+}> = [
+	{
+		value: "rapid",
+		labelKey: "animation.screen.rapid",
+		descriptionKey: "animation.screen.rapidDescription",
+		icon: Zap,
+	},
+	{
+		value: "focused",
+		labelKey: "animation.screen.focused",
+		descriptionKey: "animation.screen.focusedDescription",
+		icon: Focus,
+	},
+	{
+		value: "balanced",
+		labelKey: "animation.screen.balanced",
+		descriptionKey: "animation.screen.balancedDescription",
+		icon: Gauge,
+	},
+	{
+		value: "smooth",
+		labelKey: "animation.screen.smooth",
+		descriptionKey: "animation.screen.smoothDescription",
+		icon: Spline,
+	},
+	{
+		value: "cinematic",
+		labelKey: "animation.screen.cinematic",
+		descriptionKey: "animation.screen.cinematicDescription",
+		icon: Clapperboard,
+	},
+	{
+		value: "classic",
+		labelKey: "animation.screen.classic",
+		descriptionKey: "animation.screen.classicDescription",
+		icon: RotateCcw,
+	},
+];
+
+const CURSOR_ANIMATION_OPTIONS: Array<{
+	value: CursorAnimationStyle;
+	labelKey: string;
+	icon: typeof Focus;
+}> = [
+	{ value: "smooth", labelKey: "animation.cursor.smooth", icon: Spline },
+	{ value: "medium", labelKey: "animation.cursor.medium", icon: Gauge },
+	{ value: "rapid", labelKey: "animation.cursor.rapid", icon: Zap },
+	{ value: "none", labelKey: "animation.cursor.none", icon: Ban },
+];
+
+/** Screen/cursor animation controls grouped the way Screen Studio presents them. */
+export function AnimationPane() {
+	const ts = useScopedT("settings");
+	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
+	const [advancedOpen, setAdvancedOpen] = useState(false);
+	const cursorStyle = cursorAnimationStyleForSmoothing(settings.cursor.smoothing);
+	const selectedScreen =
+		SCREEN_ANIMATION_OPTIONS.find((option) => option.value === settings.screenAnimationStyle) ??
+		SCREEN_ANIMATION_OPTIONS[0];
+	const globalMotionBlur =
+		((settings.motionBlurZoom + settings.motionBlurPan + settings.cursor.motionBlur) / 3) * 100;
+
+	const setMotionBlurLive = (zoom: number, pan: number, cursor: number) => {
+		// Keep the old aggregate value meaningful for older renderers. New renderers
+		// consume the independent zoom/pan channels from the scene description.
+		const screen = (zoom + pan) / 2;
+		setLive({
+			motionBlurAmount: screen,
+			motionBlurZoom: zoom,
+			motionBlurPan: pan,
+			cursor: { motionBlur: cursor },
+		});
+		if (isNativeCompositorActive()) {
+			setNativeParam("motionBlur", screen);
+			setNativeParam("motionBlurZoom", zoom);
+			setNativeParam("motionBlurPan", pan);
+			setNativeParam("cursorMotionBlur", cursor);
+		}
+	};
+
+	return (
+		<Pane
+			title={ts("animation.title")}
+			icon={<Activity size={14} />}
+			helpText={ts("animation.help")}
+		>
+			<div className={styles.animationSection}>
+				<div className={styles.animationSectionTitle}>{ts("animation.screen.title")}</div>
+				<div className={`${styles.animationPresetGrid} ${styles.fourColumns}`}>
+					{SCREEN_ANIMATION_OPTIONS.map(({ value, labelKey, icon: Icon }) => {
+						const active = settings.screenAnimationStyle === value;
+						return (
+							<button
+								type="button"
+								key={value}
+								className={`${styles.animationPresetCard} ${active ? styles.isActive : ""}`}
+								aria-pressed={active}
+								disabled={!hasDocument}
+								onClick={() => void set({ screenAnimationStyle: value })}
+							>
+								<Icon size={22} strokeWidth={1.8} />
+								<span>{ts(labelKey)}</span>
+							</button>
+						);
+					})}
+				</div>
+				<p className={styles.animationDescription}>{ts(selectedScreen.descriptionKey)}</p>
+			</div>
+
+			<div className={styles.animationSection}>
+				<div className={styles.animationSectionTitle}>{ts("animation.cursor.title")}</div>
+				<div className={`${styles.animationPresetGrid} ${styles.fourColumns}`}>
+					{CURSOR_ANIMATION_OPTIONS.map(({ value, labelKey, icon: Icon }) => {
+						const active = cursorStyle === value;
+						return (
+							<button
+								type="button"
+								key={value}
+								className={`${styles.animationPresetCard} ${active ? styles.isActive : ""}`}
+								aria-pressed={active}
+								disabled={!hasDocument}
+								onClick={() => {
+									const smoothing = CURSOR_ANIMATION_SMOOTHING[value];
+									void set({ cursor: { smoothing } });
+									if (isNativeCompositorActive()) {
+										setNativeParam("cursorSmoothing", smoothing);
+									}
+								}}
+							>
+								<Icon size={20} strokeWidth={1.8} />
+								<span>{ts(labelKey)}</span>
+							</button>
+						);
+					})}
+				</div>
+			</div>
+
+			<div className={styles.animationSection}>
+				<div className={styles.animationSectionTitle}>{ts("animation.motionBlur.title")}</div>
+				<p className={styles.animationDescription}>{ts("animation.motionBlur.description")}</p>
+				<div className={styles.animationSliderWrap}>
+					<SliderCell
+						label={ts("animation.motionBlur.amount")}
+						value={globalMotionBlur}
+						min={0}
+						max={100}
+						suffix="%"
+						disabled={!hasDocument}
+						onChange={(value) => setMotionBlurLive(value / 100, value / 100, value / 100)}
+						onCommit={() => void commit()}
+					/>
+				</div>
+				<button
+					type="button"
+					className={styles.animationAdvancedToggle}
+					aria-expanded={advancedOpen}
+					onClick={() => setAdvancedOpen((open) => !open)}
+				>
+					<span>{ts("animation.motionBlur.advanced")}</span>
+					<ChevronDown size={16} className={advancedOpen ? styles.isExpanded : undefined} />
+				</button>
+				{advancedOpen ? (
+					<div className={styles.animationAdvancedBody}>
+						<SliderCell
+							label={ts("animation.motionBlur.cursorMovement")}
+							value={settings.cursor.motionBlur * 100}
+							min={0}
+							max={100}
+							suffix="%"
+							disabled={!hasDocument}
+							onChange={(value) =>
+								setMotionBlurLive(settings.motionBlurZoom, settings.motionBlurPan, value / 100)
+							}
+							onCommit={() => void commit()}
+						/>
+						<SliderCell
+							label={ts("animation.motionBlur.screenZooming")}
+							value={settings.motionBlurZoom * 100}
+							min={0}
+							max={100}
+							suffix="%"
+							disabled={!hasDocument}
+							onChange={(value) =>
+								setMotionBlurLive(value / 100, settings.motionBlurPan, settings.cursor.motionBlur)
+							}
+							onCommit={() => void commit()}
+						/>
+						<SliderCell
+							label={ts("animation.motionBlur.screenMoving")}
+							value={settings.motionBlurPan * 100}
+							min={0}
+							max={100}
+							suffix="%"
+							disabled={!hasDocument}
+							onChange={(value) =>
+								setMotionBlurLive(settings.motionBlurZoom, value / 100, settings.cursor.motionBlur)
+							}
+							onCommit={() => void commit()}
+						/>
+					</div>
+				) : null}
+			</div>
+		</Pane>
+	);
+}
+
 export function VideoEffectsPane({ embedded = false }: { embedded?: boolean } = {}) {
 	const ts = useScopedT("settings");
 	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
@@ -1399,21 +1625,6 @@ export function VideoEffectsPane({ embedded = false }: { embedded?: boolean } = 
 				/>
 			</div>
 			<div className={styles.sliderGrid}>
-				<SliderCell
-					label={ts("effects.motionBlur")}
-					value={settings.motionBlurAmount * 100}
-					min={0}
-					max={100}
-					suffix="%"
-					disabled={!hasDocument}
-					onChange={(v) => {
-						setLive({ motionBlurAmount: v / 100 });
-						if (isNativeCompositorActive()) {
-							setNativeParam("motionBlur", v / 100);
-						}
-					}}
-					onCommit={() => void commit()}
-				/>
 				<SliderCell
 					label={ts("effects.shadow")}
 					value={settings.shadowIntensity * 100}
@@ -1791,36 +2002,6 @@ export function CursorPane() {
 						setLive({ cursor: { size: v / 10 } });
 						if (isNativeCompositorActive()) {
 							setNativeParam("cursorSize", v / 10);
-						}
-					}}
-					onCommit={() => void commit()}
-				/>
-				<SliderCell
-					label={ts("cursor.smoothing")}
-					value={settings.cursor.smoothing * 100}
-					min={0}
-					max={100}
-					suffix="%"
-					disabled={!hasDocument}
-					onChange={(v) => {
-						setLive({ cursor: { smoothing: v / 100 } });
-						if (isNativeCompositorActive()) {
-							setNativeParam("cursorSmoothing", v / 100);
-						}
-					}}
-					onCommit={() => void commit()}
-				/>
-				<SliderCell
-					label={ts("cursor.motionBlur")}
-					value={settings.cursor.motionBlur * 100}
-					min={0}
-					max={100}
-					suffix="%"
-					disabled={!hasDocument}
-					onChange={(v) => {
-						setLive({ cursor: { motionBlur: v / 100 } });
-						if (isNativeCompositorActive()) {
-							setNativeParam("cursorMotionBlur", v / 100);
 						}
 					}}
 					onCommit={() => void commit()}

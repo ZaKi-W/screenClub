@@ -801,13 +801,6 @@ pub fn plan_frame(input: &FrameGeometryInput) -> FrameGeometry {
             }
             None => (timeline(frame, cfg), timeline(frame - 1.0, cfg)),
         };
-        // Motion blur écran : quand la scène (contrat de l'app) est posée, c'est elle qui pilote
-        // (parité inspector : 1.0 + motion_blur*15 taps), sinon on retombe sur `cfg.mblur_n`
-        // (le bench fixture continue d'utiliser ses taps explicites).
-        let mb_taps = scene
-            .map(|s| 1.0 + s.effects.motion_blur.clamp(0.0, 1.0) * 15.0)
-            .unwrap_or(cfg.mblur_n as f32);
-
         // Zoom regions + Full Camera : filtrées en amont pour le clip actif et échantillonnées
         // dans le même référentiel source que le PTS du décodeur écran.
         let empty_zoom: Vec<crate::scene::SceneZoomRegion> = Vec::new();
@@ -818,21 +811,56 @@ pub fn plan_frame(input: &FrameGeometryInput) -> FrameGeometry {
         let webcam_reactive = scene.map(|s| s.layout.webcam_reactive_zoom).unwrap_or(false);
         let source_t = input.timeline_t_override.unwrap_or(frame / FPS);
         let source_t_prev = source_t - 1.0 / FPS;
+        let screen_animation_style = scene
+            .map(|s| s.effects.screen_animation_style)
+            .unwrap_or_default();
         // le focus "auto" (suivi curseur) réutilise la même piste que le rendu du curseur.
         let cursor_for_zoom = cursor;
         // La rotation 3D (mode 8, pas de motion blur dans ce chemin — cf. le commentaire au
         // point d'appel) n'est calculée QUE pour la frame courante ; `pp` ne sert qu'au zoom
         // écran normal (vélocité pour le motion blur du chemin non-tilté).
         let mut zoom_rotation = [0.0f32; 3];
+        let mut zoom_velocity = 0.0f32;
+        let mut pan_velocity = 0.0f32;
         if !zoom_regions.is_empty() {
-            let zs = crate::regions::zoom_state_at(zoom_regions, source_t, cursor_for_zoom);
+            let zs = crate::regions::zoom_state_at_with_style(
+                zoom_regions,
+                source_t,
+                cursor_for_zoom,
+                screen_animation_style,
+            );
             p.zoom = zs.scale;
             p.focus = zs.focus;
             zoom_rotation = zs.rotation;
-            let zs_p = crate::regions::zoom_state_at(zoom_regions, source_t_prev, cursor_for_zoom);
+            let zs_p = crate::regions::zoom_state_at_with_style(
+                zoom_regions,
+                source_t_prev,
+                cursor_for_zoom,
+                screen_animation_style,
+            );
             pp.zoom = zs_p.scale;
             pp.focus = zs_p.focus;
+            zoom_velocity = (zs.scale - zs_p.scale).abs();
+            pan_velocity = ((zs.focus[0] - zs_p.focus[0]).powi(2)
+                + (zs.focus[1] - zs_p.focus[1]).powi(2))
+            .sqrt();
         }
+        // Screen Studio exposes separate blur controls for zooming and for moving the screen
+        // while already zoomed. Select by the actual camera velocity for this output frame:
+        // scale motion wins while entering/leaving a zoom; pure focus motion uses the pan value.
+        // Old scenes carry only `motionBlur`, and the SceneEffects accessors fall back to it.
+        let mb_taps = scene
+            .map(|s| {
+                let amount = if zoom_velocity > 1e-5 {
+                    s.effects.zoom_motion_blur()
+                } else if pan_velocity > 1e-6 {
+                    s.effects.pan_motion_blur()
+                } else {
+                    s.effects.motion_blur.clamp(0.0, 1.0)
+                };
+                1.0 + amount * 15.0
+            })
+            .unwrap_or(cfg.mblur_n as f32);
         // Full Camera ignore le rétrécissement réactif de la webcam (design web : mélanger
         // "rétrécit pour le zoom" et "grandit en plein cadre" dans la même frame n'a pas de sens).
         let cam_progress = crate::regions::camera_fullscreen_progress_at(cam_regions, source_t);
@@ -1337,6 +1365,34 @@ mod tests {
         // Et sans zoom, l'ancre EST la boîte écran : `s_ann` ne doit pas devenir un rect
         // parallèle qui dériverait de `s_dst` pour d'autres raisons (padding, cover, crop).
         assert_eq!(a.s_ann, a.s_dst, "sans zoom, ancre et boîte écran coïncident");
+    }
+
+    #[test]
+    fn screen_motion_blur_uses_independent_zoom_and_pan_amounts() {
+        let cfg = crate::config::all().pop().expect("au moins une config");
+        let mut zoom_scene = zoomed_golden_scene();
+        zoom_scene.effects.motion_blur_zoom = Some(0.8);
+        zoom_scene.effects.motion_blur_pan = Some(0.2);
+        let mut zoom_input = golden_input(&zoom_scene, &cfg);
+        zoom_input.timeline_t_override = Some(0.2);
+        let zoom_frame = plan_frame(&zoom_input);
+        assert!((zoom_frame.mb_taps - 13.0).abs() < 1e-6);
+
+        let mut pan_scene = zoomed_golden_scene();
+        pan_scene.effects.motion_blur_zoom = Some(0.8);
+        pan_scene.effects.motion_blur_pan = Some(0.2);
+        pan_scene.zoom_regions[0].end_sec = 1.0;
+        pan_scene.zoom_regions[0].focus_x = 0.25;
+        let mut next = pan_scene.zoom_regions[0].clone();
+        next.id = "z2".into();
+        next.start_sec = 1.2;
+        next.end_sec = 4.0;
+        next.focus_x = 0.75;
+        pan_scene.zoom_regions.push(next);
+        let mut pan_input = golden_input(&pan_scene, &cfg);
+        pan_input.timeline_t_override = Some(1.3);
+        let pan_frame = plan_frame(&pan_input);
+        assert!((pan_frame.mb_taps - 4.0).abs() < 1e-6);
     }
 
     /// **Le golden iso-render.**

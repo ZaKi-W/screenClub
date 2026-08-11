@@ -71,6 +71,43 @@
 		"on": "bật",
 		"help": "Kiểu khung của bản ghi: làm mờ nền, đổ bóng, mờ chuyển động, bo góc và khoảng đệm quanh video."
 	},
+	"animation": {
+		"title": "Hoạt ảnh",
+		"help": "Điều chỉnh phản hồi của thu phóng màn hình, chuyển động con trỏ và làm mờ chuyển động khi phát và xuất.",
+		"screen": {
+			"title": "Kiểu hoạt ảnh màn hình",
+			"rapid": "Nhanh",
+			"focused": "Tập trung",
+			"balanced": "Cân bằng",
+			"smooth": "Mượt",
+			"cinematic": "Điện ảnh",
+			"classic": "Cổ điển",
+			"rapidDescription": "Nhanh chóng đến mục tiêu với phản hồi dứt khoát và nhạy.",
+			"focusedDescription": "Ổn định nhanh, giúp nội dung dễ theo dõi và đọc hơn.",
+			"balancedDescription": "Cân bằng độ nhạy và độ mềm mại cho các bản ghi hằng ngày.",
+			"smoothDescription": "Dùng phản hồi máy quay mềm mại hơn giữa các điểm lấy nét.",
+			"cinematicDescription": "Thêm phản hồi máy quay chậm và có trọng lượng hơn cho chuyển động có chủ ý.",
+			"classicDescription": "Dùng chuyển động tăng giảm tốc quen thuộc, không có cảm giác lò xo."
+		},
+		"cursor": {
+			"title": "Kiểu hoạt ảnh con trỏ",
+			"smooth": "Mượt",
+			"medium": "Vừa",
+			"rapid": "Nhanh",
+			"none": "Không"
+		},
+		"motionBlur": {
+			"title": "Làm mờ chuyển động",
+			"description": "Thêm hiệu ứng mờ điện ảnh khi con trỏ hoặc màn hình di chuyển.",
+			"amount": "Cường độ",
+			"advanced": "Cài đặt làm mờ nâng cao",
+			"screen": "Làm mờ màn hình",
+			"cursor": "Làm mờ con trỏ",
+			"cursorMovement": "Di chuyển con trỏ",
+			"screenZooming": "Thu phóng màn hình",
+			"screenMoving": "Di chuyển màn hình"
+		}
+	},
 	"background": {
 		"title": "Nền",
 		"image": "Hình ảnh",

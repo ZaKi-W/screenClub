@@ -129,6 +129,8 @@ export function subscribeNativeCompositor(listener: () => void): () => void {
 export function pushAllNativeParams(settings: EditorSettingsSnapshot): void {
 	setNativeParam("backgroundBlur", settings.showBlur);
 	setNativeParam("motionBlur", settings.motionBlurAmount);
+	setNativeParam("motionBlurZoom", settings.motionBlurZoom);
+	setNativeParam("motionBlurPan", settings.motionBlurPan);
 	setNativeParam("shadow", settings.shadowIntensity);
 	setNativeParam("roundness", settings.borderRadius / NATIVE_SCREEN_BASE_RADIUS_PX);
 	setNativeParam("padding", settings.padding / 100);

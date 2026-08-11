@@ -71,6 +71,43 @@
 		"on": "açık",
 		"help": "Kayıt çerçevesinin biçimi: arka plan bulanıklığı, gölge, hareket bulanıklığı, köşe yuvarlaklığı ve videonun çevresindeki boşluk."
 	},
+	"animation": {
+		"title": "Animasyon",
+		"help": "Oynatma ve dışa aktarma sırasında ekran yakınlaştırma, imleç hareketi ve hareket bulanıklığı tepkisini ayarlayın.",
+		"screen": {
+			"title": "Ekran animasyon stili",
+			"rapid": "Hızlı",
+			"focused": "Odaklı",
+			"balanced": "Dengeli",
+			"smooth": "Yumuşak",
+			"cinematic": "Sinematik",
+			"classic": "Klasik",
+			"rapidDescription": "Hedefe hızlı, keskin ve duyarlı bir hareketle ulaşır.",
+			"focusedDescription": "Hızla sabitlenerek içeriği izlemeyi ve okumayı kolaylaştırır.",
+			"balancedDescription": "Günlük kayıtlar için duyarlılık ve yumuşaklığı dengeler.",
+			"smoothDescription": "Odak noktaları arasında daha yumuşak bir kamera tepkisi kullanır.",
+			"cinematicDescription": "Ölçülü hareketler için daha yavaş ve ağır bir kamera tepkisi ekler.",
+			"classicDescription": "Yay hissi olmadan tanıdık bir hızlanma ve yavaşlama kullanır."
+		},
+		"cursor": {
+			"title": "İmleç animasyon stili",
+			"smooth": "Yumuşak",
+			"medium": "Orta",
+			"rapid": "Hızlı",
+			"none": "Yok"
+		},
+		"motionBlur": {
+			"title": "Hareket bulanıklığı",
+			"description": "İmleç veya ekran hareket ederken sinematik hareket bulanıklığı ekler.",
+			"amount": "Miktar",
+			"advanced": "Gelişmiş hareket bulanıklığı ayarları",
+			"screen": "Ekran bulanıklığı",
+			"cursor": "İmleç bulanıklığı",
+			"cursorMovement": "İmleç hareketi",
+			"screenZooming": "Ekran yakınlaştırma",
+			"screenMoving": "Ekran hareketi"
+		}
+	},
 	"background": {
 		"title": "Arka Plan",
 		"image": "Görüntü",

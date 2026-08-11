@@ -71,6 +71,43 @@
 		"padding": "Spaziatura",
 		"help": "Stile della cornice della registrazione: sfocatura dello sfondo, ombra, sfocatura di movimento, raggio degli angoli e margine attorno al video."
 	},
+	"animation": {
+		"title": "Animazione",
+		"help": "Controlla la risposta dello zoom, del cursore e della sfocatura di movimento durante riproduzione ed esportazione.",
+		"screen": {
+			"title": "Stile animazione schermo",
+			"rapid": "Rapido",
+			"focused": "Focalizzato",
+			"balanced": "Bilanciato",
+			"smooth": "Fluido",
+			"cinematic": "Cinematografico",
+			"classic": "Classico",
+			"rapidDescription": "Raggiunge rapidamente l’obiettivo con una risposta scattante e precisa.",
+			"focusedDescription": "Si stabilizza rapidamente e rende i contenuti più facili da seguire e leggere.",
+			"balancedDescription": "Bilancia reattività e morbidezza per le registrazioni di ogni giorno.",
+			"smoothDescription": "Usa una risposta della camera più morbida tra i punti di interesse.",
+			"cinematicDescription": "Aggiunge una risposta più lenta e corposa per movimenti controllati.",
+			"classicDescription": "Usa una tradizionale accelerazione e decelerazione, senza effetto molla."
+		},
+		"cursor": {
+			"title": "Stile animazione cursore",
+			"smooth": "Fluido",
+			"medium": "Medio",
+			"rapid": "Rapido",
+			"none": "Nessuno"
+		},
+		"motionBlur": {
+			"title": "Sfocatura movimento",
+			"description": "Aggiunge una sfocatura cinematografica quando il cursore o lo schermo si muove.",
+			"amount": "Intensità",
+			"advanced": "Impostazioni avanzate sfocatura",
+			"screen": "Sfocatura schermo",
+			"cursor": "Sfocatura cursore",
+			"cursorMovement": "Movimento cursore",
+			"screenZooming": "Zoom schermo",
+			"screenMoving": "Movimento schermo"
+		}
+	},
 	"background": {
 		"title": "Sfondo",
 		"image": "Immagine",

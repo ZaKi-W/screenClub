@@ -16,6 +16,7 @@ import type {
 } from "@/components/video-editor/types";
 import { getZoomScale } from "@/components/video-editor/types";
 import type { AxcutZoomRegion } from "@/lib/ai-edition/schema";
+import type { ScreenAnimationStyle } from "@/lib/zoomMath/constants";
 import { findDominantRegion } from "@/lib/zoomMath/zoomRegionUtils";
 import { computeZoomTransform } from "@/lib/zoomMath/zoomTransform";
 
@@ -63,6 +64,7 @@ export function computeZoomPreviewTransform(
 	virtualTimeMs: number,
 	cursorTelemetry?: CursorTelemetryPoint[],
 	playbackRate = 1,
+	screenAnimationStyle: ScreenAnimationStyle = "focused",
 ): ZoomPreviewTransform {
 	if (zoomRegions.length === 0) return IDENTITY_ZOOM_TRANSFORM;
 
@@ -70,6 +72,7 @@ export function computeZoomPreviewTransform(
 	const dominant = findDominantRegion(legacyRegions, virtualTimeMs, {
 		cursorTelemetry,
 		playbackRate,
+		screenAnimationStyle,
 	});
 	if (!dominant.region || dominant.strength <= 0) return IDENTITY_ZOOM_TRANSFORM;
 

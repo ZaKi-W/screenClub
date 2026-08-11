@@ -71,6 +71,43 @@
 		"on": "activé",
 		"help": "Mise en forme du cadre de l'enregistrement : flou d'arrière-plan, ombre portée, flou de mouvement, arrondi des coins et marge autour de la vidéo."
 	},
+	"animation": {
+		"title": "Animation",
+		"help": "Contrôlez la réaction du zoom, du curseur et du flou de mouvement pendant la lecture et l’export.",
+		"screen": {
+			"title": "Style d’animation de l’écran",
+			"rapid": "Rapide",
+			"focused": "Ciblé",
+			"balanced": "Équilibré",
+			"smooth": "Fluide",
+			"cinematic": "Cinématique",
+			"classic": "Classique",
+			"rapidDescription": "Atteint rapidement la cible avec une réponse nette et réactive.",
+			"focusedDescription": "Se stabilise rapidement pour faciliter le suivi et la lecture du contenu.",
+			"balancedDescription": "Équilibre réactivité et douceur pour les enregistrements du quotidien.",
+			"smoothDescription": "Utilise une réponse de caméra plus douce entre les points d’intérêt.",
+			"cinematicDescription": "Ajoute une réponse plus lente et plus ample pour des mouvements posés.",
+			"classicDescription": "Utilise une accélération et une décélération familières, sans effet de ressort."
+		},
+		"cursor": {
+			"title": "Style d’animation du curseur",
+			"smooth": "Fluide",
+			"medium": "Moyen",
+			"rapid": "Rapide",
+			"none": "Aucun"
+		},
+		"motionBlur": {
+			"title": "Flou de mouvement",
+			"description": "Ajoute un flou cinématographique lorsque le curseur ou l’écran se déplace.",
+			"amount": "Intensité",
+			"advanced": "Réglages avancés du flou",
+			"screen": "Flou de l’écran",
+			"cursor": "Flou du curseur",
+			"cursorMovement": "Mouvement du curseur",
+			"screenZooming": "Zoom de l’écran",
+			"screenMoving": "Déplacement de l’écran"
+		}
+	},
 	"background": {
 		"title": "Arrière-plan",
 		"image": "Image",

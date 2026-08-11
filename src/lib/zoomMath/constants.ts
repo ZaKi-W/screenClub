@@ -2,7 +2,79 @@ import type { ZoomFocus } from "@/components/video-editor/types";
 
 export const DEFAULT_FOCUS: ZoomFocus = { cx: 0.5, cy: 0.5 };
 export const TRANSITION_WINDOW_MS = 1015.05;
-export const ZOOM_IN_TRANSITION_WINDOW_MS = TRANSITION_WINDOW_MS * 1.5;
+/** Screen Studio-style zoom ramp: start at the region edge and finish in about 0.45 s. */
+export const ZOOM_TRANSITION_WINDOW_MS = 450;
+/** The Smooth preset settles more gradually while preserving the authored region edges. */
+export const SMOOTH_ZOOM_TRANSITION_WINDOW_MS = 650;
+export type ScreenAnimationStyle =
+	| "rapid"
+	| "focused"
+	| "balanced"
+	| "smooth"
+	| "cinematic"
+	| "classic";
+
+export type ScreenAnimationCurve = "spring" | "smootherstep" | "classic-bezier";
+
+/**
+ * Camera-response comparison presets. Screen Studio does not publish its exact values, but its
+ * official changelog confirms a mass-based spring simulation. Most options are critically
+ * damped; Cinematic adds a symmetric polynomial curve and Classic preserves the old Bezier so
+ * the user can compare fundamentally different response shapes, not just durations.
+ */
+export const SCREEN_ANIMATION_SPRINGS: Record<
+	ScreenAnimationStyle,
+	{
+		durationMs: number;
+		stiffness: number;
+		damping: number;
+		mass: number;
+		curve: ScreenAnimationCurve;
+	}
+> = {
+	rapid: {
+		durationMs: 320,
+		stiffness: 625,
+		damping: 50,
+		mass: 1,
+		curve: "spring",
+	},
+	focused: {
+		durationMs: ZOOM_TRANSITION_WINDOW_MS,
+		stiffness: 225,
+		damping: 30,
+		mass: 1,
+		curve: "spring",
+	},
+	balanced: {
+		durationMs: 540,
+		stiffness: 121,
+		damping: 22,
+		mass: 1,
+		curve: "spring",
+	},
+	smooth: {
+		durationMs: SMOOTH_ZOOM_TRANSITION_WINDOW_MS,
+		stiffness: 64,
+		damping: 16,
+		mass: 1,
+		curve: "spring",
+	},
+	cinematic: {
+		durationMs: 700,
+		stiffness: 49,
+		damping: 14,
+		mass: 1,
+		curve: "smootherstep",
+	},
+	classic: {
+		durationMs: ZOOM_TRANSITION_WINDOW_MS,
+		stiffness: 225,
+		damping: 30,
+		mass: 1,
+		curve: "classic-bezier",
+	},
+};
 export const SMOOTHING_FACTOR = 0.12;
 export const ZOOM_TRANSLATION_DEADZONE_PX = 1.25;
 export const ZOOM_SCALE_DEADZONE = 0.002;

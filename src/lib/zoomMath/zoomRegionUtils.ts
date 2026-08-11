@@ -11,20 +11,20 @@ import {
 	lerpRotation3D,
 } from "@/components/video-editor/types";
 import { clamp01 } from "@/utils/math";
-import { TRANSITION_WINDOW_MS, ZOOM_IN_TRANSITION_WINDOW_MS } from "./constants";
+import { SCREEN_ANIMATION_SPRINGS, type ScreenAnimationStyle } from "./constants";
 import { interpolateCursorAt } from "./cursorFollowUtils";
 import { clampFocusToScale } from "./focusUtils";
-import { cubicBezier, easeOutScreenStudio } from "./mathUtils";
+import { screenSpringProgress } from "./mathUtils";
 
 const CHAINED_ZOOM_PAN_GAP_MS = 1500;
 const CONNECTED_ZOOM_PAN_DURATION_MS = 1000;
-const ZOOM_IN_OVERLAP_MS = 500;
 
 type DominantRegionOptions = {
 	connectZooms?: boolean;
 	cursorTelemetry?: CursorTelemetryPoint[];
 	viewportRatio?: ViewportRatio;
 	playbackRate?: number;
+	screenAnimationStyle?: ScreenAnimationStyle;
 };
 
 type ConnectedRegionPair = {
@@ -46,43 +46,39 @@ function lerp(start: number, end: number, amount: number) {
 	return start + (end - start) * amount;
 }
 
-function easeConnectedPan(value: number) {
-	return cubicBezier(0.1, 0.0, 0.2, 1.0, value);
-}
-
-// ponytail: `playbackRate` lets the caller scale the lead-in / lead-out
-// windows in source-time so the zoom transition stays wall-clock constant
-// inside speed regions (2× speed → window is 2× source-ms → takes 1×
-// wall-clock-ms to traverse). Hold span between `zoomInEnd` and
-// `region.endMs` stays in source-time, so the zoomed state still flies
-// through under speed regions — that's the duration the user expects
-// to scale.
+// ponytail: `playbackRate` lets the caller scale the zoom-in / zoom-out
+// windows in source-time so the transition stays wall-clock constant inside
+// speed regions (2× speed → window is 2× source-ms → takes 1× wall-clock-ms
+// to traverse). Both ramps begin at the region edges, matching Screen Studio:
+// startMs starts the zoom-in and endMs starts the equally-timed zoom-out.
 export function computeRegionStrength(
 	region: ZoomRegion,
 	timeMs: number,
 	playbackRate = 1,
+	screenAnimationStyle: ScreenAnimationStyle = "focused",
 ): number {
-	const zoomInWindow = ZOOM_IN_TRANSITION_WINDOW_MS * playbackRate;
-	const zoomOutWindow = TRANSITION_WINDOW_MS * playbackRate;
-	const zoomInEnd = region.startMs + ZOOM_IN_OVERLAP_MS;
-	const leadInStart = zoomInEnd - zoomInWindow;
+	const transitionWindow = SCREEN_ANIMATION_SPRINGS[screenAnimationStyle].durationMs;
+	const zoomInWindow = transitionWindow * playbackRate;
+	const zoomOutWindow = transitionWindow * playbackRate;
 	const leadOutEnd = region.endMs + zoomOutWindow;
 
-	if (timeMs < leadInStart || timeMs > leadOutEnd) {
+	if (timeMs <= region.startMs || timeMs >= leadOutEnd) {
 		return 0;
 	}
 
-	if (timeMs < zoomInEnd) {
-		const progress = (timeMs - leadInStart) / zoomInWindow;
-		return easeOutScreenStudio(progress);
-	}
-
 	if (timeMs <= region.endMs) {
-		return 1;
+		const progress = clamp01((timeMs - region.startMs) / zoomInWindow);
+		return screenSpringProgress(progress, screenAnimationStyle);
 	}
 
-	const progress = clamp01((timeMs - region.endMs) / zoomOutWindow);
-	return 1 - easeOutScreenStudio(progress);
+	// A very short region can end before its chosen zoom-in window finishes. Reverse
+	// smoothly from the strength reached at endMs instead of jumping to 100%.
+	const strengthAtEnd = screenSpringProgress(
+		clamp01((region.endMs - region.startMs) / zoomInWindow),
+		screenAnimationStyle,
+	);
+	const zoomOutProgress = clamp01((timeMs - region.endMs) / zoomOutWindow);
+	return strengthAtEnd * (1 - screenSpringProgress(zoomOutProgress, screenAnimationStyle));
 }
 
 function getLinearFocus(start: ZoomFocus, end: ZoomFocus, amount: number): ZoomFocus {
@@ -152,6 +148,7 @@ function getActiveRegion(
 	cursorTelemetry?: CursorTelemetryPoint[],
 	viewportRatio?: ViewportRatio,
 	playbackRate = 1,
+	screenAnimationStyle: ScreenAnimationStyle = "focused",
 ) {
 	const activeRegions = regions
 		.map((region) => {
@@ -165,7 +162,10 @@ function getActiveRegion(
 				return { region, strength: 0 };
 			}
 
-			return { region, strength: computeRegionStrength(region, timeMs, playbackRate) };
+			return {
+				region,
+				strength: computeRegionStrength(region, timeMs, playbackRate, screenAnimationStyle),
+			};
 		})
 		.filter((entry) => entry.strength > 0)
 		.sort((left, right) => {
@@ -229,6 +229,7 @@ function getConnectedRegionTransition(
 	timeMs: number,
 	cursorTelemetry?: CursorTelemetryPoint[],
 	viewportRatio?: ViewportRatio,
+	screenAnimationStyle: ScreenAnimationStyle = "focused",
 ) {
 	for (const pair of connectedPairs) {
 		const { currentRegion, nextRegion, transitionStart, transitionEnd } = pair;
@@ -237,8 +238,9 @@ function getConnectedRegionTransition(
 			continue;
 		}
 
-		const transitionProgress = easeConnectedPan(
+		const transitionProgress = screenSpringProgress(
 			clamp01((timeMs - transitionStart) / Math.max(1, transitionEnd - transitionStart)),
+			screenAnimationStyle,
 		);
 		const currentScale = getZoomScale(currentRegion);
 		const nextScale = getZoomScale(nextRegion);
@@ -303,6 +305,7 @@ let dominantRegionCache: {
 	regions: ZoomRegion[];
 	timeMsKey: number;
 	playbackRateKey: number;
+	screenAnimationStyle: ScreenAnimationStyle;
 	telemetry: CursorTelemetryPoint[] | undefined;
 	connectZooms: boolean;
 	viewportRatio: ViewportRatio | undefined;
@@ -318,6 +321,7 @@ export function findDominantRegion(
 	const telemetry = options.cursorTelemetry;
 	const vr = options.viewportRatio;
 	const playbackRate = options.playbackRate ?? 1;
+	const screenAnimationStyle = options.screenAnimationStyle ?? "focused";
 	const timeMsKey = Math.round(timeMs);
 	const playbackRateKey = Math.round(playbackRate * 1000);
 
@@ -328,7 +332,8 @@ export function findDominantRegion(
 		dominantRegionCache.telemetry === telemetry &&
 		dominantRegionCache.connectZooms === connectZooms &&
 		dominantRegionCache.viewportRatio === vr &&
-		dominantRegionCache.playbackRateKey === playbackRateKey
+		dominantRegionCache.playbackRateKey === playbackRateKey &&
+		dominantRegionCache.screenAnimationStyle === screenAnimationStyle
 	) {
 		return dominantRegionCache.result;
 	}
@@ -337,7 +342,13 @@ export function findDominantRegion(
 
 	let result: DominantRegionResult;
 	if (connectZooms) {
-		const connectedTransition = getConnectedRegionTransition(connectedPairs, timeMs, telemetry, vr);
+		const connectedTransition = getConnectedRegionTransition(
+			connectedPairs,
+			timeMs,
+			telemetry,
+			vr,
+			screenAnimationStyle,
+		);
 		if (connectedTransition) {
 			result = connectedTransition;
 		} else {
@@ -352,6 +363,7 @@ export function findDominantRegion(
 					telemetry,
 					vr,
 					playbackRate,
+					screenAnimationStyle,
 				);
 				result = activeRegion
 					? { ...activeRegion, transition: null }
@@ -372,6 +384,7 @@ export function findDominantRegion(
 			telemetry,
 			vr,
 			playbackRate,
+			screenAnimationStyle,
 		);
 		result = activeRegion
 			? { ...activeRegion, transition: null }
@@ -388,6 +401,7 @@ export function findDominantRegion(
 		regions,
 		timeMsKey,
 		playbackRateKey,
+		screenAnimationStyle,
 		telemetry,
 		connectZooms,
 		viewportRatio: vr,
