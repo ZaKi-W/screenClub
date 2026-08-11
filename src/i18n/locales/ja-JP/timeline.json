@@ -1,6 +1,5 @@
 {
 	"buttons": {
-		"addZoom": "ズームを追加 (Z)",
 		"suggestZooms": "カーソル位置からズームを提案",
 		"autoZoomOn": "自動ズーム提案がオン — クリックすると提案されたズームを削除します",
 		"autoZoomOff": "自動ズーム提案がオフ — クリックするとカーソル位置からズームを提案します",
@@ -12,7 +11,7 @@
 		"addCameraFullscreen": "フルスクリーンカメラを追加 (C)"
 	},
 	"hints": {
-		"pressZoom": "Zキーを押してズームを追加",
+		"clickZoom": "クリックしてズームを追加",
 		"pressTrim": "Tキーを押してトリムを追加",
 		"pressAnnotation": "Aキーを押して注釈を追加",
 		"pressSpeed": "Sキーを押して再生速度を追加",

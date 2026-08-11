@@ -188,9 +188,9 @@ export function useTimeline() {
 	// would strand it. A region created across a clip boundary becomes one fragment per
 	// clip; the ruler renders them as one pill because their properties are equal.
 	const addZoom = useCallback(
-		async (durationSec = DEFAULT_NEW_REGION_SEC) => {
+		async (durationSec = DEFAULT_NEW_REGION_SEC, startSec = playheadSec()) => {
 			if (!document) return;
-			const timeMs = Math.round(playheadSec() * 1000);
+			const timeMs = Math.round(finiteSec(startSec) * 1000);
 			const endMs = timeMs + Math.round(durationSec * 1000);
 			const anchored = anchorRegionsWithDerivedMs(
 				[
@@ -206,6 +206,7 @@ export function useTimeline() {
 				document.timeline.clips,
 				() => createId("zoom"),
 			);
+			if (anchored.length === 0) return;
 			const next: AxcutDocument = {
 				...document,
 				zoomRanges: [...document.zoomRanges, ...anchored] as AxcutDocument["zoomRanges"],

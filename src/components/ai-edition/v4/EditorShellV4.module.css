@@ -1097,31 +1097,6 @@
 	background: var(--accent-soft, var(--surface-3));
 	color: var(--accent, var(--fg));
 }
-.tlHints {
-	margin-left: auto;
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-.tlHint {
-	display: inline-flex;
-	align-items: center;
-	gap: 7px;
-	height: 26px;
-	padding: 0 10px;
-	background: var(--surface-1);
-	border: 1px solid var(--border);
-	border-radius: 7px;
-	font-size: 11px;
-	font-weight: 500;
-	color: var(--muted);
-}
-.tlKbd {
-	font-family: var(--font-mono);
-	font-size: 10.5px;
-	font-weight: 600;
-	color: var(--fg-2);
-}
 /* Ruler + tracks live in one relative wrapper (between the toolbar and the zoom
    bar) so a single playhead overlay can span both. */
 .tlBody {
@@ -1164,9 +1139,9 @@
 	   scrolling still works via the wheel (see the wheel handler). */
 	scrollbar-width: none;
 	/* Bottom-anchor via column-reverse (the single child is .tlCanvas, so its
-	   internal lane→clip order is untouched): the main clip track sits at the
-	   bottom edge and stays visible as the panel shrinks, while the edit lanes
-	   above overflow the top and REMAIN reachable by scrolling up. `flex-end`
+	   internal clip→zoom-lane order is untouched): the zoom lane sits beneath
+	   the main clip track and both stay grouped at the panel's bottom edge.
+	   Overflow remains reachable by scrolling up. `flex-end`
 	   would bottom-anchor too, but content it pushes past the top edge isn't
 	   scrollable — which is why the lanes couldn't be reached before. */
 	display: flex;
@@ -1293,10 +1268,11 @@
 }
 .tlLane {
 	position: relative;
-	height: 24px;
-	margin-bottom: 5px;
-	border-radius: 6px;
-	background: var(--surface-1);
+	height: 66px;
+	margin-top: 6px;
+	border-radius: 11px;
+	background: transparent;
+	cursor: pointer;
 }
 .laneEmpty {
 	position: absolute;
@@ -1317,18 +1293,15 @@
 }
 .lanePill {
 	position: absolute;
-	top: 1px;
-	height: 22px;
+	top: 0;
+	height: 66px;
 	/* The ONLY floor on a pill's width, and it is in px so it is the same hairline
 	   at every zoom: the box's width is the effect's duration, full stop. A `%`
 	   minimum is a duration in disguise (the old 1.5% drew everything shorter than
 	   27 s as 27 s on a 30-minute timeline). */
 	min-width: 1px;
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 0 8px 0 7px;
-	border-radius: 6px;
+	padding: 0;
+	border-radius: 11px;
 	border: 1.5px solid var(--accent);
 	background: var(--accent-soft);
 	color: var(--fg);
@@ -1339,6 +1312,11 @@
 	box-sizing: border-box;
 	cursor: grab;
 	z-index: 2;
+	box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.06);
+	touch-action: none;
+	user-select: none;
+	transition: box-shadow var(--motion-fast) var(--ease), opacity var(--motion-fast) var(--ease),
+		transform 150ms var(--ease);
 }
 .lanePill:active {
 	cursor: grabbing;
@@ -1367,7 +1345,37 @@
 	background: color-mix(in oklch, currentColor 35%, transparent);
 	border-radius: 2px;
 }
+.lanePillContent {
+	position: absolute;
+	left: 10px;
+	top: 8px;
+	z-index: 2;
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	max-width: calc(100% - 20px);
+	padding: 3px 9px 3px 6px;
+	border-radius: 8px;
+	background: color-mix(in srgb, #080a0d 55%, transparent);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	pointer-events: none;
+}
+.lanePillContent > svg {
+	width: 16px;
+	height: 16px;
+	padding: 2px;
+	box-sizing: border-box;
+	border-radius: 5px;
+	background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+	color: var(--accent);
+	flex-shrink: 0;
+}
 .lanePillLabel {
+	font-size: 11px;
+	font-weight: 500;
+	color: #fff;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
@@ -1385,7 +1393,7 @@
 }
 .laneZoom {
 	border-color: var(--accent);
-	background: var(--accent-soft);
+	background: color-mix(in srgb, var(--accent) 14%, var(--surface-1));
 }
 .laneCameraFullscreen {
 	border-color: #a855f7;
@@ -1644,8 +1652,8 @@
 /* V4Timeline — snap guide during region drag/resize */
 .tlSnapGuide {
 	position: absolute;
-	top: 0;
-	bottom: 66px;
+	top: 71px;
+	bottom: 0;
 	width: 2px;
 	background: var(--danger);
 	box-shadow: 0 0 6px color-mix(in oklch, var(--danger) 60%, transparent);

@@ -26,21 +26,21 @@ describe("shortcut registry", () => {
 		// type. While `addBlur: {key: "b"}` was still in the registry, binding B to
 		// any real action reported "Already used by Add Blur" and offered a Swap
 		// that handed the old binding to a hidden, undispatched action.
-		expect(findConflict({ key: "b" }, "addZoom", DEFAULT_SHORTCUTS)).toBeNull();
+		expect(findConflict({ key: "b" }, "paste", DEFAULT_SHORTCUTS)).toBeNull();
 	});
 
-	it("only exposes zoom among the former region creation shortcuts", () => {
+	it("does not expose the former region creation shortcuts", () => {
 		expect(SHORTCUT_ACTIONS).not.toContain("addAnnotation");
 		expect(SHORTCUT_ACTIONS).not.toContain("addSpeed");
 		expect(SHORTCUT_ACTIONS).not.toContain("addTrim");
 		expect(SHORTCUT_ACTIONS).not.toContain("addCameraFullscreen");
-		expect(SHORTCUT_ACTIONS).toContain("addZoom");
+		expect(SHORTCUT_ACTIONS).not.toContain("addZoom");
 	});
 
 	it("still reports a real collision", () => {
-		expect(findConflict({ key: "z" }, "paste", DEFAULT_SHORTCUTS)).toEqual({
+		expect(findConflict({ key: "v", ctrl: true }, "openApp", DEFAULT_SHORTCUTS)).toEqual({
 			type: "configurable",
-			action: "addZoom",
+			action: "paste",
 		});
 	});
 
@@ -49,7 +49,7 @@ describe("shortcut registry", () => {
 		// action was dropped loads without a migration.
 		const stored = { addZoom: { key: "q" }, addBlur: { key: "b" } };
 		const merged = mergeWithDefaults(stored as Partial<ShortcutsConfig>);
-		expect(merged.addZoom).toEqual({ key: "q" });
+		expect(merged).not.toHaveProperty("addZoom");
 		expect(merged).not.toHaveProperty("addBlur");
 	});
 });

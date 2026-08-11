@@ -1,6 +1,5 @@
 {
 	"buttons": {
-		"addZoom": "Aggiungi zoom (Z)",
 		"suggestZooms": "Suggerisci zoom dal cursore",
 		"autoZoomOn": "Suggerimenti di zoom automatico attivi — clicca per rimuovere gli zoom suggeriti",
 		"autoZoomOff": "Suggerimenti di zoom automatico disattivi — clicca per suggerire zoom dal cursore",
@@ -12,7 +11,7 @@
 		"addCameraFullscreen": "Aggiungi Camera a schermo intero (C)"
 	},
 	"hints": {
-		"pressZoom": "Premi Z per aggiungere zoom",
+		"clickZoom": "Fai clic per aggiungere lo zoom",
 		"pressTrim": "Premi T per aggiungere taglio",
 		"pressAnnotation": "Premi A per aggiungere annotazione",
 		"pressSpeed": "Premi S per aggiungere velocità",

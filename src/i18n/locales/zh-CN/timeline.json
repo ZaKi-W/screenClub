@@ -1,6 +1,5 @@
 {
 	"buttons": {
-		"addZoom": "添加缩放 (Z)",
 		"suggestZooms": "根据光标建议缩放",
 		"autoZoomOn": "自动缩放建议已开启 — 点击可移除建议的缩放",
 		"autoZoomOff": "自动缩放建议已关闭 — 点击可根据光标建议缩放",
@@ -12,7 +11,7 @@
 		"addCameraFullscreen": "添加全屏摄像头 (C)"
 	},
 	"hints": {
-		"pressZoom": "按 Z 添加缩放",
+		"clickZoom": "点击添加缩放",
 		"pressTrim": "按 T 添加剪辑",
 		"pressAnnotation": "按 A 添加标注",
 		"pressSpeed": "按 S 添加速度",

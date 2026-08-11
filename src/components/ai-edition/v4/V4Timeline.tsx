@@ -37,7 +37,10 @@ import { useTimelineTranscriptGate } from "@/lib/ai-edition/store/transcriptionS
 import { useChatPromptBus } from "@/lib/ai-edition/store/useChatPromptBus";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
-import { setTimelineScale } from "@/lib/ai-edition/timeline/newRegionDuration";
+import {
+	newRegionDurationSec,
+	setTimelineScale,
+} from "@/lib/ai-edition/timeline/newRegionDuration";
 import { ventilateSpanAcrossClips } from "@/lib/ai-edition/timeline/region-ventilation";
 import { coalesceRegionsForRuler } from "@/lib/ai-edition/timeline/timelineMap";
 import {
@@ -804,10 +807,10 @@ export function V4Timeline({
 		[nav],
 	);
 
-	// Plain scroll = vertical scroll (the panel can be too short to show every
-	// lane + the main track). Shift+scroll = horizontal pan. Ctrl+scroll = zoom
-	// around the cursor's timeline position. Shift is tested first, so it wins
-	// when both are held: holding Shift always pans, never zooms.
+	// Plain wheel and two-finger trackpad swipes pan the visible time window.
+	// Trackpads report horizontal travel on deltaX, while a mouse wheel reports
+	// vertical travel on deltaY, so use whichever axis dominates. Ctrl/Cmd+wheel
+	// remains zoom around the cursor's timeline position.
 	// Attached as a native (non-passive) listener rather than React's onWheel:
 	// React marks wheel handlers passive by default, so e.preventDefault()
 	// there silently no-ops and the browser/OS still intercepts Ctrl+wheel as
@@ -820,24 +823,16 @@ export function V4Timeline({
 		if (!showLanes) return;
 		const onWheelNative = (e: WheelEvent) => {
 			const r = el.getBoundingClientRect();
-			const viewportPct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-			if (e.shiftKey) {
+			if (r.width <= 0) return;
+			const rawDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+			if (rawDelta === 0) return;
+			const wheelDelta =
+				rawDelta *
+				(e.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : e.deltaMode === 2 ? r.width : 1);
+
+			if (e.ctrlKey || e.metaKey) {
 				e.preventDefault();
-				setNav((prev) => {
-					const width = prev.end - prev.start;
-					// Shift often routes the wheel onto deltaX; accept whichever axis moved.
-					const wheelDelta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
-					const delta = (wheelDelta / r.width) * width;
-					const start = Math.max(0, Math.min(1 - width, prev.start + delta));
-					return { start, end: start + width };
-				});
-			} else if (e.ctrlKey) {
-				e.preventDefault();
-				// A trackpad can deliver a horizontal swipe here, leaving deltaY at 0.
-				// Read whichever axis moved, otherwise the sign test below always
-				// reads "up" and the gesture only ever zooms in.
-				const wheelDelta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-				if (wheelDelta === 0) return;
+				const viewportPct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
 				setNav((prev) => {
 					const width = prev.end - prev.start;
 					const cursorFrac = prev.start + viewportPct * width;
@@ -846,8 +841,18 @@ export function V4Timeline({
 					const start = Math.max(0, Math.min(1 - nextWidth, cursorFrac - viewportPct * nextWidth));
 					return { start, end: start + nextWidth };
 				});
+				return;
 			}
-			// Otherwise let the native vertical scroll of .tlTracks run (no preventDefault).
+
+			e.preventDefault();
+			setNav((prev) => {
+				const width = prev.end - prev.start;
+				if (width >= 1) return prev;
+				const delta = (wheelDelta / r.width) * width;
+				const start = Math.max(0, Math.min(1 - width, prev.start + delta));
+				if (start === prev.start) return prev;
+				return { start, end: start + width };
+			});
 		};
 		el.addEventListener("wheel", onWheelNative, { passive: false });
 		return () => el.removeEventListener("wheel", onWheelNative);
@@ -1148,10 +1153,10 @@ export function V4Timeline({
 					/>
 				) : null}
 				{seg.showContent && roomForLabel ? (
-					<>
+					<span className={styles.lanePillContent}>
 						{pillIcon(p.kind)}
 						<span className={styles.lanePillLabel}>{p.label}</span>
-					</>
+					</span>
 				) : null}
 				{seg.interactive ? (
 					<span
@@ -1424,7 +1429,7 @@ export function V4Timeline({
 					</div>
 				) : (
 					// Media is an ARRANGING surface: add, remove, reorder. Nothing here
-					// plays or edits, so the transport, the scroll hints, the zoom nav and
+					// plays or edits, so the transport, the zoom nav and
 					// the playhead are absent rather than inert — this caption is the whole
 					// header, and it centres because it is alone in the row.
 					<div
@@ -1445,25 +1450,15 @@ export function V4Timeline({
 					</div>
 				)}
 				{showLanes ? (
-					<>
-						<TransportBar
-							playing={playing}
-							overrideTimeSec={scrubbingTimeSec}
-							clips={clips}
-							onTogglePlay={onTogglePlay}
-							onPrevClip={onPrevClip}
-							onNextClip={onNextClip}
-							onSeek={setCurrentTime}
-						/>
-						<div className={styles.tlHints}>
-							<span className={styles.tlHint}>
-								<span className={styles.tlKbd}>Shift+Scroll</span> {t("labels.pan")}
-							</span>
-							<span className={styles.tlHint}>
-								<span className={styles.tlKbd}>Ctrl+Scroll</span> {t("labels.zoom")}
-							</span>
-						</div>
-					</>
+					<TransportBar
+						playing={playing}
+						overrideTimeSec={scrubbingTimeSec}
+						clips={clips}
+						onTogglePlay={onTogglePlay}
+						onPrevClip={onPrevClip}
+						onNextClip={onNextClip}
+						onSeek={setCurrentTime}
+					/>
 				) : null}
 			</div>
 
@@ -1505,12 +1500,6 @@ export function V4Timeline({
 						{snapPct !== null ? (
 							<div aria-hidden className={styles.tlSnapGuide} style={{ left: `${snapPct}%` }} />
 						) : null}
-						{showLanes ? (
-							<>
-								<div className={styles.tlLane}>{renderPills(zoomPills, t("hints.pressZoom"))}</div>
-							</>
-						) : null}
-
 						<div
 							ref={clipsRef}
 							className={`${styles.tlClips}${dragOver ? ` ${styles.tlClipsDrag}` : ""}${
@@ -1640,6 +1629,20 @@ export function V4Timeline({
 								</div>
 							) : null}
 						</div>
+						{showLanes ? (
+							<div
+								className={styles.tlLane}
+								onPointerDown={(event) => event.stopPropagation()}
+								onClick={(event) => {
+									if ((event.target as HTMLElement).closest(`.${styles.lanePill}`)) return;
+									const startSec = timelineTimeAtClientX(event.clientX);
+									if (startSec === null) return;
+									void tl.addZoom(newRegionDurationSec(), startSec);
+								}}
+							>
+								{renderPills(zoomPills, t("hints.clickZoom"))}
+							</div>
+						) : null}
 					</div>
 				</div>
 

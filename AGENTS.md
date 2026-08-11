@@ -110,6 +110,10 @@ Unit/browser tests can't exercise real capture (native screen recording, a physi
 
 ## PR & commit conventions
 
+- When the user says **“提代码”**, treat it as an explicit request to complete the whole delivery
+  flow: commit the intended working-tree changes, integrate them into `main`, and push the updated
+  `main` to `origin`. Use the feature-branch/PR flow below rather than pushing commits directly to
+  `main`; only stop for clarification when the working tree contains unrelated or unsafe changes.
 - Branch from `main`; never push to it directly.
 - Commit messages: short imperative summary, optional body. Recent style mixes conventional-ish prefixes (`ci:`, `chore:`, `fix:`) with plain messages — either is fine, just be consistent within a PR.
 - **PR titles must follow Conventional Commits** (`feat:`, `fix:`, `chore:`, `refactor:`, `perf:`, `docs:`, `test:`, `build:`, `ci:`, `style:`, `revert:`). Enforced by the `semantic-pr` job in `ci.yml`. This feeds GitHub's auto-generated release notes with clean categories.
