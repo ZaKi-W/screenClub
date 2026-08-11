@@ -13,6 +13,7 @@ import type {
 	AssetTranscriptionStatus,
 	AssetTranscriptionView,
 } from "@/lib/ai-edition/transcription/status";
+import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { formatBytes } from "@/utils/formatBytes";
 import {
 	TranscriptionProgressBar,
@@ -130,7 +131,9 @@ export function MediaStage() {
 											e.dataTransfer.setData(ASSET_MIME, asset.id);
 											e.dataTransfer.effectAllowed = "copy";
 										}}
-										onClick={() => openDetail(asset)}
+										onClick={() => {
+											if (TRANSCRIPTION_FEATURE_ENABLED) openDetail(asset);
+										}}
 									>
 										<div
 											className={styles.mediaThumb}
@@ -162,7 +165,9 @@ export function MediaStage() {
 													<span className={styles.size}>{formatBytes(asset.sizeBytes)}</span>
 												</div>
 											</div>
-											<TranscriptionStatusDot view={transcription} />
+											{TRANSCRIPTION_FEATURE_ENABLED ? (
+												<TranscriptionStatusDot view={transcription} />
+											) : null}
 										</div>
 									</button>
 								);
@@ -187,7 +192,7 @@ export function MediaStage() {
 						</button>
 					</div>
 
-					{detailOpen && selected ? (
+					{TRANSCRIPTION_FEATURE_ENABLED && detailOpen && selected ? (
 						<div className={styles.mediaDetail}>
 							<div
 								style={{

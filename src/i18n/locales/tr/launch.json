@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Kontrol panelini gizle",
+		"expandRecordingControls": "Kayıt denetimlerini genişlet",
 		"closeApp": "Uygulamayı kapat",
 		"restartRecording": "Kaydı yeniden başlat",
 		"cancelRecording": "Kaydı iptal et",
@@ -93,6 +94,7 @@
 		"micHint": "Mikrofonunuzu test etmek için konuşun",
 		"noMicrophones": "Mikrofon bulunamadı",
 		"preview": "Önizleme",
-		"previewUnavailable": "Önizleme kullanılamıyor"
+		"previewUnavailable": "Önizleme kullanılamıyor",
+		"autoCollapseControls": "Kayıt sırasında denetimleri otomatik daralt"
 	}
 }

@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Nascondi",
+		"expandRecordingControls": "Espandi i controlli di registrazione",
 		"closeApp": "Chiudi app",
 		"restartRecording": "Riavvia registrazione",
 		"cancelRecording": "Annulla registrazione",
@@ -93,6 +94,7 @@
 		"micHint": "Parla per testare il microfono",
 		"noMicrophones": "Nessun microfono trovato",
 		"preview": "Anteprima",
-		"previewUnavailable": "Anteprima non disponibile"
+		"previewUnavailable": "Anteprima non disponibile",
+		"autoCollapseControls": "Comprimi automaticamente i controlli durante la registrazione"
 	}
 }

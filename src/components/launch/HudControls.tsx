@@ -340,6 +340,30 @@ export const HudRecordButton = memo(function HudRecordButton({
 	);
 });
 
+export const HudCollapsedRecordingButton = memo(function HudCollapsedRecordingButton({
+	saving,
+	label,
+	onStop,
+}: {
+	saving: boolean;
+	label: string;
+	onStop: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			data-testid="hud-collapsed-recording-button"
+			aria-label={label}
+			title={label}
+			disabled={saving}
+			className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[12px] border-0 bg-transparent cursor-pointer transition-all duration-150 hover:bg-[rgba(248,113,113,0.16)] active:scale-95 ${hudDisabledClasses} ${styles.electronNoDrag}`}
+			onClick={onStop}
+		>
+			<span className="h-4 w-4 rounded-full bg-[#f43f5e] shadow-[0_0_0_4px_rgba(244,63,94,0.14)] animate-pulse" />
+		</button>
+	);
+});
+
 export const HudStudioButton = memo(function HudStudioButton({
 	disabled,
 	label,
@@ -479,6 +503,7 @@ export const HudLanguageButton = memo(function HudLanguageButton({
 export const HudWindowControls = memo(function HudWindowControls({
 	vertical,
 	disabled,
+	closeDisabled,
 	hideLabel,
 	closeLabel,
 	onHide,
@@ -486,6 +511,7 @@ export const HudWindowControls = memo(function HudWindowControls({
 }: {
 	vertical: boolean;
 	disabled: boolean;
+	closeDisabled: boolean;
 	hideLabel: string;
 	closeLabel: string;
 	onHide: () => void;
@@ -496,7 +522,12 @@ export const HudWindowControls = memo(function HudWindowControls({
 			<button className={windowBtnClasses} title={hideLabel} onClick={onHide} disabled={disabled}>
 				{getIcon("minimize")}
 			</button>
-			<button className={closeBtnClasses} title={closeLabel} onClick={onClose} disabled={disabled}>
+			<button
+				className={closeBtnClasses}
+				title={closeLabel}
+				onClick={onClose}
+				disabled={closeDisabled}
+			>
 				{getIcon("close")}
 			</button>
 		</div>

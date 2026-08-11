@@ -12,6 +12,7 @@ import {
 import { useChatPromptBus } from "@/lib/ai-edition/store/useChatPromptBus";
 import { splitRoundedTime } from "@/lib/ai-edition/timeline/format";
 import type { AssetTranscriptionView } from "@/lib/ai-edition/transcription/status";
+import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { nativeBridgeClient } from "@/native/client";
 import type {
 	AiEditionChatEvent,
@@ -1517,7 +1518,7 @@ function ChatStripPanel() {
 							lineHeight: 1.5,
 						}}
 					>
-						{t("chat.emptyState")}
+						{TRANSCRIPTION_FEATURE_ENABLED ? t("chat.emptyState") : t("chat.composerPlaceholder")}
 					</p>
 				) : (
 					<>

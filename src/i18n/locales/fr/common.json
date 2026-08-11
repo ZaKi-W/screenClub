@@ -16,6 +16,7 @@
 		"window": "Fenêtre",
 		"quit": "Quitter",
 		"stopRecording": "Arrêter l'enregistrement",
+		"showRecordingControls": "Afficher les commandes d’enregistrement",
 		"undo": "Annuler",
 		"redo": "Rétablir",
 		"cut": "Couper",

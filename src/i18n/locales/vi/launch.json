@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Ẩn HUD",
+		"expandRecordingControls": "Mở rộng điều khiển ghi",
 		"closeApp": "Đóng ứng dụng",
 		"restartRecording": "Khởi động lại ghi hình",
 		"cancelRecording": "Hủy ghi hình",
@@ -93,6 +94,7 @@
 		"micHint": "Hãy nói để kiểm tra micrô",
 		"noMicrophones": "Không tìm thấy micrô",
 		"preview": "Xem trước",
-		"previewUnavailable": "Không thể xem trước"
+		"previewUnavailable": "Không thể xem trước",
+		"autoCollapseControls": "Tự động thu gọn điều khiển khi đang ghi"
 	}
 }

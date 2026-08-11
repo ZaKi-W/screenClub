@@ -1,6 +1,7 @@
 {
 	"tooltips": {
 		"hideHUD": "Ocultar HUD",
+		"expandRecordingControls": "Expandir controles de gravação",
 		"closeApp": "Fechar App",
 		"restartRecording": "Reiniciar gravação",
 		"cancelRecording": "Cancelar gravação",
@@ -93,6 +94,7 @@
 		"micHint": "Fale para testar seu microfone",
 		"noMicrophones": "Nenhum microfone encontrado",
 		"preview": "Pré-visualização",
-		"previewUnavailable": "Pré-visualização indisponível"
+		"previewUnavailable": "Pré-visualização indisponível",
+		"autoCollapseControls": "Recolher automaticamente os controles durante a gravação"
 	}
 }

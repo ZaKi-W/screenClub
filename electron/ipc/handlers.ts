@@ -20,7 +20,10 @@ import {
 	type NativeLinuxRecordingRequest,
 	portalCursorMode,
 } from "../../src/lib/nativeLinuxRecording";
-import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
+import {
+	type NativeMacRecordingRequest,
+	parseMacWindowIdFromSourceId,
+} from "../../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
 import {
 	type CursorCaptureMode,
@@ -1661,6 +1664,32 @@ export function registerIpcHandlers(
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
+	function getNativeMacExcludedWindowIds() {
+		const mainWindow = getMainWindow();
+		const windows = [
+			// mainWindow is the HUD while the recorder is open, but becomes the editor
+			// after switching to Studio. Never exclude the editor from a display capture.
+			mainWindow?.webContents.getURL().includes("windowType=hud-overlay") ? mainWindow : null,
+			getNotesWindow(),
+		];
+		const excludedWindowIds = new Set<number>();
+
+		for (const window of windows) {
+			if (!window || window.isDestroyed()) continue;
+
+			try {
+				const windowId = parseMacWindowIdFromSourceId(window.getMediaSourceId());
+				if (windowId !== null) excludedWindowIds.add(windowId);
+			} catch (error) {
+				// Exclusion is best-effort. A window may close between the getter and
+				// getMediaSourceId(); capture should still start without that window id.
+				console.warn("[native-sck] could not resolve an OpenScreen window id:", error);
+			}
+		}
+
+		return [...excludedWindowIds];
+	}
+
 	async function requestScreenAccess() {
 		if (process.platform !== "darwin") {
 			return { success: true, granted: true, status: "granted" };
@@ -2499,6 +2528,8 @@ export function registerIpcHandlers(
 						null)
 					: getSelectedDisplay();
 			const bounds = request.source.bounds ?? sourceDisplay?.bounds ?? getSelectedSourceBounds();
+			const excludedWindowIds =
+				request.source.type === "display" ? getNativeMacExcludedWindowIds() : undefined;
 			const config: NativeMacRecordingRequest = {
 				...request,
 				schemaVersion: 1,
@@ -2506,6 +2537,7 @@ export function registerIpcHandlers(
 				source: {
 					...request.source,
 					bounds,
+					excludedWindowIds,
 				},
 				video: {
 					...request.video,

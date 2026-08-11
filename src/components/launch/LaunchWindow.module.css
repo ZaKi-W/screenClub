@@ -69,6 +69,13 @@
 	overflow-x: hidden;
 }
 
+.hudBarCollapsed {
+	align-items: center;
+	justify-content: center;
+	padding: 5px;
+	border-radius: 16px;
+}
+
 /* Shared shell for every floating HUD menu (language list, device pickers), so
    they all read as one design and all reserve the same space in the window. */
 .hudPopover {

@@ -351,6 +351,13 @@ function updateTrayMenu(recording: boolean = false) {
 	const menuTemplate = recording
 		? [
 				{
+					label: mainT("common", "actions.showRecordingControls") || "Show Recording Controls",
+					click: () => {
+						showMainWindow();
+					},
+				},
+				{ type: "separator" as const },
+				{
 					label: mainT("common", "actions.stopRecording") || "Stop Recording",
 					click: () => {
 						if (mainWindow && !mainWindow.isDestroyed()) {

@@ -27,18 +27,16 @@ afterEach(() => {
 });
 
 describe("ChatWelcome", () => {
-	it("renders the English welcome card with the CTA and disclaimer", () => {
+	it("hides transcription features while the feature is disabled", () => {
 		const onOpen = vi.fn();
 		renderIn("en", <ChatWelcome onOpenProviderSettings={onOpen} />);
 
 		expect(screen.getByRole("heading", { name: /bring your own ai/i })).toBeInTheDocument();
 		expect(screen.getByText(/talk.*language model/i)).toBeInTheDocument();
-		// The 3 feature lines are inside a <ul>; query them by text so we know
-		// they actually reach the DOM, not just an unused i18n key.
-		expect(screen.getByText(/cut silences/i)).toBeInTheDocument();
-		expect(screen.getByText(/add captions/i)).toBeInTheDocument();
+		expect(screen.queryByText(/cut silences/i)).not.toBeInTheDocument();
+		expect(screen.queryByText(/add captions/i)).not.toBeInTheDocument();
 		expect(screen.getByText(/rewrite a section/i)).toBeInTheDocument();
-		expect(screen.getByText(/transcript will be sent/i)).toBeInTheDocument();
+		expect(screen.queryByText(/transcript will be sent/i)).not.toBeInTheDocument();
 	});
 
 	it("invokes the onOpenProviderSettings callback when the CTA is clicked", () => {
@@ -55,8 +53,7 @@ describe("ChatWelcome", () => {
 
 		expect(screen.getByRole("heading", { name: /apportez votre ia/i })).toBeInTheDocument();
 		expect(screen.getByText(/configurer un fournisseur/i)).toBeInTheDocument();
-		// Disclaimer must NOT be the English fallback
 		expect(screen.queryByText(/transcript will be sent/i)).not.toBeInTheDocument();
-		expect(screen.getByText(/transcription de votre vidéo/i)).toBeInTheDocument();
+		expect(screen.queryByText(/transcription de votre vidéo/i)).not.toBeInTheDocument();
 	});
 });

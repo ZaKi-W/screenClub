@@ -24,6 +24,7 @@ import { useUndoRedoShortcuts } from "@/lib/ai-edition/store/undo";
 import { useSequentialTimelineOps } from "@/lib/ai-edition/store/useSequentialTimelineOps";
 import { useTimeline } from "@/lib/ai-edition/store/useTimeline";
 import { newRegionDurationSec } from "@/lib/ai-edition/timeline/newRegionDuration";
+import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { matchesShortcut } from "@/lib/shortcuts";
 import { nativeBridgeClient } from "@/native";
 import type { AiEditionProjectSummary } from "@/native/contracts";
@@ -85,6 +86,12 @@ function NativePlaybackSync({
 	return null;
 }
 
+/** Mounts the background transcription queue only while the feature is enabled. */
+function AutoTranscriptionRuntime() {
+	useAutoTranscription();
+	return null;
+}
+
 export function NewEditorShell() {
 	const te = useScopedT("editor");
 	const document = useProjectStore((s) => s.document);
@@ -108,7 +115,7 @@ export function NewEditorShell() {
 	// v4 shell: three modes (Media / Edit / Rec), a collapsible agent (chat)
 	// column, and a floating facet inspector over the stage.
 	const [mode, setMode] = useState<EditorMode>("edit");
-	const [chatOpen, setChatOpen] = useState(true);
+	const [chatOpen, setChatOpen] = useState(false);
 	const [chatWidthPx, setChatWidthPx] = useState(
 		() => Number(localStorage.getItem("os-editor-chat-width")) || 392,
 	);
@@ -130,11 +137,9 @@ export function NewEditorShell() {
 		resolve: (choice: UnsavedChoice) => void;
 	} | null>(null);
 	const { shortcuts, isMac, openConfig: openShortcutsConfig } = useShortcuts();
-	// Transcription is local and every transcript-driven feature (Smart cuts,
-	// captions, the transcript pane) needs one, so the editor produces them by
-	// itself instead of waiting for the user to find the button. This hook is
-	// the ONLY place the background pass is driven from — see transcriptionStore.
-	useAutoTranscription();
+	useEffect(() => {
+		if (!TRANSCRIPTION_FEATURE_ENABLED) useTranscriptionStore.getState().reset();
+	}, []);
 	const requestTimelineTranscripts = useTranscriptionStore((s) => s.requestTimelineTranscripts);
 	// Resolved over the assets the TIMELINE plays, not over the primary asset: in
 	// a recording project the primary asset is the screen capture, which is
@@ -1103,6 +1108,7 @@ export function NewEditorShell() {
 			className={v4.app}
 			style={{ gridTemplateRows: `58px 1fr ${showTimeline ? timelineRow : "0px"}` }}
 		>
+			{TRANSCRIPTION_FEATURE_ENABLED ? <AutoTranscriptionRuntime /> : null}
 			<NativePlaybackSync visibleClips={visibleClips} clips={clips} />
 			<EditorTopBar
 				mode={mode}

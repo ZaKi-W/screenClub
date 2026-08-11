@@ -136,6 +136,7 @@ vi.mock("@/contexts/I18nContext", () => ({
 			"recording.selectSource": "Please select a source to record",
 			"recording.systemPicker": "Your system will ask what to share",
 			"recording.inProgress": "Recording",
+			"actions.stopRecording": "Stop Recording",
 			"tooltips.useVerticalTray": "Use vertical tray",
 			"tooltips.useHorizontalTray": "Use horizontal tray",
 			"audio.enableSystemAudio": "Enable system audio",
@@ -506,10 +507,10 @@ describe("LaunchWindow record button", () => {
 
 		renderLaunchWindow();
 
-		const recordButton = await screen.findByTestId("launch-record-button");
-		await waitFor(() => {
-			expect(recordButton).toHaveAttribute("title", "Recording");
-		});
+		const stopButton = await screen.findByTestId("hud-collapsed-recording-button");
+		expect(stopButton).toHaveAttribute("title", "Stop Recording");
+		fireEvent.click(stopButton);
+		expect(recorderState.value.toggleRecording).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -766,6 +767,7 @@ describe("LaunchWindow device buttons", () => {
 describe("LaunchWindow device settings", () => {
 	beforeEach(() => {
 		platformState.value = "darwin";
+		localStorage.clear();
 		resetLaunchMocks();
 	});
 
@@ -812,7 +814,10 @@ describe("LaunchWindow device settings", () => {
 
 		renderLaunchWindow();
 
-		expect(await screen.findByTestId("launch-device-settings-button")).toBeDisabled();
+		expect(await screen.findByTestId("hud-collapsed-recording-button")).toHaveAccessibleName(
+			"Stop Recording",
+		);
+		expect(screen.queryByTestId("launch-device-settings-button")).not.toBeInTheDocument();
 	});
 });
 
