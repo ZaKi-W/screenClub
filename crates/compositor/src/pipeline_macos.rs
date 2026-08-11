@@ -609,6 +609,7 @@ pub struct ExportParams {
     pub width: u32,
     pub height: u32,
     pub fps: Option<u32>,
+    pub bitrate: Option<i64>,
     pub codec: ExportCodec,
 }
 
@@ -618,6 +619,7 @@ impl Default for ExportParams {
             width: 1920,
             height: 1080,
             fps: None,
+            bitrate: None,
             codec: ExportCodec::H264,
         }
     }
@@ -1004,7 +1006,9 @@ pub fn run_composited_multi(
     // fps : explicite > dérivé du premier clip.
     let out_fps = params.fps.unwrap_or(30) as i32;
     // bitrate proportionnel à la surface de sortie (référence : 8Mbps @ 1920x1080).
-    let bit_rate = ((out_w as i64 * out_h as i64 * 8_000_000) / (1920 * 1080)).max(2_000_000);
+    let bit_rate = params.bitrate.unwrap_or_else(|| {
+        ((out_w as i64 * out_h as i64 * 8_000_000) / (1920 * 1080)).max(2_000_000)
+    });
 
     // ---- decodeurs : un par chemin, réutilisés entre clips (screen ≠ webcam → 2 maps) ----
     let mut screen_decs: std::collections::HashMap<String, Decoder> =

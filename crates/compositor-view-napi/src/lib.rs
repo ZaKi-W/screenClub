@@ -358,6 +358,7 @@ pub struct ExportParamsInput {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub fps: Option<u32>,
+    pub bitrate: Option<u32>,
     /// "h264" | "h265". Toute autre valeur (ex. "vp9", pas d'équivalent matériel AMF) fait
     /// échouer l'export avec un message clair plutôt que de silencieusement retomber sur h264.
     pub codec: Option<String>,
@@ -413,6 +414,7 @@ impl Task for ExportMultiTask {
                 export_params.height = h.max(2) & !1;
             }
             export_params.fps = p.fps;
+            export_params.bitrate = p.bitrate.map(i64::from);
             if let Some(codec) = &p.codec {
                 export_params.codec = match codec.as_str() {
                     "h264" => pipeline::ExportCodec::H264,

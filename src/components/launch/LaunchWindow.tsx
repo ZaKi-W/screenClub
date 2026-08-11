@@ -35,6 +35,9 @@ import {
 	computeHudPopoverMaxHeight,
 	computeHudWindowSize,
 	HUD_BAR_BOTTOM,
+	HUD_COLLAPSED_WINDOW_HEIGHT,
+	HUD_COLLAPSED_WINDOW_WIDTH,
+	HUD_COMPACT_EDGE_SLACK,
 	HUD_GROWTH_RESERVE,
 	HUD_POPOVER_GAP,
 	HUD_STACK_GAP,
@@ -309,14 +312,52 @@ export function LaunchWindow() {
 		// Content is re-measured once the drag ends instead.
 		if (isDraggingHudRef.current) return;
 
+		if (isRecordingHudCollapsed) {
+			const allocated = hudAllocatedSizeRef.current;
+			if (
+				allocated.width === HUD_COLLAPSED_WINDOW_WIDTH &&
+				allocated.height === HUD_COLLAPSED_WINDOW_HEIGHT
+			) {
+				return;
+			}
+			allocated.width = HUD_COLLAPSED_WINDOW_WIDTH;
+			allocated.height = HUD_COLLAPSED_WINDOW_HEIGHT;
+			allocated.orientation = trayLayout;
+			window.electronAPI.setHudOverlaySize(HUD_COLLAPSED_WINDOW_WIDTH, HUD_COLLAPSED_WINDOW_HEIGHT);
+			return;
+		}
+
 		const availableHeight = getAvailableScreenHeight();
 		const barRect = barEl.getBoundingClientRect();
 		const barWidth = barRect.width || barEl.scrollWidth;
 		const barHeight = barRect.height || barEl.scrollHeight;
+		if (barWidth <= 0 || barHeight <= 0) return;
 		const noticeEl = hudNoticesRef.current;
 		const noticeHeight = noticeEl
 			? noticeEl.getBoundingClientRect().height || noticeEl.scrollHeight
 			: 0;
+
+		// Keep the native hit-test region fitted to what is actually painted. The
+		// old reserve model permanently allocated enough room for the tallest device
+		// panel, leaving a large invisible BrowserWindow above an idle toolbar.
+		if (!isPopoverOpen) {
+			const noticeRect = noticeEl?.getBoundingClientRect();
+			const noticeWidth = noticeEl ? noticeRect?.width || noticeEl.scrollWidth : 0;
+			const width =
+				Math.max(Math.ceil(barWidth), Math.ceil(noticeWidth)) + HUD_COMPACT_EDGE_SLACK * 2;
+			const height =
+				HUD_BAR_BOTTOM +
+				Math.ceil(barHeight) +
+				(noticeHeight > 0 ? HUD_POPOVER_GAP + Math.ceil(noticeHeight) : 0) +
+				HUD_COMPACT_EDGE_SLACK;
+			const allocated = hudAllocatedSizeRef.current;
+			if (allocated.width === width && allocated.height === height) return;
+			allocated.width = width;
+			allocated.height = height;
+			allocated.orientation = trayLayout;
+			window.electronAPI.setHudOverlaySize(width, height);
+			return;
+		}
 
 		// The two floating surfaces get their own CSS caps (a 470px-tall language
 		// list would look absurd), but the *window* always reserves room for the
@@ -364,7 +405,7 @@ export function LaunchWindow() {
 		allocated.width = granted.width;
 		allocated.height = granted.height;
 		window.electronAPI.setHudOverlaySize(granted.width, granted.height);
-	}, [trayLayout]);
+	}, [isPopoverOpen, isRecordingHudCollapsed, trayLayout]);
 
 	// One persistent observer; elements wire themselves up via callback refs as
 	// they mount/unmount. Only the bar and the notice column are observed — the

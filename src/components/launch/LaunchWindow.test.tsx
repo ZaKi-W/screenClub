@@ -3,7 +3,13 @@ import "@testing-library/jest-dom";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../ui/tooltip";
-import { HUD_BAR_BOTTOM, HUD_POPOVER_GAP, HUD_POPOVER_MAX_HEIGHT } from "./hudGeometry";
+import {
+	HUD_BAR_BOTTOM,
+	HUD_COLLAPSED_WINDOW_HEIGHT,
+	HUD_COLLAPSED_WINDOW_WIDTH,
+	HUD_COMPACT_EDGE_SLACK,
+	HUD_POPOVER_GAP,
+} from "./hudGeometry";
 import { LaunchWindow } from "./LaunchWindow";
 
 type SelectedSourceChangedListener = Parameters<
@@ -559,7 +565,7 @@ describe("LaunchWindow overlay sizing", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("reserves room for a popover before one is ever opened", async () => {
+	it("fits the native overlay to the visible toolbar while popovers are closed", async () => {
 		renderLaunchWindow();
 
 		const bar = (await screen.findByTestId("hud-drag-handle")).closest(
@@ -572,12 +578,24 @@ describe("LaunchWindow overlay sizing", () => {
 			expect(window.electronAPI.setHudOverlaySize).toHaveBeenCalled();
 		});
 
-		const [, height] = lastRequestedHudSize();
-		// The window is already tall enough for a full-height popover, so opening one
-		// costs no native resize -- that is what stops the HUD jumping on first open.
-		expect(height).toBeGreaterThanOrEqual(
-			HUD_BAR_BOTTOM + 56 + HUD_POPOVER_GAP + HUD_POPOVER_MAX_HEIGHT,
-		);
+		expect(lastRequestedHudSize()).toEqual([
+			400 + HUD_COMPACT_EDGE_SLACK * 2,
+			HUD_BAR_BOTTOM + 56 + HUD_COMPACT_EDGE_SLACK,
+		]);
+	});
+
+	it("shrinks the native overlay to the stop button while recording", async () => {
+		recorderState.value.recording = true;
+
+		renderLaunchWindow();
+
+		await screen.findByTestId("hud-collapsed-recording-button");
+		await waitFor(() => {
+			expect(lastRequestedHudSize()).toEqual([
+				HUD_COLLAPSED_WINDOW_WIDTH,
+				HUD_COLLAPSED_WINDOW_HEIGHT,
+			]);
+		});
 	});
 
 	it("reclaims the overlay once the content drops well below what was granted", async () => {
@@ -600,7 +618,7 @@ describe("LaunchWindow overlay sizing", () => {
 		expect(height).toBeLessThan(inflatedHeight);
 	});
 
-	it("does not resize the overlay when a popover opens", async () => {
+	it("expands the overlay only while a popover is open", async () => {
 		renderLaunchWindow();
 
 		const bar = (await screen.findByTestId("hud-drag-handle")).closest(
@@ -608,6 +626,7 @@ describe("LaunchWindow overlay sizing", () => {
 		) as HTMLElement;
 		stubBox(bar, 400, 56);
 		await flushResizeObservers();
+		const [, compactHeight] = lastRequestedHudSize();
 
 		const sizeMock = window.electronAPI.setHudOverlaySize as unknown as {
 			mockClear: () => void;
@@ -618,10 +637,11 @@ describe("LaunchWindow overlay sizing", () => {
 		await screen.findByTestId("hud-language-menu");
 		await flushResizeObservers();
 
-		expect(window.electronAPI.setHudOverlaySize).not.toHaveBeenCalled();
+		expect(window.electronAPI.setHudOverlaySize).toHaveBeenCalled();
+		expect(lastRequestedHudSize()[1]).toBeGreaterThan(compactHeight);
 	});
 
-	it("does not resize the overlay when the device-settings panel opens", async () => {
+	it("returns to the compact overlay after the device-settings panel closes", async () => {
 		renderLaunchWindow();
 
 		const bar = (await screen.findByTestId("hud-drag-handle")).closest(
@@ -629,20 +649,20 @@ describe("LaunchWindow overlay sizing", () => {
 		) as HTMLElement;
 		stubBox(bar, 400, 56);
 		await flushResizeObservers();
+		const compactSize = lastRequestedHudSize();
 
 		const sizeMock = window.electronAPI.setHudOverlaySize as unknown as {
 			mockClear: () => void;
 		};
 		sizeMock.mockClear();
 
-		// The panel is the tallest floating surface, so the window reserves room for
-		// it up front. Growing on open would shift the bottom-anchored stack and
-		// show up as position judder — the exact thing the reserve model prevents.
 		fireEvent.click(screen.getByTestId("launch-device-settings-button"));
 		await screen.findByTestId("hud-device-settings");
 		await flushResizeObservers();
 
-		expect(window.electronAPI.setHudOverlaySize).not.toHaveBeenCalled();
+		expect(window.electronAPI.setHudOverlaySize).toHaveBeenCalled();
+		expect(lastRequestedHudSize()[1]).toBeGreaterThan(compactSize[1]);
+		sizeMock.mockClear();
 
 		fireEvent.click(screen.getByTestId("launch-device-settings-button"));
 		await waitFor(() => {
@@ -650,7 +670,8 @@ describe("LaunchWindow overlay sizing", () => {
 		});
 		await flushResizeObservers();
 
-		expect(window.electronAPI.setHudOverlaySize).not.toHaveBeenCalled();
+		expect(window.electronAPI.setHudOverlaySize).toHaveBeenCalled();
+		expect(lastRequestedHudSize()).toEqual(compactSize);
 	});
 
 	it("grows the HUD overlay tall enough to fit the system language prompt", async () => {
@@ -673,9 +694,9 @@ describe("LaunchWindow overlay sizing", () => {
 		});
 
 		const [, height] = lastRequestedHudSize();
-		// Bar + popover reserve + the notice stacked above it, all of it on screen.
-		expect(height).toBeGreaterThanOrEqual(
-			HUD_BAR_BOTTOM + 56 + HUD_POPOVER_GAP + HUD_POPOVER_MAX_HEIGHT + noticeHeight,
+		// Only the painted bar and notice are part of the native hit-test region.
+		expect(height).toBe(
+			HUD_BAR_BOTTOM + 56 + HUD_POPOVER_GAP + noticeHeight + HUD_COMPACT_EDGE_SLACK,
 		);
 	});
 });

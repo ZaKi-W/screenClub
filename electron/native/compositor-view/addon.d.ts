@@ -83,6 +83,8 @@ export interface ExportParamsInput {
 	width?: number;
 	height?: number;
 	fps?: number;
+	/** Target video bitrate in bits per second. */
+	bitrate?: number;
 	/** "h264" | "h265". Anything else (e.g. "vp9", no AMF hardware equivalent) fails the export
 	 *  with a clear error instead of silently falling back to h264. */
 	codec?: string;

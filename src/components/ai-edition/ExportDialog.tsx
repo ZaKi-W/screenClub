@@ -22,9 +22,11 @@ import type { AxcutDocument } from "@/lib/ai-edition/schema";
 import { getEditorSettings } from "@/lib/ai-edition/store/editorSettings";
 import { resolveClipSourceEndSec } from "@/lib/ai-edition/timeline/clipDuration";
 import {
+	calculatePresetMp4ExportSettings,
+	type ExportCompressionPreset,
 	type ExportFormat,
 	type ExportProgress,
-	type ExportQuality,
+	type ExportResolution,
 	type ExportVideoCodec,
 	GIF_FRAME_RATES,
 	GIF_SIZE_PRESETS,
@@ -32,6 +34,7 @@ import {
 	type GifSizePreset,
 } from "@/lib/exporter";
 import { calculateMp4ExportSettings, wouldUpscale } from "@/lib/exporter/mp4ExportSettings";
+import { loadUserPreferences, saveUserPreferences } from "@/lib/userPreferences";
 import { exportGifNative, exportMultiNative, useIsCpuCompositor } from "@/native";
 import type { CompositorClipInput } from "@/native/contracts";
 import { buildSceneDescription, resolveVisibleClips } from "@/native/sceneDescription";
@@ -86,13 +89,17 @@ function buildNativeClipList(document: AxcutDocument): CompositorClipInput[] {
 	});
 }
 
-const QUALITY_OPTIONS: Array<{
-	value: ExportQuality;
-	labelKey: string;
-}> = [
-	{ value: "medium", labelKey: "exportQuality.low" },
-	{ value: "good", labelKey: "exportQuality.medium" },
-	{ value: "source", labelKey: "exportQuality.high" },
+const RESOLUTION_OPTIONS: Array<{ value: ExportResolution; label: string }> = [
+	{ value: "720p", label: "720p" },
+	{ value: "1080p", label: "1080p" },
+	{ value: "4k", label: "4K" },
+];
+
+const COMPRESSION_OPTIONS: Array<{ value: ExportCompressionPreset; labelKey: string }> = [
+	{ value: "studio", labelKey: "exportDialog.compressionStudio" },
+	{ value: "social", labelKey: "exportDialog.compressionSocialMedia" },
+	{ value: "web", labelKey: "exportDialog.compressionWeb" },
+	{ value: "web-low", labelKey: "exportDialog.compressionWebLow" },
 ];
 
 interface ExportDialogProps {
@@ -107,10 +114,16 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 	// No usable GPU: the export still applies every effect (output is identical), it
 	// just runs on the software encoder and takes minutes instead of seconds.
 	const cpuCompositor = useIsCpuCompositor();
-	const [format, setFormat] = useState<ExportFormat>("mp4");
-	const [quality, setQuality] = useState<ExportQuality>("good");
-	const [fps, setFps] = useState<24 | 30 | 60>(60);
-	const [codec, setCodec] = useState<ExportVideoCodec>("h264");
+	const [initialPreferences] = useState(() => loadUserPreferences());
+	const [format, setFormat] = useState<ExportFormat>(initialPreferences.exportFormat);
+	const [resolution, setResolution] = useState<ExportResolution>(
+		initialPreferences.exportResolution,
+	);
+	const [compression, setCompression] = useState<ExportCompressionPreset>(
+		initialPreferences.exportCompression,
+	);
+	const [fps, setFps] = useState<24 | 30 | 60>(initialPreferences.exportFrameRate);
+	const [codec, setCodec] = useState<ExportVideoCodec>(initialPreferences.exportCodec);
 	const [gifFrameRate, setGifFrameRate] = useState<GifFrameRate>(15);
 	const [gifSize, setGifSize] = useState<GifSizePreset>("medium");
 	const [gifLoop, setGifLoop] = useState(true);
@@ -151,11 +164,9 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 	// goes through the same native exporter as MP4 and shares its sizing, so only the
 	// smallest-clip pick below is still needed.)
 
-	// Smallest clip's true (cropped) footprint on the timeline — a multiclip timeline can mix
-	// crops/resolutions, so this is what "Source" quality actually targets: sizing to the
-	// SMALLEST clip's own resolution means no clip on the timeline is ever upscaled past its
-	// true footprint by picking Source. It also feeds the upscale badge on the fixed
-	// 720p/1080p tiers, which can still genuinely upscale a small clip.
+	// Smallest clip's true (cropped) footprint on the timeline. It drives the
+	// honest upscale warning for fixed 720p/1080p/4K tiers and preserves the old
+	// source-sized meaning of GIF's "Original" option.
 	const smallestSource = useMemo(
 		() => pickExtremeDims(effectiveClipDims, "smallest"),
 		[effectiveClipDims],
@@ -170,11 +181,8 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 		() => resolveAspectRatioValue(document, getEditorSettings(document).aspectRatio),
 		[document],
 	);
-	// Output dimensions the export will produce for a given tier, from the (crop-aware)
-	// SMALLEST clip on the timeline — see `smallestSource` above for why. Only "Source"
-	// quality actually uses these as its target size; 720p/1080p target a fixed short side
-	// regardless (`calculateDimensionsForShortSide`), so this only changes what "Source"
-	// resolves to.
+	// Output dimensions follow the selected project aspect ratio; a 4:3 "4K"
+	// export is 2880x2160, matching Screen Studio's short-side tier model.
 	// GIF is 8-bit indexed and grows fast with area, so the size preset caps the
 	// output height rather than following the quality tier. `original` keeps the
 	// tier's dims; the native side falls back to its own defaults when undefined.
@@ -194,14 +202,23 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 		return { width: even(tierDims.width), height: even(tierDims.height) };
 	};
 
-	const tierOutputDims = (value: ExportQuality) =>
-		smallestSource
-			? calculateMp4ExportSettings({
-					quality: value,
-					sourceWidth: smallestSource.width,
-					sourceHeight: smallestSource.height,
-					aspectRatioValue: EXPORT_ASPECT,
-				})
+	const tierOutputDims = (value: ExportResolution = resolution) =>
+		calculatePresetMp4ExportSettings({
+			resolution: value,
+			compression,
+			fps,
+			aspectRatioValue: EXPORT_ASPECT,
+		});
+	const selectedMp4Settings = tierOutputDims();
+	const estimatedDurationSec = document
+		? buildNativeClipList(document).reduce(
+				(sum, clip) => sum + Math.max(0, clip.sourceEndSec - clip.sourceStartSec),
+				0,
+			)
+		: 0;
+	const estimatedMaxOutputSizeMb =
+		estimatedDurationSec > 0
+			? Math.ceil(((selectedMp4Settings.bitrate + 192_000) * estimatedDurationSec) / 8_000_000)
 			: null;
 
 	useEffect(() => {
@@ -289,7 +306,15 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 			});
 			try {
 				const sceneJson = JSON.stringify(buildSceneDescription(document));
-				const outDims = tierOutputDims(quality);
+				const outDims = tierOutputDims();
+				const gifSourceDims = smallestSource
+					? calculateMp4ExportSettings({
+							quality: "source",
+							sourceWidth: smallestSource.width,
+							sourceHeight: smallestSource.height,
+							aspectRatioValue: EXPORT_ASPECT,
+						})
+					: null;
 				if (clips.length === 0) {
 					throw new Error(t("exportDialog.nothingToExport"));
 				}
@@ -298,15 +323,16 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 						? await exportGifNative(clips, pickedPath, sceneJson, {
 								// GIF is 256-colour and grows fast; cap the long edge at the
 								// chosen preset rather than exporting at source size.
-								...gifOutputDims(gifSize, outDims),
+								...gifOutputDims(gifSize, gifSourceDims),
 								fps: gifFrameRate,
 								// 0 = infinite, the historical GIF default; 1 = play once.
 								loopCount: gifLoop ? 0 : 1,
 							})
 						: await exportMultiNative(clips, pickedPath, sceneJson, {
-								width: outDims?.width,
-								height: outDims?.height,
+								width: outDims.width,
+								height: outDims.height,
 								fps,
+								bitrate: outDims.bitrate,
 								codec,
 							});
 				setSavedPath(pickedPath);
@@ -361,14 +387,20 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 						active={format === "mp4"}
 						label={ts("exportFormat.mp4")}
 						icon={<FileVideo size={18} />}
-						onClick={() => setFormat("mp4")}
+						onClick={() => {
+							setFormat("mp4");
+							saveUserPreferences({ exportFormat: "mp4" });
+						}}
 						disabled={isBusy}
 					/>
 					<FormatToggle
 						active={format === "gif"}
 						label={ts("exportFormat.gif")}
 						icon={<Download size={18} />}
-						onClick={() => setFormat("gif")}
+						onClick={() => {
+							setFormat("gif");
+							saveUserPreferences({ exportFormat: "gif" });
+						}}
 						disabled={isBusy}
 					/>
 				</div>
@@ -384,41 +416,35 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 								marginBottom: 8,
 							}}
 						>
-							{t("exportDialog.quality")}
+							{t("exportDialog.size")}
 						</div>
 						<div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-							{QUALITY_OPTIONS.map((q) => (
+							{RESOLUTION_OPTIONS.map((option) => (
 								<button
 									type="button"
-									key={q.value}
+									key={option.value}
 									disabled={isBusy}
-									onClick={() => setQuality(q.value)}
+									onClick={() => {
+										setResolution(option.value);
+										saveUserPreferences({ exportResolution: option.value });
+									}}
 									style={{
 										display: "flex",
 										flexDirection: "column",
 										gap: 2,
 										padding: "10px 12px",
-										border: `1px solid ${quality === q.value ? "var(--accent)" : "var(--border)"}`,
+										border: `1px solid ${resolution === option.value ? "var(--accent)" : "var(--border)"}`,
 										borderRadius: 10,
-										background: quality === q.value ? "var(--accent-wash)" : "var(--surface)",
+										background:
+											resolution === option.value ? "var(--accent-wash)" : "var(--surface)",
 										color: "var(--fg-2)",
 										cursor: "pointer",
 										font: "500 13px/1 var(--font-body)",
 									}}
 								>
-									<span style={{ color: "var(--fg)", fontWeight: 600 }}>{ts(q.labelKey)}</span>
+									<span style={{ color: "var(--fg)", fontWeight: 600 }}>{option.label}</span>
 									{(() => {
-										const dims = tierOutputDims(q.value);
-										if (!dims) return null;
-										// Downscale badge removed everywhere — restated what picking a lower
-										// tier already means, not actionable. The upscale badge asks whether
-										// the clip has to be STRETCHED to fill this frame (`wouldUpscale`),
-										// which is a contain-fit question: a short-side compare read the
-										// letterbox rows a non-16:9 source gets in a 16:9 project as if they
-										// were stretched pixels, and flagged "1080p" on the very frame
-										// "Source" produced unflagged. No "Source" special case any more —
-										// its frame is the source's long side at the project ratio, so its
-										// contain scale is never above 1 and the general test covers it.
+										const dims = tierOutputDims(option.value);
 										const isUpscale = smallestSource !== null && wouldUpscale(dims, smallestSource);
 										return (
 											<span
@@ -435,10 +461,39 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 								</button>
 							))}
 						</div>
+
+						<div
+							style={{
+								font: "500 11px/1 var(--font-body)",
+								textTransform: "uppercase",
+								letterSpacing: "0.06em",
+								color: "var(--muted)",
+								marginTop: 12,
+								marginBottom: 8,
+							}}
+						>
+							{t("exportDialog.quality")}
+						</div>
+						<div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+							{COMPRESSION_OPTIONS.map((option) => (
+								<button
+									type="button"
+									key={option.value}
+									disabled={isBusy}
+									onClick={() => {
+										setCompression(option.value);
+										saveUserPreferences({ exportCompression: option.value });
+									}}
+									style={segStyle(compression === option.value)}
+								>
+									{t(option.labelKey)}
+								</button>
+							))}
+						</div>
 						<div
 							style={{
 								display: "grid",
-								gridTemplateColumns: "1fr 1fr",
+								gridTemplateColumns: "1fr",
 								gap: 12,
 								marginTop: 12,
 							}}
@@ -461,7 +516,10 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 											type="button"
 											key={r}
 											disabled={isBusy}
-											onClick={() => setFps(r)}
+											onClick={() => {
+												setFps(r);
+												saveUserPreferences({ exportFrameRate: r });
+											}}
 											style={segStyle(fps === r)}
 										>
 											{r}
@@ -469,18 +527,19 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 									))}
 								</div>
 							</div>
-							<div>
-								<div
+							<details>
+								<summary
 									style={{
 										font: "500 11px/1 var(--font-body)",
 										textTransform: "uppercase",
 										letterSpacing: "0.06em",
 										color: "var(--muted)",
 										marginBottom: 8,
+										cursor: "pointer",
 									}}
 								>
 									{t("exportDialog.codec")}
-								</div>
+								</summary>
 								<div
 									style={{
 										display: "grid",
@@ -502,7 +561,10 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 											type="button"
 											key={value}
 											disabled={isBusy}
-											onClick={() => setCodec(value)}
+											onClick={() => {
+												setCodec(value);
+												saveUserPreferences({ exportCodec: value });
+											}}
 											style={segStyle(codec === value)}
 											title={
 												value === "h264"
@@ -514,7 +576,17 @@ export function ExportDialog({ open, onClose, document }: ExportDialogProps) {
 										</button>
 									))}
 								</div>
-							</div>
+							</details>
+						</div>
+						<div
+							style={{
+								marginTop: 10,
+								font: "500 11px/1.4 var(--font-mono)",
+								color: "var(--muted)",
+							}}
+						>
+							{selectedMp4Settings.width} × {selectedMp4Settings.height}
+							{estimatedMaxOutputSizeMb !== null ? ` · ≈ ${estimatedMaxOutputSizeMb} MB` : ""}
 						</div>
 					</section>
 				) : (

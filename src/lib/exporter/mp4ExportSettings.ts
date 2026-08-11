@@ -1,4 +1,4 @@
-import type { ExportQuality } from "./types";
+import type { ExportCompressionPreset, ExportQuality, ExportResolution } from "./types";
 
 export interface Mp4ExportSettings {
 	width: number;
@@ -32,6 +32,7 @@ export function wouldUpscale(output: Dims, source: Dims): boolean {
 
 const MEDIUM_SHORT_SIDE = 720;
 const HIGH_SHORT_SIDE = 1080;
+const FOUR_K_SHORT_SIDE = 2160;
 
 function even(value: number) {
 	return Math.floor(value / 2) * 2;
@@ -125,6 +126,47 @@ function calculateBitrate(width: number, height: number, quality: ExportQuality)
 	if (totalPixels <= 1280 * 720) return 10_000_000;
 	if (totalPixels <= 1920 * 1080) return 20_000_000;
 	return 30_000_000;
+}
+
+const COMPRESSION_BASE_BITRATE_1080P_60: Record<ExportCompressionPreset, number> = {
+	studio: 30_000_000,
+	social: 20_000_000,
+	web: 12_000_000,
+	"web-low": 8_000_000,
+};
+
+/**
+ * Resolution and compression are deliberately independent: choosing 4K changes
+ * the raster size, while the purpose preset changes only the encoder budget.
+ */
+export function calculatePresetMp4ExportSettings({
+	resolution,
+	compression,
+	fps,
+	aspectRatioValue,
+}: {
+	resolution: ExportResolution;
+	compression: ExportCompressionPreset;
+	fps: 24 | 30 | 60;
+	aspectRatioValue: number;
+}): Mp4ExportSettings {
+	const shortSide =
+		resolution === "720p"
+			? MEDIUM_SHORT_SIDE
+			: resolution === "1080p"
+				? HIGH_SHORT_SIDE
+				: FOUR_K_SHORT_SIDE;
+	const dimensions = calculateDimensionsForShortSide(shortSide, aspectRatioValue);
+	const pixelScale = (dimensions.width * dimensions.height) / (1920 * 1080);
+	const frameRateScale = fps === 60 ? 1 : fps === 30 ? 0.75 : 0.65;
+	const bitrate = Math.max(
+		2_000_000,
+		Math.round(
+			(COMPRESSION_BASE_BITRATE_1080P_60[compression] * pixelScale * frameRateScale) / 100_000,
+		) * 100_000,
+	);
+
+	return { ...dimensions, bitrate };
 }
 
 export function calculateMp4ExportSettings({

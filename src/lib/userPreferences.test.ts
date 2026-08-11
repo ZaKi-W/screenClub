@@ -98,6 +98,22 @@ describe("user preferences", () => {
 		expect(loadUserPreferences().trayLayout).toBe("vertical");
 	});
 
+	it("remembers the MP4 export preset", () => {
+		saveUserPreferences({
+			exportResolution: "1080p",
+			exportCompression: "web",
+			exportFrameRate: 30,
+			exportCodec: "h265",
+		});
+
+		expect(loadUserPreferences()).toMatchObject({
+			exportResolution: "1080p",
+			exportCompression: "web",
+			exportFrameRate: 30,
+			exportCodec: "h265",
+		});
+	});
+
 	it("falls back to the default tray layout for invalid stored values", () => {
 		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ trayLayout: "diagonal" }));
 

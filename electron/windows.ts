@@ -236,9 +236,9 @@ export function createHudOverlayWindow(): BrowserWindow {
 		width: windowWidth,
 		height: windowHeight,
 		// Min/max are intentionally loose: the renderer resizes to fit content via
-		// "hud-overlay-set-size" (above), needed for the vertical tray to grow taller.
-		minWidth: 120,
-		minHeight: 80,
+		// "hud-overlay-set-size" (above), including the compact recording stop button.
+		minWidth: 1,
+		minHeight: 1,
 		x: x,
 		y: y,
 		frame: false,

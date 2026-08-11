@@ -368,14 +368,22 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			guard let display = content.displays.first(where: { $0.displayID == displayId }) else {
 				throw HelperError.sourceNotFound("No ScreenCaptureKit display found for id \(displayId).")
 			}
-			let width = Int(CGDisplayPixelsWide(display.displayID))
-			let height = Int(CGDisplayPixelsHigh(display.displayID))
+			// `CGDisplayPixelsWide/High` follows the logical desktop mode on Retina
+			// displays (for example 1440x900). ScreenCaptureKit accepts backing-pixel
+			// dimensions, so use the mode's physical pixel grid instead; otherwise a
+			// 16:9 crop of that display is only 1440x810 and every 1080p export is an
+			// upscale. The proportional fit keeps large/ultrawide displays inside the
+			// recorder's 4K ceiling without stretching their aspect ratio.
+			let mode = CGDisplayCopyDisplayMode(display.displayID)
+			let width = mode?.pixelWidth ?? Int(CGDisplayPixelsWide(display.displayID))
+			let height = mode?.pixelHeight ?? Int(CGDisplayPixelsHigh(display.displayID))
+			let fitted = fitCaptureDimensions(width: width, height: height)
 			let excludedWindowIds = Set(request.source.excludedWindowIds ?? [])
 			let excludedWindows = content.windows.filter { excludedWindowIds.contains($0.windowID) }
 			return CaptureTarget(
 				filter: SCContentFilter(display: display, excludingWindows: excludedWindows),
-				width: clampCaptureDimension(width, fallback: request.video.width),
-				height: clampCaptureDimension(height, fallback: request.video.height),
+				width: fitted.width,
+				height: fitted.height,
 				captureFrame: display.frame
 			)
 		case "window":
@@ -391,10 +399,11 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			let scaleFactor = Self.scaleFactor(for: candidateDisplay?.displayID ?? CGMainDisplayID())
 			let width = Int(window.frame.width) * scaleFactor
 			let height = Int(window.frame.height) * scaleFactor
+			let fitted = fitCaptureDimensions(width: width, height: height)
 			return CaptureTarget(
 				filter: SCContentFilter(desktopIndependentWindow: window),
-				width: clampCaptureDimension(width, fallback: request.video.width),
-				height: clampCaptureDimension(height, fallback: request.video.height),
+				width: fitted.width,
+				height: fitted.height,
 				captureFrame: window.frame
 			)
 		default:
@@ -406,6 +415,9 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let configuration = SCStreamConfiguration()
 		configuration.width = outputWidth
 		configuration.height = outputHeight
+		if #available(macOS 14.0, *) {
+			configuration.captureResolution = .best
+		}
 		configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(max(1, request.video.fps)))
 		configuration.queueDepth = 6
 		configuration.showsCursor = !request.video.hideSystemCursor
@@ -611,11 +623,22 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		return status == .complete
 	}
 
-	private func clampCaptureDimension(_ value: Int, fallback: Int) -> Int {
-		let requested = max(2, fallback)
-		let candidate = value > 0 ? value : requested
-		let clamped = min(candidate, requested)
-		return max(2, clamped - (clamped % 2))
+	private func fitCaptureDimensions(width: Int, height: Int) -> (width: Int, height: Int) {
+		let maxWidth = max(2, request.video.width)
+		let maxHeight = max(2, request.video.height)
+		let candidateWidth = width > 0 ? width : maxWidth
+		let candidateHeight = height > 0 ? height : maxHeight
+		let scale = min(
+			1.0,
+			Double(maxWidth) / Double(candidateWidth),
+			Double(maxHeight) / Double(candidateHeight)
+		)
+		let fittedWidth = max(2, Int((Double(candidateWidth) * scale).rounded(.down)))
+		let fittedHeight = max(2, Int((Double(candidateHeight) * scale).rounded(.down)))
+		return (
+			width: fittedWidth - (fittedWidth % 2),
+			height: fittedHeight - (fittedHeight % 2)
+		)
 	}
 
 	private static func scaleFactor(for displayId: CGDirectDisplayID) -> Int {

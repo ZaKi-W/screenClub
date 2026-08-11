@@ -62,6 +62,14 @@ export const HUD_MODAL_MIN_HEIGHT = 200;
 export const HUD_GROWTH_RESERVE = 120;
 /** Floor for the window itself, in case the bar measures as ~nothing. */
 export const HUD_MIN_WINDOW_WIDTH = 220;
+/**
+ * Native window bounds while recording. The collapsed bar is 50px wide/high;
+ * the remaining pixels preserve its shadow and the normal 20px bottom offset.
+ */
+export const HUD_COLLAPSED_WINDOW_WIDTH = 56;
+export const HUD_COLLAPSED_WINDOW_HEIGHT = 76;
+/** Transparent breathing room around the visible idle toolbar. */
+export const HUD_COMPACT_EDGE_SLACK = 8;
 
 export interface HudSize {
 	width: number;
