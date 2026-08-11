@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "Window",
 		"screen": "Screen",
+		"area": "Area",
 		"virtual": "Virtual display",
 		"unknown": "Screen recording"
 	}

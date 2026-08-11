@@ -7,6 +7,48 @@
 	-webkit-app-region: no-drag;
 }
 
+.hudDismissButton {
+	background: #f1f1ef !important;
+	color: #242424 !important;
+}
+
+.hudDismissButton:hover,
+.hudDismissButton:focus-visible {
+	background: #ffffff !important;
+}
+
+.hudMagneticButton {
+	position: relative;
+	isolation: isolate;
+	/* The visual hover plate intentionally crosses the hit area's edge during
+	   directional entry/exit. The button's layout and hit target stay fixed. */
+	overflow: visible;
+}
+
+.hudMagneticHighlight {
+	position: absolute;
+	inset: 2px;
+	z-index: -1;
+	pointer-events: none;
+	border-radius: inherit;
+	background: rgba(255, 255, 255, 0.085);
+	will-change: transform, opacity;
+}
+
+.hudMagneticHighlightLight {
+	background: rgba(255, 255, 255, 0.5);
+}
+
+.hudMagneticHighlightDanger {
+	background: rgba(255, 89, 79, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hudMagneticHighlight {
+		will-change: opacity;
+	}
+}
+
 /*
  * The HUD is one bottom-anchored, upward-growing stack: the bar sits at the
  * bottom, popovers and notices float above it in DOM order. Everything that
@@ -45,17 +87,19 @@
 .hudBar {
 	pointer-events: auto;
 	display: flex;
-	border-radius: 17px;
-	border: 1px solid #242932;
-	background: #14171c;
-	box-shadow: 0 2px 6px -2px rgba(0, 0, 0, 0.35);
-	backdrop-filter: blur(24px) saturate(140%);
+	border-radius: 28px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	background: rgba(31, 32, 32, 0.96);
+	box-shadow:
+		0 18px 42px -20px rgba(0, 0, 0, 0.82),
+		inset 0 1px 0 rgba(255, 255, 255, 0.08);
+	backdrop-filter: blur(28px) saturate(125%);
 }
 
 .hudBarHorizontal {
 	align-items: center;
-	gap: 5px;
-	padding: 7px 9px;
+	gap: 3px;
+	padding: 6px 10px;
 }
 
 .hudBarVertical {
@@ -72,8 +116,8 @@
 .hudBarCollapsed {
 	align-items: center;
 	justify-content: center;
-	padding: 5px;
-	border-radius: 16px;
+	padding: 7px 9px;
+	border-radius: 24px;
 }
 
 /* Shared shell for every floating HUD menu (language list, device pickers), so
@@ -295,6 +339,29 @@
 	color: #ffffff;
 }
 
+.hudActionMenuItem {
+	display: flex;
+	width: 100%;
+	height: 34px;
+	align-items: center;
+	gap: 9px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.72);
+	font-size: 11px;
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.hudActionMenuItem:hover,
+.hudActionMenuItem:focus-visible {
+	background: rgba(255, 255, 255, 0.08);
+	color: #ffffff;
+	outline: none;
+}
+
 /* Device-picker popovers (microphone / camera) reuse the language menu's
    panel/item/checkmark shell; this is the one extra piece they need. */
 .hudMenuSectionLabel {
@@ -313,9 +380,11 @@
 }
 .hudDividerHorizontal {
 	width: 1px;
-	height: 22px;
+	height: 38px;
+	margin: 0 6px;
 }
 .hudDividerVertical {
-	width: 22px;
+	width: 38px;
 	height: 1px;
+	margin: 8px 0;
 }

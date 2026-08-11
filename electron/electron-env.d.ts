@@ -37,7 +37,7 @@ interface Window {
 		switchToEditor: () => Promise<void>;
 		switchToHud: () => Promise<void>;
 		startNewRecording: () => Promise<{ success: boolean; error?: string }>;
-		openSourceSelector: () => Promise<{
+		openSourceSelector: (preferredSourceKind?: "screen" | "window") => Promise<{
 			opened: boolean;
 			reason?: string;
 			access?: {
@@ -394,6 +394,17 @@ interface Window {
 		}) => Promise<{ success: boolean }>;
 		hudOverlayHide: () => void;
 		hudOverlayClose: () => void;
+		showHudNativeInputMenu: (
+			request: import("../src/lib/hudNativeMenu").HudNativeInputMenuRequest,
+		) => Promise<import("../src/lib/hudNativeMenu").HudNativeInputMenuResult>;
+		showHudNativeSettingsMenu: (
+			request: import("../src/lib/hudNativeMenu").HudNativeSettingsMenuRequest,
+		) => Promise<import("../src/lib/hudNativeMenu").HudNativeSettingsMenuResult>;
+		openAreaSelector: () => Promise<import("../src/lib/captureArea").CaptureAreaSelection | null>;
+		confirmAreaSelection: (
+			selection: import("../src/lib/captureArea").CaptureAreaSelection,
+		) => void;
+		cancelAreaSelection: () => void;
 		setHudOverlayIgnoreMouseEvents: (ignore: boolean) => void;
 		/** Pins the overlay's current position as the origin for `dragHudOverlayTo`. */
 		beginHudOverlayDrag: () => void;

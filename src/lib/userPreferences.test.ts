@@ -98,6 +98,22 @@ describe("user preferences", () => {
 		expect(loadUserPreferences().trayLayout).toBe("vertical");
 	});
 
+	it("defaults the recording countdown to three seconds and persists supported choices", () => {
+		expect(loadUserPreferences().recordingCountdownSeconds).toBe(3);
+
+		saveUserPreferences({ recordingCountdownSeconds: 10 });
+		expect(loadUserPreferences().recordingCountdownSeconds).toBe(10);
+	});
+
+	it("falls back to three seconds for an invalid recording countdown", () => {
+		localStorage.setItem(
+			"openscreen_user_preferences",
+			JSON.stringify({ recordingCountdownSeconds: 7 }),
+		);
+
+		expect(loadUserPreferences().recordingCountdownSeconds).toBe(3);
+	});
+
 	it("remembers the MP4 export preset", () => {
 		saveUserPreferences({
 			exportResolution: "1080p",

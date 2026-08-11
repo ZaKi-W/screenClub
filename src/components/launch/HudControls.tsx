@@ -1,4 +1,26 @@
-import { Check, Languages, NotepadText, Settings } from "lucide-react";
+import {
+	AppWindow,
+	Check,
+	ChevronDown,
+	CircleStop,
+	Clapperboard,
+	Languages,
+	Mic,
+	MicOff,
+	Monitor,
+	MonitorSpeaker,
+	MousePointer2,
+	NotepadText,
+	Pause,
+	Play,
+	RotateCcw,
+	Scan,
+	Settings,
+	Trash2,
+	Video,
+	VideoOff,
+	X,
+} from "lucide-react";
 import { memo } from "react";
 import { formatTimePadded } from "../../utils/timeUtils";
 import { Button } from "../ui/button";
@@ -11,10 +33,10 @@ import {
 	MicIcon,
 	OpenInEditorIcon,
 	OrientationIcon,
-	RecordGlyph,
 	SourceIcon,
 	VolumeIcon,
 } from "./HudIcons";
+import { HudMagneticButton } from "./HudMagneticButton";
 import styles from "./LaunchWindow.module.css";
 
 // Every control below is a `memo` boundary on purpose. The HUD's root re-renders
@@ -39,12 +61,141 @@ const windowBtnClasses = `flex h-[30px] w-[30px] shrink-0 items-center justify-c
 
 const closeBtnClasses = `flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] border-0 bg-transparent cursor-pointer text-[#828c99] transition-all duration-150 hover:bg-[rgba(248,113,113,0.16)] hover:text-[#f87171] ${hudDisabledClasses}`;
 
+const hudReferenceButtonClasses = `shrink-0 border-0 bg-transparent cursor-pointer transition-all duration-150 active:scale-[0.97] ${hudDisabledClasses} ${styles.electronNoDrag}`;
+
 export const HudDivider = memo(function HudDivider({ vertical }: { vertical: boolean }) {
 	return (
 		<span
 			className={`${styles.hudDivider} ${vertical ? styles.hudDividerVertical : styles.hudDividerHorizontal}`}
 			aria-hidden
 		/>
+	);
+});
+
+export const HudDismissButton = memo(function HudDismissButton({
+	label,
+	disabled,
+	onClick,
+}: {
+	label: string;
+	disabled: boolean;
+	onClick: () => void;
+}) {
+	return (
+		<Tooltip content={label}>
+			<HudMagneticButton
+				type="button"
+				aria-label={label}
+				disabled={disabled}
+				onClick={onClick}
+				className={`${hudReferenceButtonClasses} ${styles.hudDismissButton} flex h-9 w-9 items-center justify-center rounded-full`}
+				highlightClassName={styles.hudMagneticHighlightLight}
+			>
+				<X size={21} strokeWidth={2.5} />
+			</HudMagneticButton>
+		</Tooltip>
+	);
+});
+
+export const HudCaptureModeButton = memo(function HudCaptureModeButton({
+	kind,
+	label,
+	active,
+	disabled,
+	compact,
+	onClick,
+}: {
+	kind: "screen" | "window" | "area";
+	label: string;
+	active: boolean;
+	disabled: boolean;
+	compact: boolean;
+	onClick: () => void;
+}) {
+	const Icon = kind === "screen" ? Monitor : kind === "window" ? AppWindow : Scan;
+	return (
+		<HudMagneticButton
+			type="button"
+			data-testid={
+				kind === "screen"
+					? "launch-source-selector-button"
+					: kind === "window"
+						? "launch-window-source-button"
+						: "launch-area-source-button"
+			}
+			aria-label={label}
+			aria-pressed={active}
+			disabled={disabled}
+			onClick={onClick}
+			className={`${hudReferenceButtonClasses} flex ${compact ? "h-[50px] w-[50px]" : "h-[52px] w-[64px]"} flex-col items-center justify-center gap-0.5 rounded-[12px] ${
+				active ? "bg-white/[0.11] text-white" : "text-[#a6a6a4] hover:text-white"
+			}`}
+		>
+			<Icon size={compact ? 23 : 25} strokeWidth={1.9} />
+			<span className={`${compact ? "text-[10px]" : "text-[11px]"} font-medium leading-none`}>
+				{label}
+			</span>
+		</HudMagneticButton>
+	);
+});
+
+export const HudStatusToggleButton = memo(function HudStatusToggleButton({
+	kind,
+	enabled,
+	disabled,
+	label,
+	statusLabel,
+	compact,
+	expanded,
+	onClick,
+}: {
+	kind: "camera" | "microphone" | "system-audio";
+	enabled: boolean;
+	disabled: boolean;
+	label: string;
+	statusLabel: string;
+	compact: boolean;
+	expanded: boolean;
+	onClick: () => void;
+}) {
+	const Icon =
+		kind === "camera"
+			? enabled
+				? Video
+				: VideoOff
+			: kind === "microphone"
+				? enabled
+					? Mic
+					: MicOff
+				: MonitorSpeaker;
+	const testId =
+		kind === "camera"
+			? "launch-webcam-button"
+			: kind === "microphone"
+				? "launch-microphone-button"
+				: "launch-system-audio-button";
+	return (
+		<Tooltip content={label}>
+			<HudMagneticButton
+				type="button"
+				data-testid={testId}
+				aria-label={label}
+				aria-pressed={enabled}
+				aria-expanded={expanded}
+				aria-haspopup="menu"
+				data-hud-popover-trigger="true"
+				disabled={disabled}
+				onClick={onClick}
+				className={`${hudReferenceButtonClasses} flex ${compact ? "h-10 w-10 justify-center" : "h-[46px] min-w-[128px] max-w-[174px] gap-2 px-2.5"} items-center rounded-[12px] ${
+					enabled ? "bg-white/[0.08] text-[#f4f4f2]" : "text-[#8b8b89] hover:text-[#bdbdbb]"
+				}`}
+			>
+				<Icon size={compact ? 21 : 22} strokeWidth={1.8} />
+				<span className={compact ? "sr-only" : "truncate text-[12px] font-medium"}>
+					{statusLabel}
+				</span>
+			</HudMagneticButton>
+		</Tooltip>
 	);
 });
 
@@ -77,7 +228,7 @@ export const HudDragHandle = memo(function HudDragHandle({
 	return (
 		<div
 			data-testid="hud-drag-handle"
-			className={`flex ${vertical ? "h-6 w-8" : "h-8 w-7"} shrink-0 cursor-grab items-center justify-center active:cursor-grabbing ${
+			className={`flex ${vertical ? "h-3 w-11" : "h-11 w-3"} shrink-0 cursor-grab items-center justify-center active:cursor-grabbing ${
 				nativeDrag ? styles.electronDrag : styles.electronNoDrag
 			}`}
 			onPointerDown={onPointerDown}
@@ -85,7 +236,10 @@ export const HudDragHandle = memo(function HudDragHandle({
 			onPointerUp={onPointerEnd}
 			onPointerCancel={onPointerEnd}
 		>
-			{getIcon("drag", "text-[#333a45]")}
+			<span
+				className={`${styles.hudDivider} ${vertical ? styles.hudDividerVertical : styles.hudDividerHorizontal}`}
+				aria-hidden
+			/>
 		</div>
 	);
 });
@@ -101,7 +255,7 @@ export const HudTrayLayoutButton = memo(function HudTrayLayoutButton({
 }) {
 	return (
 		<Tooltip content={label}>
-			<button
+			<HudMagneticButton
 				data-testid="launch-tray-layout-button"
 				type="button"
 				aria-label={label}
@@ -110,7 +264,7 @@ export const HudTrayLayoutButton = memo(function HudTrayLayoutButton({
 				onClick={onClick}
 			>
 				<OrientationIcon vertical={vertical} />
-			</button>
+			</HudMagneticButton>
 		</Tooltip>
 	);
 });
@@ -224,31 +378,31 @@ export const HudSettingsButton = memo(function HudSettingsButton({
 	expanded,
 	label,
 	onClick,
-	buttonRef,
 }: {
 	disabled: boolean;
 	expanded: boolean;
 	label: string;
 	onClick: () => void;
-	buttonRef: React.MutableRefObject<HTMLButtonElement | null>;
 }) {
 	return (
 		<Tooltip content={label}>
-			<button
-				ref={buttonRef}
+			<HudMagneticButton
 				type="button"
-				data-testid="launch-device-settings-button"
+				data-testid="launch-action-menu-button"
 				aria-label={label}
 				aria-expanded={expanded}
-				aria-haspopup="dialog"
-				// Dimmer at rest than the toggles it configures, so it reads as their
-				// accessory rather than a fourth peer control.
-				className={`${hudIconBtnClasses} text-[#5c6672] ${disabled ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
+				aria-haspopup="menu"
+				className={`${hudReferenceButtonClasses} flex h-10 w-[50px] items-center justify-center gap-1 rounded-[12px] text-[#a6a6a4] hover:text-white ${disabled ? "opacity-30 cursor-not-allowed pointer-events-none" : ""}`}
 				onClick={onClick}
 				disabled={disabled}
 			>
-				<Settings size={17} />
-			</button>
+				<Settings size={21} strokeWidth={1.8} />
+				<ChevronDown
+					size={14}
+					strokeWidth={1.8}
+					className={`transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+				/>
+			</HudMagneticButton>
 		</Tooltip>
 	);
 });
@@ -281,86 +435,90 @@ export const HudCursorButton = memo(function HudCursorButton({
 	);
 });
 
-export const HudRecordButton = memo(function HudRecordButton({
-	recording,
-	paused,
-	saving,
-	elapsedSeconds,
-	label,
-	savingLabel,
-	onClick,
-}: {
-	recording: boolean;
-	paused: boolean;
-	saving: boolean;
-	elapsedSeconds: number;
-	label: string;
-	savingLabel: string;
-	onClick: () => void;
-}) {
-	return (
-		<Tooltip content={label}>
-			<button
-				data-testid="launch-record-button"
-				disabled={saving}
-				className={`flex h-[34px] shrink-0 items-center justify-center rounded-[17px] border-0 transition-all duration-150 ${recording || saving ? "min-w-[78px] px-3" : "w-[34px]"} ${styles.electronNoDrag} ${
-					saving
-						? "bg-transparent opacity-60 cursor-not-allowed"
-						: "bg-transparent hover:bg-[rgba(248,113,113,0.16)]"
-				}`}
-				onClick={onClick}
-				title={label}
-				aria-label={label}
-				style={{ flex: "0 0 auto" }}
-			>
-				<div className={`flex items-center justify-center ${recording || saving ? "gap-1.5" : ""}`}>
-					{saving ? (
-						<div className="animate-spin flex items-center justify-center">
-							{getIcon("spinner", "text-[#f87171]")}
-						</div>
-					) : (
-						<RecordGlyph
-							recording={recording}
-							className={paused ? "text-amber-400" : "text-[#f87171]"}
-						/>
-					)}
-					{saving && (
-						<span className="text-[#f87171] text-xs font-semibold select-none">{savingLabel}</span>
-					)}
-					{recording && (
-						<span
-							className={`${paused ? "text-amber-400" : "text-[#f87171]"} inline-block w-[34px] text-left text-xs font-semibold tabular-nums`}
-						>
-							{formatTimePadded(elapsedSeconds)}
-						</span>
-					)}
-				</div>
-			</button>
-		</Tooltip>
-	);
-});
-
 export const HudCollapsedRecordingButton = memo(function HudCollapsedRecordingButton({
 	saving,
+	paused,
+	canPause,
+	elapsedSeconds,
 	label,
+	pauseLabel,
+	restartLabel,
+	cancelLabel,
 	onStop,
+	onTogglePause,
+	onRestart,
+	onCancel,
 }: {
 	saving: boolean;
+	paused: boolean;
+	canPause: boolean;
+	elapsedSeconds: number;
 	label: string;
+	pauseLabel: string;
+	restartLabel: string;
+	cancelLabel: string;
 	onStop: () => void;
+	onTogglePause: () => void;
+	onRestart: () => void;
+	onCancel: () => void;
 }) {
 	return (
-		<button
-			type="button"
-			data-testid="hud-collapsed-recording-button"
-			aria-label={label}
-			title={label}
-			disabled={saving}
-			className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[12px] border-0 bg-transparent cursor-pointer transition-all duration-150 hover:bg-[rgba(248,113,113,0.16)] active:scale-95 ${hudDisabledClasses} ${styles.electronNoDrag}`}
-			onClick={onStop}
-		>
-			<span className="h-4 w-4 rounded-full bg-[#f43f5e] shadow-[0_0_0_4px_rgba(244,63,94,0.14)] animate-pulse" />
-		</button>
+		<div className="flex items-center gap-1.5">
+			<Tooltip content={label}>
+				<HudMagneticButton
+					type="button"
+					data-testid="hud-collapsed-recording-button"
+					aria-label={label}
+					title={label}
+					disabled={saving}
+					className={`${hudReferenceButtonClasses} flex h-12 items-center gap-2.5 rounded-[16px] px-3 text-[#ff594f]`}
+					highlightClassName={styles.hudMagneticHighlightDanger}
+					onClick={onStop}
+				>
+					{saving ? getIcon("spinner", "animate-spin") : <CircleStop size={25} strokeWidth={2.1} />}
+					<span className="min-w-[46px] text-left text-[16px] font-semibold tabular-nums">
+						{formatTimePadded(elapsedSeconds)}
+					</span>
+				</HudMagneticButton>
+			</Tooltip>
+
+			<span className="mx-1 h-10 w-px bg-white/20" aria-hidden />
+
+			<Tooltip content={pauseLabel}>
+				<HudMagneticButton
+					type="button"
+					aria-label={pauseLabel}
+					disabled={saving || !canPause}
+					className={`${hudReferenceButtonClasses} flex h-12 w-12 items-center justify-center rounded-[15px] text-[#f2f2ef]`}
+					onClick={onTogglePause}
+				>
+					{paused ? <Play size={25} /> : <Pause size={25} />}
+				</HudMagneticButton>
+			</Tooltip>
+			<Tooltip content={restartLabel}>
+				<HudMagneticButton
+					type="button"
+					aria-label={restartLabel}
+					disabled={saving}
+					className={`${hudReferenceButtonClasses} flex h-12 w-12 items-center justify-center rounded-[15px] text-[#f2f2ef]`}
+					onClick={onRestart}
+				>
+					<RotateCcw size={26} strokeWidth={2.1} />
+				</HudMagneticButton>
+			</Tooltip>
+			<Tooltip content={cancelLabel}>
+				<HudMagneticButton
+					type="button"
+					aria-label={cancelLabel}
+					disabled={saving}
+					className={`${hudReferenceButtonClasses} flex h-12 w-12 items-center justify-center rounded-[15px] text-[#f2f2ef] hover:text-[#ff7168]`}
+					highlightClassName={styles.hudMagneticHighlightDanger}
+					onClick={onCancel}
+				>
+					<Trash2 size={25} strokeWidth={2.1} />
+				</HudMagneticButton>
+			</Tooltip>
+		</div>
 	);
 });
 
@@ -483,6 +641,7 @@ export const HudLanguageButton = memo(function HudLanguageButton({
 			aria-label={label}
 			aria-expanded={expanded}
 			aria-haspopup="menu"
+			data-hud-popover-trigger="true"
 			disabled={disabled}
 			onClick={onClick}
 			title={label}
@@ -576,6 +735,91 @@ export const HudLanguageMenu = memo(function HudLanguageMenu({
 					{loc === activeLocale ? <Check size={11} className="text-white/85" /> : null}
 				</button>
 			))}
+		</div>
+	);
+});
+
+export const HudActionMenu = memo(function HudActionMenu({
+	deviceSettingsLabel,
+	cursorLabel,
+	studioLabel,
+	notesLabel,
+	layoutLabel,
+	languageLabel,
+	languageCode,
+	showCursor,
+	showNotes,
+	onDeviceSettings,
+	onCursor,
+	onStudio,
+	onNotes,
+	onLayout,
+	onLanguage,
+	panelRef,
+	onEnsureInteractive,
+}: {
+	deviceSettingsLabel: string;
+	cursorLabel: string;
+	studioLabel: string;
+	notesLabel: string;
+	layoutLabel: string;
+	languageLabel: string;
+	languageCode: string;
+	showCursor: boolean;
+	showNotes: boolean;
+	onDeviceSettings: () => void;
+	onCursor: () => void;
+	onStudio: () => void;
+	onNotes: () => void;
+	onLayout: () => void;
+	onLanguage: () => void;
+	panelRef: (el: HTMLDivElement | null) => void;
+	onEnsureInteractive: () => void;
+}) {
+	const actions = [
+		{ key: "devices", label: deviceSettingsLabel, icon: Settings, onClick: onDeviceSettings },
+		...(showCursor
+			? [{ key: "cursor", label: cursorLabel, icon: MousePointer2, onClick: onCursor }]
+			: []),
+		{ key: "studio", label: studioLabel, icon: Clapperboard, onClick: onStudio },
+		...(showNotes
+			? [{ key: "notes", label: notesLabel, icon: NotepadText, onClick: onNotes }]
+			: []),
+		{ key: "layout", label: layoutLabel, icon: Monitor, onClick: onLayout },
+	];
+
+	return (
+		<div
+			ref={panelRef}
+			data-hud-interactive="true"
+			data-testid="hud-action-menu"
+			role="menu"
+			className={`${styles.hudPopover} ${styles.electronNoDrag}`}
+			onPointerDown={(event) => event.stopPropagation()}
+			onPointerEnter={onEnsureInteractive}
+		>
+			{actions.map(({ key, label, icon: Icon, onClick }) => (
+				<button
+					key={key}
+					type="button"
+					role="menuitem"
+					onClick={onClick}
+					className={styles.hudActionMenuItem}
+				>
+					<Icon size={16} strokeWidth={1.8} />
+					<span className="truncate">{label}</span>
+				</button>
+			))}
+			<button
+				type="button"
+				role="menuitem"
+				onClick={onLanguage}
+				className={styles.hudActionMenuItem}
+			>
+				<Languages size={16} strokeWidth={1.8} />
+				<span className="flex-1 truncate text-left">{languageLabel}</span>
+				<span className="font-mono text-[10px] font-semibold text-white/55">{languageCode}</span>
+			</button>
 		</div>
 	);
 });

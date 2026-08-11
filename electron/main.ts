@@ -457,8 +457,8 @@ function createEditorWindowWrapper() {
 	});
 }
 
-function createSourceSelectorWindowWrapper() {
-	sourceSelectorWindow = createSourceSelectorWindow();
+function createSourceSelectorWindowWrapper(preferredSourceKind?: "screen" | "window") {
+	sourceSelectorWindow = createSourceSelectorWindow(preferredSourceKind);
 	sourceSelectorWindow.on("closed", () => {
 		sourceSelectorWindow = null;
 		if (mainWindow && !mainWindow.isDestroyed()) {

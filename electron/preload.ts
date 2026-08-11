@@ -1,4 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type { CaptureAreaSelection } from "../src/lib/captureArea";
+import type {
+	HudNativeInputMenuRequest,
+	HudNativeInputMenuResult,
+	HudNativeSettingsMenuRequest,
+	HudNativeSettingsMenuResult,
+} from "../src/lib/hudNativeMenu";
 import type { NativeLinuxRecordingRequest } from "../src/lib/nativeLinuxRecording";
 import type { NativeMacRecordingRequest } from "../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
@@ -77,6 +84,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	hudOverlayClose: () => {
 		ipcRenderer.send("hud-overlay-close");
 	},
+	showHudNativeInputMenu: (request: HudNativeInputMenuRequest) =>
+		ipcRenderer.invoke("hud-show-native-input-menu", request) as Promise<HudNativeInputMenuResult>,
+	showHudNativeSettingsMenu: (request: HudNativeSettingsMenuRequest) =>
+		ipcRenderer.invoke(
+			"hud-show-native-settings-menu",
+			request,
+		) as Promise<HudNativeSettingsMenuResult>,
+	openAreaSelector: () =>
+		ipcRenderer.invoke("hud-open-area-selector") as Promise<CaptureAreaSelection | null>,
+	confirmAreaSelection: (selection: CaptureAreaSelection) => {
+		ipcRenderer.send("hud-area-selector-confirm", selection);
+	},
+	cancelAreaSelection: () => {
+		ipcRenderer.send("hud-area-selector-cancel");
+	},
 	setHudOverlayIgnoreMouseEvents: (ignore: boolean) => {
 		ipcRenderer.send("hud-overlay-ignore-mouse-events", ignore);
 	},
@@ -104,8 +126,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	startNewRecording: () => {
 		return ipcRenderer.invoke("start-new-recording");
 	},
-	openSourceSelector: () => {
-		return ipcRenderer.invoke("open-source-selector");
+	openSourceSelector: (preferredSourceKind?: "screen" | "window") => {
+		return ipcRenderer.invoke("open-source-selector", preferredSourceKind);
 	},
 	openNotes: () => {
 		return ipcRenderer.invoke("open-notes");

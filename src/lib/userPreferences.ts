@@ -36,6 +36,8 @@ export interface UserPreferences {
 	projectFolder: string | null;
 	/** Recording HUD control layout */
 	trayLayout: "horizontal" | "vertical";
+	/** Countdown shown before a recording starts */
+	recordingCountdownSeconds: 3 | 5 | 10;
 	/** Force the Windows native recorder to use the software H.264 encoder */
 	preferSoftwareEncoder: boolean;
 	/** Stop showing the notice that recording fell back to software encoding */
@@ -54,6 +56,7 @@ export const DEFAULT_PREFS: UserPreferences = {
 	exportFolder: null,
 	projectFolder: null,
 	trayLayout: "horizontal",
+	recordingCountdownSeconds: 3,
 	preferSoftwareEncoder: false,
 	hideSoftwareEncoderFallbackNotice: false,
 };
@@ -130,6 +133,12 @@ export function loadUserPreferences(): UserPreferences {
 			raw.trayLayout === "horizontal" || raw.trayLayout === "vertical"
 				? raw.trayLayout
 				: DEFAULT_PREFS.trayLayout,
+		recordingCountdownSeconds:
+			raw.recordingCountdownSeconds === 3 ||
+			raw.recordingCountdownSeconds === 5 ||
+			raw.recordingCountdownSeconds === 10
+				? raw.recordingCountdownSeconds
+				: DEFAULT_PREFS.recordingCountdownSeconds,
 		preferSoftwareEncoder:
 			typeof raw.preferSoftwareEncoder === "boolean"
 				? raw.preferSoftwareEncoder

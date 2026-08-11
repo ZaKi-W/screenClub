@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "Ventana",
 		"screen": "Pantalla",
+		"area": "Área",
 		"virtual": "Pantalla virtual",
 		"unknown": "Grabación de pantalla"
 	}

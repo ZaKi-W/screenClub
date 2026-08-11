@@ -87,6 +87,13 @@
 		"dismiss": "Anladım",
 		"dontShowAgain": "Bir daha gösterme"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "Kayıt geri sayımı",
+		"threeSeconds": "3 saniye",
+		"fiveSeconds": "5 saniye",
+		"tenSeconds": "10 saniye",
+		"advanced": "Gelişmiş"
+	},
 	"deviceSettings": {
 		"title": "Cihaz ayarları",
 		"done": "Tamam",

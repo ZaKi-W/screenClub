@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "نافذة",
 		"screen": "شاشة",
+		"area": "منطقة",
 		"virtual": "شاشة افتراضية",
 		"unknown": "تسجيل الشاشة"
 	}

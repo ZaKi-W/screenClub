@@ -19,6 +19,7 @@ struct RecordingRequest: Decodable {
 		let windowId: UInt32?
 		let excludedWindowIds: [UInt32]?
 		let bounds: Rectangle?
+		let cropRect: Rectangle?
 	}
 
 	struct Video: Decodable {
@@ -125,6 +126,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let filter: SCContentFilter
 		let width: Int
 		let height: Int
+		let sourceRect: CGRect?
 		// Global frame (points, top-left origin) of the captured region. Used by the
 		// renderer to normalize cursor positions into the captured window's space.
 		let captureFrame: CGRect
@@ -150,6 +152,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 	private var outputWidth = 1920
 	private var outputHeight = 1080
 	private var captureFrame = CGRect.zero
+	private var captureSourceRect: CGRect?
 	private let microphoneOutputTypeRawValue = 2
 	private let hostClock = CMClockGetHostTimeClock()
 
@@ -168,6 +171,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		outputWidth = target.width
 		outputHeight = target.height
 		captureFrame = target.captureFrame
+		captureSourceRect = target.sourceRect
 		let configuration = makeStreamConfiguration()
 		let stream = SCStream(filter: target.filter, configuration: configuration, delegate: self)
 
@@ -377,14 +381,32 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			let mode = CGDisplayCopyDisplayMode(display.displayID)
 			let width = mode?.pixelWidth ?? Int(CGDisplayPixelsWide(display.displayID))
 			let height = mode?.pixelHeight ?? Int(CGDisplayPixelsHigh(display.displayID))
-			let fitted = fitCaptureDimensions(width: width, height: height)
+			let displayLocalFrame = CGRect(origin: .zero, size: display.frame.size)
+			let requestedCrop = request.source.cropRect.map {
+				CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)
+			}
+			let crop = requestedCrop?.intersection(displayLocalFrame)
+			let validCrop = crop.flatMap { $0.width >= 2 && $0.height >= 2 ? $0 : nil }
+			let scaleFactor = Self.scaleFactor(for: display.displayID)
+			let captureWidth = validCrop.map { Int($0.width.rounded()) * scaleFactor } ?? width
+			let captureHeight = validCrop.map { Int($0.height.rounded()) * scaleFactor } ?? height
+			let fitted = fitCaptureDimensions(width: captureWidth, height: captureHeight)
 			let excludedWindowIds = Set(request.source.excludedWindowIds ?? [])
 			let excludedWindows = content.windows.filter { excludedWindowIds.contains($0.windowID) }
+			let captureFrame = validCrop.map {
+				CGRect(
+					x: display.frame.minX + $0.minX,
+					y: display.frame.minY + $0.minY,
+					width: $0.width,
+					height: $0.height
+				)
+			} ?? display.frame
 			return CaptureTarget(
 				filter: SCContentFilter(display: display, excludingWindows: excludedWindows),
 				width: fitted.width,
 				height: fitted.height,
-				captureFrame: display.frame
+				sourceRect: validCrop,
+				captureFrame: captureFrame
 			)
 		case "window":
 			guard let windowId = request.source.windowId else {
@@ -404,6 +426,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 				filter: SCContentFilter(desktopIndependentWindow: window),
 				width: fitted.width,
 				height: fitted.height,
+				sourceRect: nil,
 				captureFrame: window.frame
 			)
 		default:
@@ -415,6 +438,9 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let configuration = SCStreamConfiguration()
 		configuration.width = outputWidth
 		configuration.height = outputHeight
+		if let sourceRect = captureSourceRect {
+			configuration.sourceRect = sourceRect
+		}
 		if #available(macOS 14.0, *) {
 			configuration.captureResolution = .best
 		}

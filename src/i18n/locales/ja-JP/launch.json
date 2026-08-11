@@ -87,6 +87,13 @@
 		"dismiss": "OK",
 		"dontShowAgain": "今後表示しない"
 	},
+	"nativeMenu": {
+		"recordingCountdown": "録画カウントダウン",
+		"threeSeconds": "3秒",
+		"fiveSeconds": "5秒",
+		"tenSeconds": "10秒",
+		"advanced": "詳細"
+	},
 	"deviceSettings": {
 		"title": "デバイス設定",
 		"done": "完了",

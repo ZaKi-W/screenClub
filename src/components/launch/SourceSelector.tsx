@@ -15,6 +15,9 @@ interface DesktopSource {
 export function SourceSelector() {
 	const t = useScopedT("launch");
 	const tc = useScopedT("common");
+	const preferredSourceKind = new URLSearchParams(window.location.search).get(
+		"preferredSourceKind",
+	);
 	const [sources, setSources] = useState<DesktopSource[]>([]);
 	const [selectedSource, setSelectedSource] = useState<DesktopSource | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -143,7 +146,9 @@ export function SourceSelector() {
 	return (
 		<div className={`h-screen flex flex-col ${styles.glassContainer}`}>
 			<Tabs
-				defaultValue={screenSources.length === 0 ? "windows" : "screens"}
+				defaultValue={
+					preferredSourceKind === "window" || screenSources.length === 0 ? "windows" : "screens"
+				}
 				className="flex-1 flex flex-col min-h-0"
 			>
 				<TabsList className="flex items-center gap-1.5 h-auto p-3.5 rounded-none bg-transparent border-b border-[#191d24] flex-shrink-0">

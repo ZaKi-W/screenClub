@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useScopedT } from "@/contexts/I18nContext";
 import { MIC_GAIN_BOOST, mixAudioTracks } from "@/lib/audioMix";
+import type { CaptureAreaSelection } from "@/lib/captureArea";
 import {
 	type NativeLinuxRecordingRequest,
 	portalOwnsSourceSelection,
@@ -80,6 +81,8 @@ type UseScreenRecorderReturn = {
 	setWebcamEnabled: (enabled: boolean) => Promise<boolean>;
 	cursorCaptureMode: CursorCaptureMode;
 	setCursorCaptureMode: (mode: CursorCaptureMode) => void;
+	captureArea: CaptureAreaSelection | null;
+	setCaptureArea: (area: CaptureAreaSelection | null) => void;
 	softwareEncoderFallbackNoticeVisible: boolean;
 	dismissSoftwareEncoderFallbackNotice: (dontShowAgain?: boolean) => void;
 };
@@ -199,6 +202,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [systemAudioEnabled, setSystemAudioEnabled] = useState(false);
 	const [webcamEnabled, setWebcamEnabledState] = useState(false);
 	const [cursorCaptureMode, setCursorCaptureMode] = useState<CursorCaptureMode>("editable-overlay");
+	const [captureArea, setCaptureArea] = useState<CaptureAreaSelection | null>(null);
 	const [softwareEncoderFallbackNoticeVisible, setSoftwareEncoderFallbackNoticeVisible] =
 		useState(false);
 
@@ -1225,6 +1229,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					sourceId: selectedSource.id,
 					...(displayId ? { displayId } : {}),
 					...(windowId ? { windowId } : {}),
+					...(sourceType === "display" && captureArea?.displayId === displayId
+						? { cropRect: captureArea.rect }
+						: {}),
 				},
 				video: {
 					fps: TARGET_FRAME_RATE,
@@ -1534,7 +1541,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 		let overlayHiddenBeforeStart = false;
 		try {
-			const values = [3, 2, 1];
+			const countdownSeconds = loadUserPreferences().recordingCountdownSeconds;
+			const values = Array.from(
+				{ length: countdownSeconds },
+				(_, index) => countdownSeconds - index,
+			);
 			const overlayShown = await safeShowCountdownOverlay(values[0], runId);
 
 			if (countdownRunId.current !== runId) {
@@ -2235,6 +2246,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setWebcamEnabled,
 		cursorCaptureMode,
 		setCursorCaptureMode,
+		captureArea,
+		setCaptureArea,
 		softwareEncoderFallbackNoticeVisible,
 		dismissSoftwareEncoderFallbackNotice,
 	};

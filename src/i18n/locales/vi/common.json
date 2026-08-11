@@ -55,6 +55,7 @@
 	"recordingSource": {
 		"window": "Cửa sổ",
 		"screen": "Màn hình",
+		"area": "Khu vực",
 		"virtual": "Màn hình ảo",
 		"unknown": "Ghi màn hình"
 	}
