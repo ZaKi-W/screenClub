@@ -5,6 +5,7 @@ import { I18nProvider } from "@/contexts/I18nContext";
 import type { AxcutDocument } from "../schema";
 import { axcutSchemaVersion } from "../schema";
 import { useProjectStore } from "./projectStore";
+import { clearHistory, undo } from "./undo";
 import { useTimeline } from "./useTimeline";
 
 /**
@@ -18,6 +19,8 @@ const probeVideoDurationMock = vi.hoisted(() => vi.fn());
 const probeVideoDimensionsMock = vi.hoisted(() =>
 	vi.fn().mockResolvedValue({ width: 1920, height: 1080 }),
 );
+
+beforeEach(() => clearHistory());
 
 vi.mock("../timeline/duration", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("../timeline/duration")>();
@@ -255,6 +258,39 @@ describe("useTimeline.moveClip / duplicateClip (delegates to document/timeline.t
 			await result.current.duplicateClip("clip_missing");
 		});
 		expect(bridgeMocks.save).not.toHaveBeenCalled();
+	});
+});
+
+describe("useTimeline.splitClip undo history", () => {
+	beforeEach(() => {
+		useProjectStore.getState().clear();
+		for (const mock of Object.values(bridgeMocks)) mock.mockReset();
+		bridgeMocks.save.mockImplementation(async (doc: typeof sampleDoc) => ({
+			success: true,
+			document: doc,
+		}));
+		useProjectStore.setState({
+			projectId: "proj_test",
+			document: sampleDoc,
+			revision: 1,
+			status: "ready",
+			error: null,
+		});
+	});
+
+	it("restores the unsplit clip with Cmd/Ctrl+Z's undo operation", async () => {
+		const { result } = renderTimeline();
+		await act(async () => {
+			await result.current.splitClip("clip_a", 4);
+		});
+		expect(useProjectStore.getState().document?.timeline.clips).toHaveLength(2);
+
+		let undone = false;
+		act(() => {
+			undone = undo();
+		});
+		expect(undone).toBe(true);
+		expect(useProjectStore.getState().document?.timeline.clips).toEqual(sampleDoc.timeline.clips);
 	});
 });
 

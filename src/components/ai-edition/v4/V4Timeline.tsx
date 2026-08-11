@@ -8,7 +8,6 @@ import {
 	Pencil,
 	Scissors,
 	Sparkles,
-	SplitSquareHorizontal,
 	Trash2,
 	Wand2,
 	ZoomIn,
@@ -38,15 +37,10 @@ import { useTimelineTranscriptGate } from "@/lib/ai-edition/store/transcriptionS
 import { useChatPromptBus } from "@/lib/ai-edition/store/useChatPromptBus";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
-import { formatSec } from "@/lib/ai-edition/timeline/format";
-import {
-	newRegionDurationSec,
-	setTimelineScale,
-} from "@/lib/ai-edition/timeline/newRegionDuration";
+import { setTimelineScale } from "@/lib/ai-edition/timeline/newRegionDuration";
 import { ventilateSpanAcrossClips } from "@/lib/ai-edition/timeline/region-ventilation";
 import { coalesceRegionsForRuler } from "@/lib/ai-edition/timeline/timelineMap";
 import {
-	coalescedTrimGroups,
 	resolveTimelineSpanToTrim,
 	ventilateTimelineSpanToTrims,
 } from "@/lib/ai-edition/timeline/trim-mapping";
@@ -81,8 +75,7 @@ const AI_ENHANCE_PROMPT =
 type TimelineApi = ReturnType<typeof useTimeline>;
 
 const ASSET_MIME = "application/x-axcut-asset";
-
-type ToolId = "cut" | "comment" | "speed";
+const SPLIT_EDGE_GUARD_SEC = 0.001;
 
 // "Nice" ruler steps, from a 20th of a second up to an hour. The one that gets
 // used depends on the zoom (see rulerTicks), so the ladder has to cover both a
@@ -404,6 +397,8 @@ export function V4Timeline({
 		pointerDeltaX: number;
 		shiftPx: number;
 	} | null>(null);
+	const [splitMode, setSplitMode] = useState(false);
+	const [splitGuideTimeSec, setSplitGuideTimeSec] = useState<number | null>(null);
 	const { settings, set: setSettings } = useEditorSettings();
 	const document = useProjectStore((s) => s.document);
 	// The distinct native shapes of the clips actually on the timeline. "Original" used to be a
@@ -453,6 +448,40 @@ export function V4Timeline({
 	const pctOf = useCallback((sec: number) => (sec / total) * 100, [total]);
 	const showLanes = variant === "edit";
 
+	useEffect(() => {
+		if (!splitMode) {
+			setSplitGuideTimeSec(null);
+			return;
+		}
+		const exitSplitMode = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			setSplitMode(false);
+			setSplitGuideTimeSec(null);
+		};
+		window.addEventListener("keydown", exitSplitMode);
+		return () => window.removeEventListener("keydown", exitSplitMode);
+	}, [splitMode]);
+
+	const timelineTimeAtClientX = useCallback(
+		(clientX: number): number | null => {
+			const canvas = canvasRef.current;
+			if (!canvas) return null;
+			const rect = canvas.getBoundingClientRect();
+			if (rect.width <= 0) return null;
+			return Math.min(total, Math.max(0, ((clientX - rect.left) / rect.width) * total));
+		},
+		[total],
+	);
+
+	const updateSplitGuide = useCallback(
+		(clientX: number) => {
+			if (!splitMode) return;
+			const timeSec = timelineTimeAtClientX(clientX);
+			if (timeSec !== null) setSplitGuideTimeSec(timeSec);
+		},
+		[splitMode, timelineTimeAtClientX],
+	);
+
 	// The visible fraction of the timeline, and what one second is worth on screen
 	// at that zoom. Every screen-space rule below — ruler step, pill affordances,
 	// snap radius — goes through this instead of being written as a fraction of
@@ -468,39 +497,11 @@ export function V4Timeline({
 	}, [pxPerSec]);
 
 	// ── region lanes ────────────────────────────────────────────────
-	// zoom/speed/annotation: one pill per row, never coalesced — each carries
-	// distinct per-instance content (depth/focus, speed value, text) that two
+	// Zoom regions carry distinct per-instance content (depth/focus) that two
 	// touching-but-different regions must not silently merge into one.
 	// Pills follow the universal merge rule (timelineMap): regions of the same kind whose
 	// PROPERTIES are equal and whose spans touch render as ONE pill, however they came to be
 	// adjacent. Different properties never merge (and cannot overlap — they repel on edit).
-	// Trims obey the same rule with an empty property set, so they always merge.
-	const annPills: LanePill[] = coalesceRegionsForRuler(tl.annotationRegions).map((p) => ({
-		id: p.ids[0],
-		kind: "annotation",
-		start: p.start,
-		end: p.end,
-		label: t("toolbar.newAnnotation"),
-		sourceIds: p.ids,
-	}));
-	const speedPills: LanePill[] = coalesceRegionsForRuler(tl.speedRegions).map((p) => ({
-		id: p.ids[0],
-		kind: "speed",
-		start: p.start,
-		end: p.end,
-		label: `${(p.member as { speed?: number }).speed ?? 1.5}×`,
-		sourceIds: p.ids,
-	}));
-	const cameraFullscreenPills: LanePill[] = coalesceRegionsForRuler(tl.cameraFullscreenRegions).map(
-		(p) => ({
-			id: p.ids[0],
-			kind: "cameraFullscreen",
-			start: p.start,
-			end: p.end,
-			label: "Full Camera",
-			sourceIds: p.ids,
-		}),
-	);
 	const zoomPills: LanePill[] = coalesceRegionsForRuler(tl.zoomRegions).map((p) => ({
 		id: p.ids[0],
 		kind: "zoom",
@@ -512,20 +513,6 @@ export function V4Timeline({
 		label: `${(p.member.customScale ?? ZOOM_DEPTH_SCALES[p.member.depth]).toFixed(2)}×`,
 		sourceIds: p.ids,
 	}));
-	// trims: content-free (no per-instance text/settings), so touching rows —
-	// inevitable once a trim is ventilated across a clip boundary — are
-	// coalesced into one pill. This is what makes growing a trim across a
-	// junction look like one continuously-growing pill instead of visibly
-	// splitting, aligning trims with how zoom/speed/annotation already behave.
-	const trimPills: LanePill[] = coalescedTrimGroups(tl.trimRanges, clips).map((g) => ({
-		id: g.ids[0],
-		kind: "trim",
-		start: g.start,
-		end: g.end,
-		label: formatSec(g.end - g.start),
-		sourceIds: g.ids,
-	}));
-
 	// Ruler ticks are chosen from what is actually ON SCREEN, not from the clip
 	// length: the canvas is widened by 1/navSpan, so the same recording shows one
 	// label per 30s zoomed out and one per tenth of a second zoomed in. The step
@@ -614,6 +601,9 @@ export function V4Timeline({
 	const startScrub = useCallback(
 		(e: ReactPointerEvent) => {
 			if (e.button !== 0) return;
+			// Screen Studio keeps the playhead still while the blade is armed: the
+			// pointer marks a cut location, not a seek request.
+			if (splitMode) return;
 			// Media has no playhead rendered, so there is nothing to scrub. Guarded
 			// here rather than at the three call sites: seeking an invisible cursor
 			// would still move `currentTimeSec`, i.e. silently reposition the Edit
@@ -644,7 +634,7 @@ export function V4Timeline({
 			window.addEventListener("pointermove", move);
 			window.addEventListener("pointerup", up);
 		},
-		[seekToClientX, tl, setCurrentTime, showLanes],
+		[seekToClientX, tl, setCurrentTime, showLanes, splitMode],
 	);
 
 	const [activePillDrag, setActivePillDrag] = useState<{
@@ -921,6 +911,11 @@ export function V4Timeline({
 	const startClipDrag = useCallback(
 		(e: ReactPointerEvent, clip: AxcutClip) => {
 			if (e.button !== 0) return;
+			if (splitMode) {
+				e.preventDefault();
+				e.stopPropagation();
+				return;
+			}
 			// Let the delete button (and any future in-clip control) handle its
 			// own pointer events instead of starting a drag.
 			if ((e.target as HTMLElement).closest("[data-no-clip-drag]")) return;
@@ -1003,14 +998,8 @@ export function V4Timeline({
 			window.addEventListener("pointermove", move);
 			window.addEventListener("pointerup", up);
 		},
-		[clips, tl],
+		[clips, tl, splitMode],
 	);
-
-	const tools: Array<{ id: ToolId; label: string; icon: React.ReactNode }> = [
-		{ id: "cut", label: t("buttons.addTrim"), icon: <SplitSquareHorizontal size={15} /> },
-		{ id: "comment", label: t("toolbar.comment"), icon: <MessageSquare size={15} /> },
-		{ id: "speed", label: t("buttons.addSpeed"), icon: <Clock size={15} /> },
-	];
 
 	// Auto-enhance option 1 — the deterministic cursor-telemetry auto-zoom
 	// (ported from main; NOT AI). Reads the recorded cursor movement and drops
@@ -1326,33 +1315,18 @@ export function V4Timeline({
 							</PopoverContent>
 						</Popover>
 						<span className={styles.tlToolSep} aria-hidden />
-						{tools.map((tool) => (
-							<button
-								type="button"
-								key={tool.id}
-								className={styles.tlToolBtn}
-								title={tool.label}
-								aria-label={tool.label}
-								onClick={() => {
-									// Read at CLICK time: a render-time value would be one zoom
-									// notch stale when the user zooms and immediately creates.
-									const dur = newRegionDurationSec();
-									if (tool.id === "speed") void tl.addSpeed(dur);
-									if (tool.id === "comment") void tl.addAnnotation(dur);
-									if (tool.id === "cut") void tl.addTrim(dur);
-								}}
-							>
-								{tool.icon}
-							</button>
-						))}
 						<button
 							type="button"
 							className={styles.tlToolBtn}
-							title={t("buttons.addZoom")}
-							aria-label={t("buttons.addZoom")}
-							onClick={() => void tl.addZoom(newRegionDurationSec())}
+							aria-pressed={splitMode}
+							title={t("toolbar.splitClip")}
+							aria-label={t("toolbar.splitClip")}
+							onClick={() => {
+								setSplitMode((active) => !active);
+								setSplitGuideTimeSec(null);
+							}}
 						>
-							<ZoomIn size={15} />
+							<Scissors size={15} />
 						</button>
 						<button
 							type="button"
@@ -1368,15 +1342,6 @@ export function V4Timeline({
 						>
 							<Crosshair size={15} />
 						</button>
-						<button
-							type="button"
-							className={styles.tlToolBtn}
-							title={t("buttons.addCameraFullscreen")}
-							aria-label={t("buttons.addCameraFullscreen")}
-							onClick={() => void tl.addCameraFullscreen(newRegionDurationSec())}
-						>
-							<Maximize2 size={15} />
-						</button>
 						<span className={styles.tlToolSep} aria-hidden />
 						<Popover open={aspectMenuOpen} onOpenChange={setAspectMenuOpen}>
 							<PopoverTrigger asChild>
@@ -1386,7 +1351,9 @@ export function V4Timeline({
 									title={t("toolbar.aspectRatio")}
 									aria-label={t("toolbar.aspectRatio")}
 								>
-									{getAspectRatioLabel(settings.aspectRatio)}
+									{settings.aspectRatio === "native"
+										? t("mediaStage.auto")
+										: getAspectRatioLabel(settings.aspectRatio)}
 									<ChevronDown size={10} />
 								</button>
 							</PopoverTrigger>
@@ -1400,6 +1367,18 @@ export function V4Timeline({
 									className={styles.recMenu}
 									style={{ position: "relative", bottom: "auto", width: 210 }}
 								>
+									<button
+										type="button"
+										className={`${styles.recMenuRow}${
+											settings.aspectRatio === "native" ? ` ${styles.active}` : ""
+										}`}
+										onClick={() => {
+											void setSettings({ aspectRatio: "native" });
+											setAspectMenuOpen(false);
+										}}
+									>
+										{t("mediaStage.auto")}
+									</button>
 									{ASPECT_RATIO_PRESETS.map((ratio) => (
 										<button
 											type="button"
@@ -1514,34 +1493,29 @@ export function V4Timeline({
 					</div>
 				</div>
 
-				<div ref={tracksRef} className={styles.tlTracks} onPointerDown={startScrub}>
+				<div
+					ref={tracksRef}
+					className={styles.tlTracks}
+					onPointerDown={startScrub}
+					onPointerEnter={(event) => updateSplitGuide(event.clientX)}
+					onPointerMove={(event) => updateSplitGuide(event.clientX)}
+					onPointerLeave={() => setSplitGuideTimeSec(null)}
+				>
 					<div ref={canvasRef} className={styles.tlCanvas} style={canvasStyle}>
 						{snapPct !== null ? (
 							<div aria-hidden className={styles.tlSnapGuide} style={{ left: `${snapPct}%` }} />
 						) : null}
-
 						{showLanes ? (
 							<>
-								{/* An empty lane advertises the shortcut that fills it ("Press A to add
-								    annotation") rather than restating that it is empty — the same hint
-								    strings the pre-v4 timeline used, so the keys stay translated. */}
-								<div className={styles.tlLane}>
-									{renderPills(annPills, t("hints.pressAnnotation"))}
-								</div>
-								<div className={styles.tlLane}>
-									{renderPills(speedPills, t("hints.pressSpeed"))}
-								</div>
-								<div className={styles.tlLane}>{renderPills(trimPills, t("hints.pressTrim"))}</div>
 								<div className={styles.tlLane}>{renderPills(zoomPills, t("hints.pressZoom"))}</div>
-								<div className={styles.tlLane}>
-									{renderPills(cameraFullscreenPills, t("hints.pressCameraFullscreen"))}
-								</div>
 							</>
 						) : null}
 
 						<div
 							ref={clipsRef}
-							className={`${styles.tlClips}${dragOver ? ` ${styles.tlClipsDrag}` : ""}`}
+							className={`${styles.tlClips}${dragOver ? ` ${styles.tlClipsDrag}` : ""}${
+								splitMode ? ` ${styles.tlClipsSplit}` : ""
+							}`}
 							onDragOver={(e) => {
 								e.preventDefault();
 								e.dataTransfer.dropEffect = "copy";
@@ -1595,6 +1569,16 @@ export function V4Timeline({
 										onPointerDown={(e) => startClipDrag(e, c)}
 										onClick={(e) => {
 											e.stopPropagation();
+											if (splitMode) {
+												const pointerTimeSec = timelineTimeAtClientX(e.clientX);
+												if (pointerTimeSec === null) return;
+												const cutTimeSec = Math.min(
+													c.timelineEndSec - SPLIT_EDGE_GUARD_SEC,
+													Math.max(c.timelineStartSec + SPLIT_EDGE_GUARD_SEC, pointerTimeSec),
+												);
+												void tl.splitClip(c.id, cutTimeSec);
+												return;
+											}
 											// A completed reorder-drag also fires a click; don't let it
 											// double as a selection.
 											if (didClipDragRef.current) {
@@ -1605,9 +1589,10 @@ export function V4Timeline({
 										}}
 										onDoubleClick={(e) => {
 											e.stopPropagation();
+											if (splitMode) return;
 											onEditClip(c);
 										}}
-										title={t("toolbar.dragToReorderHint")}
+										title={splitMode ? undefined : t("toolbar.dragToReorderHint")}
 									>
 										<ClipWaveform
 											videoUrl={clipVideoUrl}
@@ -1671,6 +1656,18 @@ export function V4Timeline({
 						onPointerDown={startScrub}
 						playheadRef={playheadElRef}
 					/>
+				) : null}
+				{showLanes && splitMode && splitGuideTimeSec !== null ? (
+					<div className={`${styles.tlPlayheadLayer} ${styles.tlSplitGuideLayer}`} aria-hidden>
+						<div className={styles.tlCanvas} style={canvasStyle}>
+							<div
+								className={`${styles.tlPlayhead} ${styles.tlSplitGuide}`}
+								style={{ left: `${pctOf(splitGuideTimeSec)}%` }}
+							>
+								<span className={`${styles.tlPlayheadHead} ${styles.tlSplitGuideHead}`} />
+							</div>
+						</div>
+					</div>
 				) : null}
 			</div>
 

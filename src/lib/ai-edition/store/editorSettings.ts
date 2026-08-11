@@ -61,17 +61,14 @@ export interface EditorSettingsSnapshot {
 
 export const DEFAULT_EDITOR_SETTINGS: EditorSettingsSnapshot = {
 	wallpaper: DEFAULT_WALLPAPER,
-	aspectRatio: "16:9",
-	// Opinionated by default: the wallpaper and the padding were already on, but
-	// with square corners and no shadow the recording read as a rectangle pasted
-	// onto the background rather than a window floating above it (#271 reported
-	// the symptom and blamed the padding). These three are the rest of that look;
-	// shipping the background without them was shipping half a composition.
+	// Auto follows the recording's effective source dimensions. A concrete ratio
+	// is only persisted once the user deliberately selects one from the picker.
+	aspectRatio: "native",
 	shadowIntensity: 0.2,
 	showBlur: false,
 	motionBlurAmount: 0.2,
-	borderRadius: 40,
-	padding: 50,
+	borderRadius: 0,
+	padding: 0,
 	cropRegion: DEFAULT_CROP_REGION,
 	webcamLayoutPreset: DEFAULT_WEBCAM_LAYOUT_PRESET,
 	webcamMaskShape: DEFAULT_WEBCAM_MASK_SHAPE,

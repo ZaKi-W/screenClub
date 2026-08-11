@@ -18,6 +18,7 @@ import {
 	removeRegion as removeRegionInDocument,
 	resequenceClips,
 	setClipSourceRange,
+	splitClip as splitClipInDocument,
 } from "../document/timeline";
 import type { AxcutClipCropRegion, AxcutDocument } from "../schema";
 import { probeVideoDimensions, probeVideoDuration } from "../timeline/duration";
@@ -104,6 +105,30 @@ export function useTimeline() {
 	// the Delete key operates on.
 	const [multiSelection, setMultiSelection] = useState<RegionHandle[]>([]);
 	const [clipSelection, setClipSelection] = useState<string | null>(null);
+	// Splitting is intentionally a persistent mode, so users can click several times in
+	// quick succession. Serialize structural clip writes and read the document inside the
+	// queue so a second cut never starts from the pre-first-cut snapshot.
+	const clipMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+	const enqueueClipMutation = useCallback(
+		async (mutate: (current: AxcutDocument) => AxcutDocument) => {
+			const task = clipMutationQueueRef.current.then(async () => {
+				const current = useProjectStore.getState().document;
+				if (!current) return;
+				const next = mutate(current);
+				if (next === current) return;
+				await saveDocument(next);
+				// Structural clip edits persist immediately, unlike live inspector drags
+				// that pass through setDocument. Record the pre-edit snapshot explicitly
+				// after a successful save so split/remove participate in Cmd/Ctrl+Z without
+				// leaving a phantom history entry when persistence fails.
+				const { pushHistory } = await import("./undo");
+				pushHistory({ projectId: current.project.id, doc: structuredClone(current) });
+			});
+			clipMutationQueueRef.current = task.catch(() => undefined);
+			await task;
+		},
+		[saveDocument],
+	);
 
 	const hasDoc = document !== null && projectId !== null;
 
@@ -979,12 +1004,18 @@ export function useTimeline() {
 
 	const removeClip = useCallback(
 		async (clipId: string) => {
-			if (!document) return;
 			// One shared mutator with the agent's removeClip tool: reflow survivors + rederive pills.
-			await saveDocument(removeClipInDocument(document, clipId));
+			await enqueueClipMutation((current) => removeClipInDocument(current, clipId));
 			if (clipSelection === clipId) setClipSelection(null);
 		},
-		[document, clipSelection, saveDocument],
+		[clipSelection, enqueueClipMutation],
+	);
+
+	const splitClip = useCallback(
+		async (clipId: string, timelineSec: number) => {
+			await enqueueClipMutation((current) => splitClipInDocument(current, clipId, timelineSec));
+		},
+		[enqueueClipMutation],
 	);
 
 	// Mirror of selectRegion: picking a clip retires the pill selection.
@@ -1040,6 +1071,7 @@ export function useTimeline() {
 		moveClip,
 		duplicateClip,
 		removeClip,
+		splitClip,
 		selectClip,
 		updateTrim,
 		setTrimEntries,

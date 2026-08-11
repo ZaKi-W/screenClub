@@ -11,7 +11,13 @@ import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { LOCALE_STORAGE_KEY } from "@/i18n/config";
-import { BackgroundPane, CursorPane, LayoutPane, VideoEffectsPane } from "./RightPanes";
+import {
+	BackgroundPane,
+	CursorPane,
+	LayoutPane,
+	VideoAppearancePane,
+	VideoEffectsPane,
+} from "./RightPanes";
 
 function renderIn(locale: string, ui: ReactElement) {
 	localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -42,6 +48,13 @@ describe("right-rail panes are localized", () => {
 		expect(screen.getByRole("heading", { name: "Efectos de video" })).toBeInTheDocument();
 		expect(screen.getByText("Desenfoque de movimiento")).toBeInTheDocument();
 		expect(screen.getByText("Sombra")).toBeInTheDocument();
+	});
+
+	it("combines video effects and background in one localized pane", () => {
+		renderIn("fr", <VideoAppearancePane />);
+		expect(screen.getByRole("heading", { name: "Effets vidéo" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Téléverser une image" })).toBeInTheDocument();
+		expect(screen.getByText("Flou de mouvement")).toBeInTheDocument();
 	});
 
 	it("renders the layout pane in Japanese", () => {

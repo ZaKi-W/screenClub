@@ -44,6 +44,11 @@ function renderTopBar(projectTitle: string | null) {
 }
 
 describe("ProjectNameField (issue #180)", () => {
+	it("does not render OpenScreen branding in the studio top bar", () => {
+		renderTopBar("Demo Project");
+		expect(screen.queryByText("OpenScreen")).not.toBeInTheDocument();
+	});
+
 	it("renders the project title on the button", () => {
 		renderTopBar("Demo Project");
 		expect(screen.getByRole("button", { name: "topbar.renameProject" })).toHaveTextContent(

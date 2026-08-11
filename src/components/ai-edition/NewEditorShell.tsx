@@ -891,6 +891,10 @@ export function NewEditorShell() {
 				}
 				if (tl.selection) {
 					void tl.removeRegion(tl.selection.kind, tl.selection.id);
+					return;
+				}
+				if (tl.clipSelection) {
+					void tl.removeClip(tl.clipSelection);
 				}
 			};
 
@@ -965,27 +969,6 @@ export function NewEditorShell() {
 				void tl.addZoom(newRegionDurationSec());
 				return;
 			}
-			if (matchesShortcut(e, shortcuts.addTrim, isMac)) {
-				e.preventDefault();
-				void tl.addTrim(newRegionDurationSec());
-				return;
-			}
-			if (matchesShortcut(e, shortcuts.addAnnotation, isMac)) {
-				e.preventDefault();
-				void tl.addAnnotation(newRegionDurationSec());
-				return;
-			}
-			if (matchesShortcut(e, shortcuts.addSpeed, isMac)) {
-				e.preventDefault();
-				void tl.addSpeed(newRegionDurationSec());
-				return;
-			}
-			if (matchesShortcut(e, shortcuts.addCameraFullscreen, isMac)) {
-				e.preventDefault();
-				void tl.addCameraFullscreen(newRegionDurationSec());
-				return;
-			}
-
 			// Fixed (non-configurable) shortcuts advertised in the shortcuts dialog.
 			if (e.key === "Tab") {
 				const annotations = [...tl.annotationRegions].sort((a, b) => a.startMs - b.startMs);

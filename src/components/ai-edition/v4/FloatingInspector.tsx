@@ -2,7 +2,6 @@ import {
 	Captions as CaptionsIcon,
 	ChevronRight,
 	FileText,
-	Image as ImageIcon,
 	Layout as LayoutIcon,
 	Maximize2,
 	MousePointer2,
@@ -43,13 +42,12 @@ import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
 import { CaptionsPane } from "../CaptionsPane";
 import { ColorField } from "../ColorField";
 import {
-	BackgroundPane,
 	CursorPane,
 	LayoutPane,
 	SliderCell,
 	Toggle,
 	TranscriptPane,
-	VideoEffectsPane,
+	VideoAppearancePane,
 } from "../RightPanes";
 import styles from "./EditorShellV4.module.css";
 
@@ -57,8 +55,7 @@ type TimelineApi = ReturnType<typeof useTimeline>;
 
 export type Facet = "background" | "effects" | "layout" | "cursor" | "captions" | "transcript";
 
-const FACETS: Array<{ id: Facet; labelKey: string; icon: typeof ImageIcon }> = [
-	{ id: "background", labelKey: "background.title", icon: ImageIcon },
+const FACETS: Array<{ id: Facet; labelKey: string; icon: typeof SlidersHorizontal }> = [
 	{ id: "effects", labelKey: "effects.title", icon: SlidersHorizontal },
 	{ id: "layout", labelKey: "layout.title", icon: LayoutIcon },
 	{ id: "cursor", labelKey: "cursor.title", icon: MousePointer2 },
@@ -107,9 +104,11 @@ export function FloatingInspector({
 	const selection = tl.selection;
 	const effectiveOpen = open || selection !== null;
 	const visibleFacet =
-		!TRANSCRIPTION_FEATURE_ENABLED && (facet === "captions" || facet === "transcript")
+		facet === "background"
 			? "effects"
-			: facet;
+			: !TRANSCRIPTION_FEATURE_ENABLED && (facet === "captions" || facet === "transcript")
+				? "effects"
+				: facet;
 	return (
 		<div className={styles.inspectorWrap}>
 			{effectiveOpen ? (
@@ -1065,8 +1064,7 @@ function FacetBody({
 		</button>
 	);
 
-	if (facet === "background") return wrap(collapse, <BackgroundPane />);
-	if (facet === "effects") return wrap(collapse, <VideoEffectsPane />);
+	if (facet === "effects") return wrap(collapse, <VideoAppearancePane />);
 	if (facet === "layout") return wrap(collapse, <LayoutPane />);
 	if (facet === "cursor") return wrap(collapse, <CursorPane />);
 	if (facet === "transcript") return wrap(collapse, <TranscriptPane {...transcriptProps} />);

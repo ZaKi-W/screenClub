@@ -821,6 +821,124 @@ export function duplicateClip(
 }
 
 /**
+ * Split one clip at a RAW timeline position without touching its media file.
+ *
+ * The left piece keeps the original id; the right piece gets a fresh id. Both continue to
+ * reference the same asset through adjacent source windows. Anchored trims and modifiers are
+ * ventilated across the new boundary so a zoom/effect crossing the cut keeps covering the same
+ * source content. Invalid, unknown, and edge cuts are no-ops.
+ */
+export function splitClip(
+	document: AxcutDocument,
+	clipId: string,
+	timelineSec: number,
+): AxcutDocument {
+	const clipIndex = document.timeline.clips.findIndex((clip) => clip.id === clipId);
+	if (clipIndex < 0 || !Number.isFinite(timelineSec)) return document;
+	const clip = document.timeline.clips[clipIndex];
+	if (
+		timelineSec - clip.timelineStartSec <= REGION_WINDOW_EPSILON_SEC ||
+		clip.timelineEndSec - timelineSec <= REGION_WINDOW_EPSILON_SEC
+	) {
+		return document;
+	}
+
+	const sourceEndSec =
+		clip.sourceEndSec ?? clip.sourceStartSec + (clip.timelineEndSec - clip.timelineStartSec);
+	const sourceCutSec = clip.sourceStartSec + (timelineSec - clip.timelineStartSec);
+	if (
+		sourceCutSec - clip.sourceStartSec <= REGION_WINDOW_EPSILON_SEC ||
+		sourceEndSec - sourceCutSec <= REGION_WINDOW_EPSILON_SEC
+	) {
+		return document;
+	}
+
+	const rightClipId = createId("clip");
+	const wordById = new Map((document.transcript?.words ?? []).map((word) => [word.id, word]));
+	const wordRefsFor = (startSec: number, endSec: number) =>
+		clip.wordRefs.filter((wordId) => {
+			const word = wordById.get(wordId);
+			return !word || (word.endSec > startSec && word.startSec < endSec);
+		});
+	const leftClip: AxcutClip = {
+		...clip,
+		sourceEndSec: sourceCutSec,
+		timelineEndSec: timelineSec,
+		wordRefs: wordRefsFor(clip.sourceStartSec, sourceCutSec),
+	};
+	const rightClip: AxcutClip = {
+		...clip,
+		id: rightClipId,
+		sourceStartSec: sourceCutSec,
+		sourceEndSec,
+		timelineStartSec: timelineSec,
+		wordRefs: wordRefsFor(sourceCutSec, sourceEndSec),
+		origin: "user",
+		reason: "Split clip",
+	};
+	const nextClips = resequenceClips([
+		...document.timeline.clips.slice(0, clipIndex),
+		leftClip,
+		rightClip,
+		...document.timeline.clips.slice(clipIndex + 1),
+	]);
+
+	const splitAnchorPieces = (
+		anchorClipId: string | undefined,
+		startSec: number,
+		endSec: number,
+	): Array<{ clipId: string; startSec: number; endSec: number }> | null => {
+		if (anchorClipId !== clipId) return null;
+		return [
+			{
+				clipId,
+				startSec: Math.max(startSec, clip.sourceStartSec),
+				endSec: Math.min(endSec, sourceCutSec),
+			},
+			{
+				clipId: rightClipId,
+				startSec: Math.max(startSec, sourceCutSec),
+				endSec: Math.min(endSec, sourceEndSec),
+			},
+		].filter((piece) => piece.endSec - piece.startSec > REGION_WINDOW_EPSILON_SEC);
+	};
+
+	const withSplitModifiers = mapAllRegionCollections(document, (regions, prefix) =>
+		regions.flatMap((region) => {
+			if (!isAnchored(region)) return [region];
+			const pieces = splitAnchorPieces(region.clipId, region.sourceStartSec, region.sourceEndSec);
+			if (!pieces) return [region];
+			return pieces.map((piece, index) => ({
+				...region,
+				id: index === 0 ? region.id : createId(prefix),
+				clipId: piece.clipId,
+				sourceStartSec: piece.startSec,
+				sourceEndSec: piece.endSec,
+			}));
+		}),
+	);
+	const next: AxcutDocument = {
+		...withSplitModifiers,
+		timeline: {
+			...withSplitModifiers.timeline,
+			clips: nextClips,
+			trimRanges: document.timeline.trimRanges.flatMap((trim) => {
+				const pieces = splitAnchorPieces(trim.clipId, trim.startSec, trim.endSec);
+				if (!pieces) return [trim];
+				return pieces.map((piece, index) => ({
+					...trim,
+					id: index === 0 ? trim.id : createId("trim"),
+					clipId: piece.clipId,
+					startSec: piece.startSec,
+					endSec: piece.endSec,
+				}));
+			}),
+		},
+	};
+	return rederiveRegionMs(next, nextClips);
+}
+
+/**
  * The single mutator for "narrow/extend a clip's own source in/out" — the edit the
  * clip's Edit modal, the renderer op dispatcher, and the LLM's `setClipRange` tool all
  * perform. Extracted here (like `moveClip` / `duplicateClip`) so the recipe lives in one

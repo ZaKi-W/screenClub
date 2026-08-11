@@ -69,6 +69,7 @@
 		"aspectRatio": "Format",
 		"original": "Original",
 		"timelineTools": "Outils de la timeline",
+		"splitClip": "Scinder le clip",
 		"arrangeClips": "Organiser les clips",
 		"arrangeClipsHint": "Glissez les clips ci-dessous pour les réorganiser ou en déposer de nouveaux",
 		"newAnnotation": "Annotation",

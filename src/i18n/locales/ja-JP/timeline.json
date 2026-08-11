@@ -69,6 +69,7 @@
 		"aspectRatio": "アスペクト比",
 		"original": "オリジナル",
 		"timelineTools": "タイムラインツール",
+		"splitClip": "クリップを分割",
 		"arrangeClips": "クリップを配置",
 		"arrangeClipsHint": "下のクリップをドラッグして並べ替えるか、新しいクリップをドロップします",
 		"newAnnotation": "注釈",
