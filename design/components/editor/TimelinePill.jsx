@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen TimelinePill — a labelled marker on a timeline lane.
+ * ScreenClub TimelinePill — a labelled marker on a timeline lane.
  * tone maps to the four lane accents. `fixedWidth` (tag mode) sizes to
  * content; otherwise it spans a range via left/width percentages.
  */

@@ -1,4 +1,4 @@
-//! OpenScreen Linux capture helper.
+//! ScreenClub Linux capture helper.
 //!
 //! WHY THIS EXISTS. Two reasons, and they turned out to be the same reason.
 //!

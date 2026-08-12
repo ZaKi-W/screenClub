@@ -1,6 +1,6 @@
 # Architecture overview
 
-OpenScreen is an Electron + React + TypeScript screen recorder and video editor. The
+ScreenClub is an Electron + React + TypeScript screen recorder and video editor. The
 main process lives in `electron/`; the renderer is a single Vite-built SPA whose entry
 point is `src/App.tsx`. `App.tsx` reads `?windowType=` from the URL and lazy-loads one
 window component. The four real window types — verified against `src/App.tsx:71-125`

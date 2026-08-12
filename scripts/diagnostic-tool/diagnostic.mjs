@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// OpenScreen standalone diagnostic tool.
+// ScreenClub standalone diagnostic tool.
 //
 // Runs the native capture helper outside the Electron app, captures its
 // stdout/stderr, and writes a JSON report you can attach to a bug report.
@@ -78,7 +78,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-	console.log(`OpenScreen standalone diagnostic tool
+	console.log(`ScreenClub standalone diagnostic tool
 
 Usage:
   node diagnostic.mjs [flags]
@@ -114,7 +114,7 @@ function findHelper() {
 			`  $OPENSCREEN_HELPER_EXE\n` +
 			`  ${inScriptDir}\n` +
 			`  ${inHelpersDir}\n` +
-			`Download the matching diagnostic bundle from the OpenScreen releases / CI artifacts.`,
+			`Download the matching diagnostic bundle from the ScreenClub releases / CI artifacts.`,
 	);
 }
 

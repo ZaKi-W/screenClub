@@ -1,6 +1,6 @@
 # AGENTS.md
 
-OpenScreen is a free, open-source screen recorder and video editor (Electron + React + TypeScript + Pixi.js) maintained as a continuation of the original v1.5.0 release. This file is the canonical guide for any AI coding agent working in this repo.
+ScreenClub is a free, open-source screen recorder and video editor (Electron + React + TypeScript + Pixi.js) maintained as a continuation of the original v1.5.0 release. This file is the canonical guide for any AI coding agent working in this repo.
 
 ## Setup commands
 
@@ -75,12 +75,12 @@ Unit/browser tests can't exercise real capture (native screen recording, a physi
 **Launch the app**
 
 - Normal: `npm run dev` — Vite serves the renderer and `vite-plugin-electron` opens the Electron window. The main process logs `Global shortcut registered: CommandOrControl+Shift+O` when ready (Ctrl/Cmd+Shift+O toggles the HUD).
-- The app is single-instance through `app.requestSingleInstanceLock()`, which keys on the `userData` path. If a leftover Electron process still holds it, a new launch quits silently (exit 0, no window) — kill leftover `electron` processes before relaunching. The lock is held by the OS and dies with the process, so there is nothing to clean up on disk. A dev build and the installed `Openscreen` resolve different `userData` paths and can run side by side.
+- The app is single-instance through `app.requestSingleInstanceLock()`, which keys on the `userData` path. If a leftover Electron process still holds it, a new launch quits silently (exit 0, no window) — kill leftover `electron` processes before relaunching. The lock is held by the OS and dies with the process, so there is nothing to clean up on disk. A dev build and the installed `ScreenClub` resolve different `userData` paths and can run side by side.
 - **From a git worktree** (no `node_modules`/native binaries): junction/symlink `node_modules` from the main checkout (deps are usually identical — check `package-lock.json`), and copy the prebuilt native capture binaries from `electron/native/bin/<platform>/` (gitignored — rebuilding needs the full VS/Xcode toolchain). Then `npm run dev` works normally.
 
 **Granting access**
 
-- `request_access` resolves names against installed apps. A **dev build runs as `electron.exe`** (or `Electron.app`), *not* the installed `Openscreen` — grant **`electron.exe`** or the dev window stays masked in screenshots. Non-allowlisted windows are masked (solid rectangles); the screenshot note lists their process names to add.
+- `request_access` resolves names against installed apps. A **dev build runs as `electron.exe`** (or `Electron.app`), *not* the installed `ScreenClub` — grant **`electron.exe`** or the dev window stays masked in screenshots. Non-allowlisted windows are masked (solid rectangles); the screenshot note lists their process names to add.
 
 **The HUD widget** (recording controller)
 
@@ -93,7 +93,7 @@ Unit/browser tests can't exercise real capture (native screen recording, a physi
 **The tray icon** (bottom-right notification area)
 
 - Because the HUD skips the taskbar and can be minimized/hidden, the **system-tray icon is the reliable way to refocus the app**: **left-click or double-click reopens/focuses the HUD** (`showMainWindow`). Its icon swaps to a red dot while recording.
-- **Right-click → context menu**: *Open* / *Quit* when idle, or ***Stop Recording*** while recording (mirrors the HUD's stop). Tooltip shows `OpenScreen` or `Recording: <source>`. Use this to stop a recording if the HUD isn't reachable.
+- **Right-click → context menu**: *Open* / *Quit* when idle, or ***Stop Recording*** while recording (mirrors the HUD's stop). Tooltip shows `ScreenClub` or `Recording: <source>`. Use this to stop a recording if the HUD isn't reachable.
 
 **End-to-end flow (record → edit)**
 

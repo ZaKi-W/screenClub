@@ -21,7 +21,7 @@
 | Vulkan SDK | 1.4.350.0, installed via `winget install --id KhronosGroup.VulkanSDK -e --silent` |
 | CUDA | **skipped** — no NVIDIA GPU on this machine (`nvidia-smi` not present, AMD Radeon only) |
 | Models (multilingual `small` only, never `.en`, never `q5_1`/`q4_0`) | `ggml-small.bin` (fp16, 465 MB) — `sha256: 1BE3A9B2063867B937E64E2EC7483364A79917E157FA98C5D94B5C1FFFEA987B`<br>`ggml-small-q8_0.bin` (~252 MB) — `sha256: 49C8FB02B65E6049D5FA6C04F81F53B867B5EC9540406812C643F177317F779F` |
-| CTranslate2 baseline model | `Systran/faster-whisper-small` (`model.bin`, sha256 `3E305921506D8872816023E4C273E75D2419FB89B24DA97B4FE7BCE14170D671`, ~461 MB) cached at `%APPDATA%\openscreen\stt-models\whisper-ct2\`; built and shipped by OpenScreen as `electron\native\bin\win32-x64\ctranslate2-server-ctranslate2-cpu.exe` |
+| CTranslate2 baseline model | `Systran/faster-whisper-small` (`model.bin`, sha256 `3E305921506D8872816023E4C273E75D2419FB89B24DA97B4FE7BCE14170D671`, ~461 MB) cached at `%APPDATA%\openscreen\stt-models\whisper-ct2\`; built and shipped by ScreenClub as `electron\native\bin\win32-x64\ctranslate2-server-ctranslate2-cpu.exe` |
 | `n_threads` (wcpp) | `std::thread::hardware_concurrency()` = **8** (per the build-cmd style) |
 | `n_threads` (CT2 server) | **8** (server default; the boot line prints `threads=8 cuda=off`) |
 | Flash attention (wcpp) | **disabled** — see §A.1 below; DTW is incompatible with flash attention in v1.9.1 and the model logger literally turns `dtw_token_timestamps` back off if `flash_attn=1` |
@@ -488,7 +488,7 @@ cmake -S harness -B build-harness -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_MAKE_PROGRAM="C:/Program Files/Microsoft Visual Studio/18/Insiders/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
 cmake --build build-harness --config Release
 
-# 3. Run CT2 baseline (uses OpenScreen's pre-built server, does not rebuild)
+# 3. Run CT2 baseline (uses ScreenClub's pre-built server, does not rebuild)
 node harness/run_ct2.mjs results int8  20199 "$env:APPDATA/openscreen/stt-models/whisper-ct2" fixtures/jfk.wav fixtures/librispeech_demo_{0..4}.wav fixtures/two-min-clip.wav
 node harness/run_ct2.mjs results fp16  20198 "$env:APPDATA/openscreen/stt-models/whisper-ct2" fixtures/jfk.wav fixtures/librispeech_demo_{0..4}.wav fixtures/two-min-clip.wav
 

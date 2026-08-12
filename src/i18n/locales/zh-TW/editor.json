@@ -43,7 +43,7 @@
 		"permissionDenied": "錄影權限被拒絕。請允許螢幕錄製。",
 		"cameraDisconnected": "網路攝影機已中斷連線。",
 		"cameraNotFound": "找不到攝影機。",
-		"accessibilityAllowAndRetry": "允許 OpenScreen 使用輔助使用權限，然後再次按下錄製以開始倒數。",
+		"accessibilityAllowAndRetry": "允許 ScreenClub 使用輔助使用權限，然後再次按下錄製以開始倒數。",
 		"selectSource": "請選擇要錄製的來源"
 	},
 	"emptyState": {
@@ -82,9 +82,6 @@
 		"saveProject": "儲存專案",
 		"unsaved": "未儲存",
 		"saved": "已儲存",
-		"switchToLightTheme": "切換至淺色主題",
-		"switchToDarkTheme": "切換至深色主題",
-		"toggleTheme": "切換主題",
 		"settings": "設定",
 		"export": "匯出",
 		"renameProject": "重新命名專案",
@@ -282,7 +279,7 @@
 			"disclaimer": "你影片的轉錄文字會送到你選擇的提供者。在你連接之前不會分享任何內容。"
 		},
 		"authorUser": "你",
-		"authorAssistant": "OpenScreen",
+		"authorAssistant": "ScreenClub",
 		"rewindToMessage": "倒轉至此訊息",
 		"copyMessage": "複製訊息",
 		"copiedToClipboard": "已複製到剪貼簿",

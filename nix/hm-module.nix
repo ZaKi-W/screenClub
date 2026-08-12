@@ -1,4 +1,4 @@
-# Home Manager module for OpenScreen
+# Home Manager module for ScreenClub
 # Usage in flake-based Home Manager config:
 #
 #   inputs.openscreen.url = "github:EtienneLescot/openscreen";
@@ -20,13 +20,13 @@ let
 in
 {
   options.programs.openscreen = {
-    enable = lib.mkEnableOption "OpenScreen screen recorder";
+    enable = lib.mkEnableOption "ScreenClub screen recorder";
 
     package = lib.mkOption {
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.openscreen;
       defaultText = lib.literalExpression "inputs.openscreen.packages.\${pkgs.stdenv.hostPlatform.system}.openscreen";
-      description = "The OpenScreen package to use.";
+      description = "The ScreenClub package to use.";
     };
   };
 

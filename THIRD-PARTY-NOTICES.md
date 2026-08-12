@@ -1,6 +1,6 @@
 # Third-party notices
 
-OpenScreen is MIT licensed (see [LICENSE](LICENSE)). The installers additionally
+ScreenClub is MIT licensed (see [LICENSE](LICENSE)). The installers additionally
 bundle the pre-built native components below. This file ships inside the
 application resources and satisfies the attribution and source-offer obligations
 that come with them.
@@ -66,7 +66,7 @@ distributed by their own registries, not redistributed inside our binaries.
   so nothing of PipeWire's ships inside our installers beyond the compiled
   result of its headers (inline functions and struct layouts).
 
-## OpenScreen native helpers
+## ScreenClub native helpers
 
 `wgc-capture` (Windows Graphics Capture), the ScreenCaptureKit helper (macOS),
 the PipeWire helper (Linux) and the compositor addon are part of this repository

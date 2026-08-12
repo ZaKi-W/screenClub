@@ -53,7 +53,7 @@ export function useTranscriptionLabel(): (view: AssetTranscriptionView) => strin
 const DOT_COLOR: Record<AssetTranscriptionView["status"], { fill: string; halo: string }> = {
 	ready: { fill: "var(--success)", halo: "0 0 0 3px var(--success-soft)" },
 	queued: { fill: "#f59e0b", halo: "0 0 0 3px rgba(245, 158, 11, 0.2)" },
-	running: { fill: "var(--accent)", halo: "0 0 0 3px rgba(16, 185, 129, 0.2)" },
+	running: { fill: "var(--accent)", halo: "0 0 0 3px rgba(39, 224, 193, 0.2)" },
 	// A silent media is not a bug — it just has nothing to say. Amber, not red.
 	empty: { fill: "#f59e0b", halo: "0 0 0 3px rgba(245, 158, 11, 0.2)" },
 	failed: { fill: "var(--danger)", halo: "0 0 0 3px rgba(239, 68, 68, 0.2)" },

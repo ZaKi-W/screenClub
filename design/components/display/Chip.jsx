@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen Chip — rounded action/filter pill with optional leading
+ * ScreenClub Chip — rounded action/filter pill with optional leading
  * icon. Used for the quick-action row above the composer. Hover gives
  * an accent wash + border.
  */

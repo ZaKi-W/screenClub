@@ -43,7 +43,7 @@
 		"cameraDisconnected": "Webcam desconectada.",
 		"cameraNotFound": "Câmera não encontrada.",
 		"permissionDenied": "Permissão de gravação negada. Por favor, permita a gravação de tela.",
-		"accessibilityAllowAndRetry": "Permita o acesso de Acessibilidade para o OpenScreen e pressione gravar novamente para iniciar a contagem regressiva.",
+		"accessibilityAllowAndRetry": "Permita o acesso de Acessibilidade para o ScreenClub e pressione gravar novamente para iniciar a contagem regressiva.",
 		"selectSource": "Por favor, selecione uma fonte para gravar"
 	},
 	"emptyState": {
@@ -82,9 +82,6 @@
 		"saveProject": "Salvar projeto",
 		"unsaved": "Não salvo",
 		"saved": "Salvo",
-		"switchToLightTheme": "Mudar para tema claro",
-		"switchToDarkTheme": "Mudar para tema escuro",
-		"toggleTheme": "Alternar tema",
 		"settings": "Configurações",
 		"export": "Exportar",
 		"renameProject": "Renomear projeto",
@@ -282,7 +279,7 @@
 			"disclaimer": "A transcrição do seu vídeo será enviada ao fornecedor que escolher. Nada é compartilhado até você conectar um."
 		},
 		"authorUser": "Você",
-		"authorAssistant": "OpenScreen",
+		"authorAssistant": "ScreenClub",
 		"rewindToMessage": "Rebobinar até esta mensagem",
 		"copyMessage": "Copiar mensagem",
 		"copiedToClipboard": "Copiado para a área de transferência",

@@ -22,7 +22,7 @@ export const SOFTWARE_ID = `${SITE_URL}/#software`;
 const SOFTWARE_APPLICATION_LD = {
 	"@type": "SoftwareApplication",
 	"@id": SOFTWARE_ID,
-	name: "OpenScreen",
+	name: "ScreenClub",
 	applicationCategory: "MultimediaApplication",
 	applicationSubCategory: "Screen Recorder",
 	operatingSystem: "Windows, macOS, Linux",

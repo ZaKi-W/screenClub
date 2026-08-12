@@ -14,7 +14,7 @@ keywords:
 
 # Captions & transcript
 
-OpenScreen transcribes your recording's audio **entirely on-device** — nothing is uploaded, and it works offline. That one transcript is then the source for two things: the captions burned into your video, and a text view you can edit your recording from.
+ScreenClub transcribes your recording's audio **entirely on-device** — nothing is uploaded, and it works offline. That one transcript is then the source for two things: the captions burned into your video, and a text view you can edit your recording from.
 
 ## Transcribing
 

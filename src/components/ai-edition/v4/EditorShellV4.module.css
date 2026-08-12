@@ -1,5 +1,5 @@
-/* OpenScreen Editor v4 shell — Media / Edit / Rec modes.
- * Ported 1:1 from design/OpenScreen Editor v4.dc.html. All colors read the
+/* ScreenClub Editor v4 shell — Media / Edit / Rec modes.
+ * Ported 1:1 from design/ScreenClub Editor v4.dc.html. All colors read the
  * global --* design tokens (src/styles/design-tokens.css); dark is the hero
  * look, light is a full token swap handled by the token layer. */
 
@@ -1173,10 +1173,10 @@
 	height: 100%;
 	overflow: hidden;
 	/* Track colors are local to the editor timeline: warm amber identifies source
-	   video, while cool indigo identifies a zoom/effect span. Keeping them off the
+	   video, while electric cyan identifies a zoom/effect span. Keeping them off the
 	   app-wide accent prevents every editable object from reading as the same type. */
-	--timeline-video: #f59e0b;
-	--timeline-zoom: #818cf8;
+	--timeline-video: #ffb454;
+	--timeline-zoom: #27e0c1;
 	/* The playhead's head sits ENTIRELY above the ruler, its tip landing on the
 	   line's top edge — that's what keeps it clear of the tick labels below. It
 	   deliberately overshoots the timeline body by --playhead-head-overshoot, so
@@ -1548,8 +1548,8 @@
 	box-shadow: 0 0 0 3px color-mix(in srgb, var(--timeline-zoom) 30%, transparent);
 }
 .laneCameraFullscreen {
-	border-color: #a855f7;
-	background: rgba(168, 85, 247, 0.14);
+	border-color: #ff7a90;
+	background: rgba(255, 122, 144, 0.14);
 }
 .tlClips {
 	position: relative;

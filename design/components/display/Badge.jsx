@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen Badge — the small status pill. Optional leading dot.
+ * ScreenClub Badge — the small status pill. Optional leading dot.
  * tones: accent (default) · neutral · danger · warn. `soft` uses the
  * tinted fill (default); pass soft={false} for a bordered outline.
  */

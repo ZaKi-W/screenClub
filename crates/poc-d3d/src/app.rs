@@ -513,7 +513,7 @@ unsafe fn run_gui_inner(screen: &str, webcam: &str, cursor_json: &str, out_dir: 
     let ww = rc.right - rc.left;
     let wh = rc.bottom - rc.top;
 
-    let title = wide("OpenScreen — POC D3D11 compositor · preview + export");
+    let title = wide("ScreenClub — POC D3D11 compositor · preview + export");
     let hwnd = CreateWindowExW(
         WINDOW_EX_STYLE(0),
         PCWSTR(main_cls.as_ptr()),

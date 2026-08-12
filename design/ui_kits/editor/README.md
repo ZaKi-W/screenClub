@@ -1,6 +1,6 @@
-# OpenScreen Editor — UI kit
+# ScreenClub Editor — UI kit
 
-A high-fidelity recreation of the OpenScreen Editor's **Edit** view, composed from the design
+A high-fidelity recreation of the ScreenClub Editor's **Edit** view, composed from the design
 system primitives. It is a visual + light-interaction recreation, not production code.
 
 ## Screen

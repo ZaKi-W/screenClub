@@ -141,7 +141,7 @@ function splitSegmentEvenly(raw: RawSegment): WordTiming[] {
  *     — OpenAI `verbose_json` and faster-whisper, the shape
  *     `electron/stt/whisperServer.ts:54-70` already parses;
  *   • `{ words: [...] }` — the same words, flat;
- *   • `{ wordSegments: [{ word, startSec, endSec, confidence }] }` — OpenScreen's
+ *   • `{ wordSegments: [{ word, startSec, endSec, confidence }] }` — ScreenClub's
  *     own `SttResult` (`electron/stt/index.ts:104`);
  *   • `{ transcription: [{ offsets: {from,to}, tokens: [{ text, offsets }] }] }`
  *     — whisper.cpp `--output-json-full`, whose offsets are MILLISECONDS and

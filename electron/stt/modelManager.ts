@@ -14,7 +14,7 @@ import { pipeline } from "node:stream/promises";
  * `ggml-org/whisper.cpp` on HuggingFace is a different, access-gated repo
  * and returns 401 on every file including README.md — confirmed by curl).
  * whisper.cpp bakes precision into the file, so
- * there is no runtime `--int8` flag; OpenScreen ships the q8_0 quantized
+ * there is no runtime `--int8` flag; ScreenClub ships the q8_0 quantized
  * `small` multilingual model by default.
  *
  * The file is verified by SHA-256 and written atomically (via .partial rename)

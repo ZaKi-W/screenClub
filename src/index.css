@@ -33,30 +33,30 @@
 		--radius: 0.5rem;
 	}
 	.dark {
-		--background: 20 14.3% 4.1%;
-		--foreground: 60 9.1% 97.8%;
-		--card: 20 14.3% 4.1%;
-		--card-foreground: 60 9.1% 97.8%;
-		--popover: 20 14.3% 4.1%;
-		--popover-foreground: 60 9.1% 97.8%;
-		--primary: 60 9.1% 97.8%;
-		--primary-foreground: 24 9.8% 10%;
-		--secondary: 12 6.5% 15.1%;
-		--secondary-foreground: 60 9.1% 97.8%;
-		--muted: 12 6.5% 15.1%;
-		--muted-foreground: 24 5.4% 63.9%;
-		--accent: 12 6.5% 15.1%;
-		--accent-foreground: 60 9.1% 97.8%;
-		--destructive: 0 62.8% 30.6%;
-		--destructive-foreground: 60 9.1% 97.8%;
-		--border: 12 6.5% 15.1%;
-		--input: 12 6.5% 15.1%;
-		--ring: 24 5.7% 82.9%;
-		--chart-1: 220 70% 50%;
-		--chart-2: 160 60% 45%;
-		--chart-3: 30 80% 55%;
-		--chart-4: 280 65% 60%;
-		--chart-5: 340 75% 55%;
+		--background: 0 0% 0%;
+		--foreground: 185 16% 93%;
+		--card: 215 20% 5%;
+		--card-foreground: 185 16% 93%;
+		--popover: 215 18% 7%;
+		--popover-foreground: 185 16% 93%;
+		--primary: 170 74% 52%;
+		--primary-foreground: 168 100% 5%;
+		--secondary: 205 18% 11%;
+		--secondary-foreground: 185 16% 93%;
+		--muted: 205 15% 12%;
+		--muted-foreground: 195 9% 62%;
+		--accent: 170 74% 52%;
+		--accent-foreground: 168 100% 5%;
+		--destructive: 354 100% 69%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 205 18% 15%;
+		--input: 205 18% 15%;
+		--ring: 170 74% 52%;
+		--chart-1: 170 74% 52%;
+		--chart-2: 33 100% 66%;
+		--chart-3: 211 100% 68%;
+		--chart-4: 16 100% 68%;
+		--chart-5: 145 63% 55%;
 	}
 }
 
@@ -80,12 +80,8 @@
 		flex-direction: column;
 		padding: 14px;
 		background:
-			radial-gradient(
-				circle at 18% 0%,
-				rgba(52, 178, 123, 0.08),
-				transparent 30%
-			),
-			linear-gradient(180deg, #08090b 0%, #050606 100%);
+			radial-gradient(circle at 18% 0%, rgba(39, 224, 193, 0.07), transparent 30%),
+			linear-gradient(180deg, #050708 0%, #000000 100%);
 	}
 
 	.editor-main-deck {
@@ -167,7 +163,7 @@
 
 	.editor-inspector-shell button:focus-visible,
 	.editor-inspector-shell [role="button"]:focus-visible {
-		outline: 1px solid rgba(52, 178, 123, 0.68);
+		outline: 1px solid rgba(39, 224, 193, 0.72);
 		outline-offset: 2px;
 	}
 
@@ -178,7 +174,7 @@
 	}
 
 	.editor-inspector-shell [role="slider"] {
-		box-shadow: 0 0 0 4px rgba(52, 178, 123, 0.12);
+		box-shadow: 0 0 0 4px rgba(39, 224, 193, 0.12);
 	}
 
 	.editor-inspector-shell .editor-panel-section > h3 {
@@ -253,7 +249,7 @@
 	}
 
 	.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-		background: rgba(52, 178, 123, 0.55);
+		background: rgba(39, 224, 193, 0.55);
 		border: 3px solid transparent;
 		background-clip: content-box;
 	}

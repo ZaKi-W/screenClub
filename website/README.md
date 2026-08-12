@@ -1,4 +1,4 @@
-# OpenScreen docs site
+# ScreenClub docs site
 
 Docusaurus 3 site. Lives in `website/` inside the monorepo. Deployed to GitHub Pages via `.github/workflows/docs.yml`.
 

@@ -55,7 +55,7 @@ function stubCanvasRef(): RefObject<HTMLCanvasElement> {
 }
 
 const DEVICE_FAILURE =
-	"this display adapter has no D3D11 video decoder (0x887A0004). OpenScreen decodes every preview and export frame with D3D11VA";
+	"this display adapter has no D3D11 video decoder (0x887A0004). ScreenClub decodes every preview and export frame with D3D11VA";
 
 describe("useNativeCompositorView", () => {
 	beforeEach(() => {

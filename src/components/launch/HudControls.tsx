@@ -49,7 +49,7 @@ const hudDisabledClasses =
 	"disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none";
 
 // Exact values from the design's renderVals() (comfortable density, rounded
-// shape, #10b981 accent) — btnSize 34 / btnRadius 10 / containerRadius 17
+// shape, ScreenClub cyan accent) — btnSize 34 / btnRadius 10 / containerRadius 17
 // (btnRadius + padY) / dividerLen 22. Every control is its own standalone
 // transparent icon button (no shared "group" pill background) — grouping
 // reads purely from proximity + the divider spans between logical sections.
@@ -318,7 +318,7 @@ export const HudSystemAudioButton = memo(function HudSystemAudioButton({
 			disabled={disabled}
 			title={label}
 		>
-			<VolumeIcon muted={!enabled} className={enabled ? "text-[#10b981]" : ""} />
+			<VolumeIcon muted={!enabled} className={enabled ? "text-[#27e0c1]" : ""} />
 		</button>
 	);
 });
@@ -343,7 +343,7 @@ export const HudMicButton = memo(function HudMicButton({
 			disabled={disabled}
 			title={label}
 		>
-			<MicIcon muted={!enabled} className={enabled ? "text-[#10b981]" : ""} />
+			<MicIcon muted={!enabled} className={enabled ? "text-[#27e0c1]" : ""} />
 		</button>
 	);
 });
@@ -368,7 +368,7 @@ export const HudCameraButton = memo(function HudCameraButton({
 			disabled={disabled}
 			title={label}
 		>
-			<CameraIcon off={!enabled} className={enabled ? "text-[#10b981]" : ""} />
+			<CameraIcon off={!enabled} className={enabled ? "text-[#27e0c1]" : ""} />
 		</button>
 	);
 });
@@ -423,7 +423,7 @@ export const HudCursorButton = memo(function HudCursorButton({
 			data-testid="launch-cursor-mode-button"
 			className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] border-0 cursor-pointer transition-all duration-150 active:scale-95 ${hudDisabledClasses} ${styles.electronNoDrag} ${
 				editableOverlay
-					? "bg-[#10b981] text-[#08090d] hover:bg-[#0e9e6e]"
+					? "bg-[#27e0c1] text-[#001b16] hover:bg-[#8af7e3]"
 					: "bg-transparent text-[#828c99] hover:bg-[#1a1e25] hover:text-[#f5f7fa]"
 			}`}
 			onClick={onClick}

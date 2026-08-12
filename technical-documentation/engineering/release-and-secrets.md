@@ -1,6 +1,6 @@
 # Release and secrets
 
-OpenScreen's release machinery lives in `.github/workflows/prerelease.yml`, `promote.yml`, and `build.yml`; its credentials are repository secrets and variables consumed by those workflows and the downstream package and Discord automations. This page is the operational reference for cutting releases and maintaining those credentials.
+ScreenClub's release machinery lives in `.github/workflows/prerelease.yml`, `promote.yml`, and `build.yml`; its credentials are repository secrets and variables consumed by those workflows and the downstream package and Discord automations. This page is the operational reference for cutting releases and maintaining those credentials.
 
 ## Release flow
 
@@ -50,7 +50,7 @@ Any `v*` tag triggers `build.yml`. The fallback skips milestone migration/closur
 
 This fine-grained personal access token is used by `prerelease.yml`, `promote.yml`, and `build.yml`. It migrates and closes issues/milestones, pushes release branches, creates and merges the release-sync PR, dispatches `build.yml`, and creates GitHub releases so `release: published` can start downstream workflows. The automatic `GITHUB_TOKEN` cannot reliably trigger those subsequent workflows.
 
-Grant the token access only to the OpenScreen repository with:
+Grant the token access only to the ScreenClub repository with:
 
 - Contents: read and write.
 - Issues: read and write.

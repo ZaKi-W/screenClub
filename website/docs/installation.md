@@ -2,10 +2,10 @@
 id: installation
 title: Installation
 sidebar_position: 2
-description: "Install OpenScreen on macOS, Windows, or Linux — .dmg, .exe, .deb, .rpm, .pacman, AppImage, and a Nix flake, including the macOS Gatekeeper step."
+description: "Install ScreenClub on macOS, Windows, or Linux — .dmg, .exe, .deb, .rpm, .pacman, AppImage, and a Nix flake, including the macOS Gatekeeper step."
 keywords:
   - install screen recorder
-  - download OpenScreen
+  - download ScreenClub
   - macOS dmg
   - Windows installer
   - Linux deb
@@ -23,17 +23,17 @@ Download the latest installer for your platform from the [download page](/downlo
 Download the `.dmg` installer from [Releases](https://github.com/getopenscreen/openscreen/releases). If Gatekeeper blocks the app, remove the quarantine flag:
 
 ```bash
-xattr -rd com.apple.quarantine /Applications/Openscreen.app
+xattr -rd com.apple.quarantine /Applications/ScreenClub.app
 ```
 
 :::note
 Give your terminal **Full Disk Access** in System Settings → Privacy & Security first, then run the command above.
 :::
 
-After that, go to **System Settings → Privacy & Security** and grant **Screen Recording** and **Accessibility** to OpenScreen. Launch the app once permissions are granted.
+After that, go to **System Settings → Privacy & Security** and grant **Screen Recording** and **Accessibility** to ScreenClub. Launch the app once permissions are granted.
 
 :::tip Upgrading and recording won't start?
-If OpenScreen was already installed and a new version won't record (Screen Recording or Accessibility keep failing even after granting them), uninstall the old version, remove OpenScreen's entries under both permissions in System Settings, then reinstall and grant them fresh.
+If ScreenClub was already installed and a new version won't record (Screen Recording or Accessibility keep failing even after granting them), uninstall the old version, remove ScreenClub's entries under both permissions in System Settings, then reinstall and grant them fresh.
 :::
 
 ## Windows
@@ -46,28 +46,28 @@ Four packages are published per release — pick the one matching your distro.
 
 **Debian / Ubuntu / Pop!_OS**
 ```bash
-sudo apt install ./Openscreen-Linux-*.deb
+sudo apt install ./ScreenClub-Linux-*.deb
 ```
 
 **Fedora / RHEL / CentOS**
 ```bash
-sudo dnf install ./Openscreen-Linux-*.rpm
+sudo dnf install ./ScreenClub-Linux-*.rpm
 ```
 
 **Arch / Manjaro**
 ```bash
-sudo pacman -U Openscreen-Linux-*.pacman
+sudo pacman -U ScreenClub-Linux-*.pacman
 ```
 
 **Any distro (AppImage)**
 ```bash
-chmod +x Openscreen-Linux-*.AppImage
-./Openscreen-Linux-*.AppImage
+chmod +x ScreenClub-Linux-*.AppImage
+./ScreenClub-Linux-*.AppImage
 ```
 
 If the AppImage fails to launch with a sandbox error:
 ```bash
-./Openscreen-Linux-*.AppImage --no-sandbox
+./ScreenClub-Linux-*.AppImage --no-sandbox
 ```
 
 **NixOS / Nix (flake)**

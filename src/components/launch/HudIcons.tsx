@@ -28,7 +28,7 @@ export function getIcon(name: IconName, className?: string) {
 	return <Icon size={size} className={className} />;
 }
 
-// Custom glyphs matching the Claude Design "OpenScreen Recording Widget"
+// Custom glyphs matching the Claude Design "ScreenClub Recording Widget"
 // spec exactly (source/audio/mic/camera/cursor/record) — these are the
 // controls most visible in the collapsed toolbar, so the design's own paths
 // are used verbatim rather than the closest lucide/react-icons stand-in.

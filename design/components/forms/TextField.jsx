@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen TextField — one primitive for both single-line inputs and
+ * ScreenClub TextField — one primitive for both single-line inputs and
  * the multiline composer (same border/fill/radius vocabulary).
  * `multiline` swaps <input> for an auto-height <textarea>.
  * `leadingIcon` renders a search/glyph inside a bordered wrapper.

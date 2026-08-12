@@ -1,6 +1,6 @@
 # Build and packaging
 
-OpenScreen builds its renderer, Electron main process, preload bridge, native helpers, and installers from the root npm scripts, `vite.config.ts`, `electron-builder.json5`, and platform-native projects under `electron/native/`. Nix provides a separate Linux package and development shell.
+ScreenClub builds its renderer, Electron main process, preload bridge, native helpers, and installers from the root npm scripts, `vite.config.ts`, `electron-builder.json5`, and platform-native projects under `electron/native/`. Nix provides a separate Linux package and development shell.
 
 ## Commands
 
@@ -102,7 +102,7 @@ The two failures above were found by the Store, not by us, and each was fixed wi
 `scripts/verify-appx-native.ps1` is the check that does. It registers a built `.appx` and asks the Windows loader to resolve every shipped binary from inside the package: `LoadLibraryEx` with `LOAD_WITH_ALTERED_SEARCH_PATH` for each `.dll`/`.node` — the same call Node makes for an addon — and, for each helper executable, a start with no arguments. Whatever the next unresolvable dependency turns out to be, this fails on it.
 
 ```bash
-powershell -File scripts/verify-appx-native.ps1 -Appx release/1.9.1/Openscreen.Setup.1.9.1.appx
+powershell -File scripts/verify-appx-native.ps1 -Appx release/1.9.1/ScreenClub.Setup.1.9.1.appx
 ```
 
 Add `-KeepRegistered` to leave the package installed and click through the app afterwards. Loose registration needs Developer Mode; the script will not enable it for you, because that is a machine-wide setting. The `Windows Store package` job runs the same script on every build, enabling Developer Mode on the runner it is about to discard.

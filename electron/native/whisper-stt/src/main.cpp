@@ -1,4 +1,4 @@
-// whisper-stt-server: long-lived HTTP helper for OpenScreen's STT pipeline.
+// whisper-stt-server: long-lived HTTP helper for ScreenClub's STT pipeline.
 //
 // Wires the POC's transcription core (tools/stt-eval/whispercpp-dtw-poc/harness/wcpp_dtw_bench.cpp)
 // into an httplib-shaped loop, so the Electron main process can keep the same

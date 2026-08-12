@@ -23,7 +23,7 @@ const ORGANIZATION_LD = {
 	"@context": "https://schema.org",
 	"@type": "Organization",
 	"@id": `${SITE_URL}/#organization`,
-	name: "OpenScreen",
+	name: "ScreenClub",
 	url: SITE_URL,
 	logo: `${SITE_URL}/img/logo-icon.png`,
 	description: SITE_DESCRIPTION,
@@ -34,7 +34,7 @@ const WEBSITE_LD = {
 	"@context": "https://schema.org",
 	"@type": "WebSite",
 	"@id": `${SITE_URL}/#website`,
-	name: "OpenScreen",
+	name: "ScreenClub",
 	url: SITE_URL,
 	description: SITE_DESCRIPTION,
 	inLanguage: "en",
@@ -147,7 +147,7 @@ export default async function createConfig(): Promise<Config> {
 			: "";
 
 	return {
-		title: "OpenScreen",
+		title: "ScreenClub",
 		tagline: "A free, open-source screen recorder and editor.",
 		favicon: "img/logo-icon.png",
 
@@ -256,8 +256,8 @@ export default async function createConfig(): Promise<Config> {
 				},
 				{ name: "robots", content: "index, follow, max-image-preview:large, max-snippet:-1" },
 				{ property: "og:type", content: "website" },
-				{ property: "og:site_name", content: "OpenScreen" },
-				{ name: "twitter:image:alt", content: "OpenScreen — free, open-source screen recorder" },
+				{ property: "og:site_name", content: "ScreenClub" },
+				{ name: "twitter:image:alt", content: "ScreenClub — free, open-source screen recorder" },
 			],
 			colorMode: {
 				defaultMode: "dark",
@@ -265,11 +265,11 @@ export default async function createConfig(): Promise<Config> {
 				respectPrefersColorScheme: false,
 			},
 			navbar: {
-				title: "OpenScreen",
+				title: "ScreenClub",
 				logo: {
 					// Explicit intrinsic size: without it the navbar reserves no space
 					// for the mark and the whole bar reflows once the PNG decodes.
-					alt: "OpenScreen logo",
+					alt: "ScreenClub logo",
 					src: "img/logo-icon.png",
 					width: 32,
 					height: 32,

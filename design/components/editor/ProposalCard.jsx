@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen ProposalCard — the agent's "Proposed cuts" card: a header
+ * ScreenClub ProposalCard — the agent's "Proposed cuts" card: a header
  * with total + confidence badge, a list of time-range rows with striped
  * clip chips, an apply/review action row, and a rationale footnote.
  */

@@ -1,4 +1,4 @@
-/* Marketing landing page — always dark, styled after the OpenScreen Design System hero. */
+/* Marketing landing page — always dark, styled after the ScreenClub Design System hero. */
 
 .hero,
 .visualSection,
@@ -88,7 +88,7 @@
 .primaryCta {
 	background: var(--os-accent);
 	color: #fff;
-	box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+	box-shadow: 0 8px 24px rgba(39, 224, 193, 0.25);
 }
 
 .primaryCta:hover {
@@ -854,4 +854,3 @@
 		align-items: flex-start;
 	}
 }
-

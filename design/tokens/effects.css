@@ -1,5 +1,5 @@
 /* ============================================================
-   OpenScreen — Effects: shadows, glass, gradients, motion
+   ScreenClub — Effects: shadows, glass, gradients, motion
    The signature look is DEPTH ON DARK: floating chrome with a
    big soft outer shadow + a 1px inner top highlight, sat over a
    heavy backdrop-blur. Nothing is flat. Motion is quick and
@@ -27,7 +27,7 @@
 	--shadow-inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 
 	/* ---- The "beautified recording" shadow ------------------ */
-	/* What OpenScreen renders around the captured window sitting
+	/* What ScreenClub renders around the captured window sitting
 	   on a wallpaper. Big, soft, slightly lifted. */
 	--shadow-capture: 0 40px 90px rgba(0, 0, 0, 0.45),
 		0 12px 32px rgba(0, 0, 0, 0.35);
@@ -48,7 +48,7 @@
 	   near-black vertical fade. This green wash is a brand tell. */
 	--gradient-workspace: radial-gradient(
 			circle at 18% 0%,
-			rgba(52, 178, 123, 0.08),
+			rgba(39, 224, 193, 0.08),
 			transparent 30%
 		),
 		linear-gradient(180deg, #08090b 0%, #050606 100%);
@@ -62,7 +62,7 @@
 	/* Selected card wash (green tint → glass). */
 	--gradient-selected: linear-gradient(
 		145deg,
-		rgba(52, 178, 123, 0.13),
+		rgba(39, 224, 193, 0.13),
 		rgba(255, 255, 255, 0.045)
 	);
 
@@ -78,5 +78,5 @@
 
 	/* ---- Focus ---------------------------------------------- */
 	--ring-focus: 0 0 0 2px var(--brand-green-ring);
-	--ring-slider: 0 0 0 4px rgba(52, 178, 123, 0.12);
+	--ring-slider: 0 0 0 4px rgba(39, 224, 193, 0.12);
 }

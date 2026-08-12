@@ -1,19 +1,19 @@
-# OpenScreen Roadmap
+# ScreenClub Roadmap
 The recorder you love, with an optional AI sidekick. Same sleek, low-friction recorder UX. An opt-in AI editing layer is on the way for users who want it — never required, never snuck in.
 
-This roadmap is the source of truth for what we're shipping next in OpenScreen. It is a living document — items move between tiers as work lands. Have an idea, a vote, or a dissenting opinion? Drop into the 🗺️・roadmap channel on our Discord or open a GitHub issue with the `roadmap` label.
+This roadmap is the source of truth for what we're shipping next in ScreenClub. It is a living document — items move between tiers as work lands. Have an idea, a vote, or a dissenting opinion? Drop into the 🗺️・roadmap channel on our Discord or open a GitHub issue with the `roadmap` label.
 
 ## 🧭 North Star
 **Record → Edit → Export.** (with an optional AI shortcut for users who want one)
 
-OpenScreen is, first and foremost, a polished screen recorder. Record, trim on the timeline, export. Most users will keep using exactly this workflow.
+ScreenClub is, first and foremost, a polished screen recorder. Record, trim on the timeline, export. Most users will keep using exactly this workflow.
 
 There is also an optional AI editing layer — for users who want to edit by talking or by editing a transcript. It's opt-in, off by default, and never required. If you don't enable it, the AI layer doesn't exist for your install: nothing downloads, nothing leaves your machine, no LLM is contacted.
 
 Three axes guide every decision on this roadmap:
 
 - **Stability first** — the recorder must work reliably on macOS, Windows, and Linux. Bugs found by real users ship before new features.
-- **Sleek UX stays** — every AI feature must keep the OpenScreen feel: minimal clicks, instant feedback, no clutter.
+- **Sleek UX stays** — every AI feature must keep the ScreenClub feel: minimal clicks, instant feedback, no clutter.
 - **100% free, forever** — no paywalls, no premium tier, no usage caps. Every feature on this page ships under MIT.
 
 ## 🤖 The optional AI Edition — shipped, off by default
@@ -67,7 +67,7 @@ Pulled from real user bug reports on getopenscreen/openscreen. This is the queue
   - Engineering docs stay in `technical-documentation/` on purpose: they track the code rather than the product, are link-checked by `npm run docs:check`, and aren't user-facing.
 
 ## 📬 How to influence this roadmap
-- **Discord** — join the OpenScreen Discord and post in [#🗺️・roadmap](https://discord.com/channels/1489517664467681310/1493586210675884265). The fastest way to get a thumbs-up or thumbs-down on a feature.
+- **Discord** — join the ScreenClub Discord and post in [#🗺️・roadmap](https://discord.com/channels/1489517664467681310/1493586210675884265). The fastest way to get a thumbs-up or thumbs-down on a feature.
 - **GitHub** — open an issue with the `enhancement` label, or react with 👍 / 👎 on existing items.
 - **PRs** — if you want to ship one of these, open a PR and link the relevant issue. We review fast and help with native-bridge / i18n questions.
 

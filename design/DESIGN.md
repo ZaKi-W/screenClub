@@ -1,4 +1,4 @@
-# OpenScreen Design System
+# ScreenClub Design System
 
 > Category: Video & Productivity Tools
 > Surface: Desktop web (Electron)

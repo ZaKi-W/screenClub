@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen Slider — the labelled range control inside inspector cards.
+ * ScreenClub Slider — the labelled range control inside inspector cards.
  * Renders the whole card: label (left) + mono value in emerald (right)
  * above a filled range track. Pass `card={false}` for a bare track.
  */

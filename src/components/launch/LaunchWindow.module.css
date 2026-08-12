@@ -279,7 +279,7 @@
 }
 
 .levelSegmentOn {
-	background: #10b981;
+	background: #27e0c1;
 }
 
 .cameraPreview {
@@ -335,7 +335,7 @@
 }
 
 .languageMenuItemActive {
-	background: rgba(52, 178, 123, 0.14);
+	background: rgba(39, 224, 193, 0.14);
 	color: #ffffff;
 }
 

@@ -21,7 +21,7 @@ export type LatestRelease = {
 } | null;
 
 /**
- * Asset filenames carry the version (Openscreen-Mac-arm64-1.7.0.dmg), so these
+ * Asset filenames carry the version (ScreenClub-Mac-arm64-1.7.0.dmg), so these
  * match on the stable parts only — platform, arch, and extension — and keep
  * working across releases without a config change.
  */

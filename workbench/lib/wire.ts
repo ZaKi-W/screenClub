@@ -54,7 +54,7 @@ export interface WireTranscript {
 	systemChars: number;
 	systemSha256: string;
 	toolsSent: WireTool[];
-	/** 18 today: exactly the OpenScreen tools, no injected surface. */
+	/** 18 today: exactly the ScreenClub tools, no injected surface. */
 	toolNames: string[];
 	toolsSha256: string;
 	calls: WireCall[];

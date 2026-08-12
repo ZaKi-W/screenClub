@@ -2,7 +2,7 @@
 id: editing-timeline
 title: Editing & timeline
 sidebar_position: 6
-description: "Edit in OpenScreen's timeline: zoom, trim, and speed regions, Full Camera segments, annotations, cursor styling, and the floating inspector."
+description: "Edit in ScreenClub's timeline: zoom, trim, and speed regions, Full Camera segments, annotations, cursor styling, and the floating inspector."
 keywords:
   - video timeline editor
   - zoom regions

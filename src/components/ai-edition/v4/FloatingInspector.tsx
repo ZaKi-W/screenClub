@@ -644,7 +644,7 @@ function SelectionPane({ tl, onClose }: { tl: TimelineApi; onClose: () => void }
 									onChange={(e) => {
 										tl.updateAnnotationLive(region.id, {
 											figureData: {
-												...(region.figureData ?? { color: "#34B27B", strokeWidth: 4 }),
+												...(region.figureData ?? { color: "#27E0C1", strokeWidth: 4 }),
 												arrowDirection: e.target.value as ArrowDirectionKind,
 											},
 										});
@@ -663,7 +663,7 @@ function SelectionPane({ tl, onClose }: { tl: TimelineApi; onClose: () => void }
 								ts("annotation.arrowColor"),
 								<ColorField
 									label={ts("annotation.arrowColor")}
-									value={region.figureData?.color ?? "#34B27B"}
+									value={region.figureData?.color ?? "#27E0C1"}
 									onChange={(next) =>
 										liveUpdate(region.id, {
 											figureData: {
@@ -685,7 +685,7 @@ function SelectionPane({ tl, onClose }: { tl: TimelineApi; onClose: () => void }
 								onChange={(next) =>
 									tl.updateAnnotationLive(region.id, {
 										figureData: {
-											...(region.figureData ?? { arrowDirection: "right", color: "#34B27B" }),
+											...(region.figureData ?? { arrowDirection: "right", color: "#27E0C1" }),
 											strokeWidth: next,
 										},
 									})

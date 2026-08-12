@@ -8,7 +8,13 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { DEFAULT_LOCALE, type I18nNamespace, LOCALE_STORAGE_KEY, type Locale } from "@/i18n/config";
+import {
+	DEFAULT_LOCALE,
+	type I18nNamespace,
+	LEGACY_LOCALE_STORAGE_KEY,
+	LOCALE_STORAGE_KEY,
+	type Locale,
+} from "@/i18n/config";
 import { getAvailableLocales, translate } from "@/i18n/loader";
 
 type TranslateVars = Record<string, string | number>;
@@ -23,7 +29,8 @@ interface I18nContextValue {
 	resolveSystemLocaleSuggestion: () => void;
 }
 
-const SYSTEM_LANGUAGE_PROMPT_SEEN_KEY = "openscreen-system-language-prompt-seen";
+const SYSTEM_LANGUAGE_PROMPT_SEEN_KEY = "screenclub-system-language-prompt-seen";
+const LEGACY_SYSTEM_LANGUAGE_PROMPT_SEEN_KEY = "openscreen-system-language-prompt-seen";
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
@@ -77,7 +84,8 @@ function getSupportedSystemLocale(): Locale | null {
 
 function getInitialLocale(): Locale {
 	try {
-		const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+		const stored =
+			localStorage.getItem(LOCALE_STORAGE_KEY) ?? localStorage.getItem(LEGACY_LOCALE_STORAGE_KEY);
 		if (stored && isSupportedLocale(stored)) return stored;
 	} catch {
 		// localStorage may be unavailable
@@ -121,9 +129,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 		let hasStoredLocale = false;
 		let hasHandledSystemPrompt = false;
 		try {
-			const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
+			const stored =
+				localStorage.getItem(LOCALE_STORAGE_KEY) ?? localStorage.getItem(LEGACY_LOCALE_STORAGE_KEY);
 			hasStoredLocale = Boolean(stored && isSupportedLocale(stored));
-			hasHandledSystemPrompt = localStorage.getItem(SYSTEM_LANGUAGE_PROMPT_SEEN_KEY) === "1";
+			hasHandledSystemPrompt =
+				localStorage.getItem(SYSTEM_LANGUAGE_PROMPT_SEEN_KEY) === "1" ||
+				localStorage.getItem(LEGACY_SYSTEM_LANGUAGE_PROMPT_SEEN_KEY) === "1";
 		} catch {
 			// localStorage may be unavailable
 		}

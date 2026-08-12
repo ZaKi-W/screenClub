@@ -1,13 +1,13 @@
 <p align="center">
-  <img src="public/openscreen.png" alt="OpenScreen Logo" width="64" />
+  <img src="public/screenclub.svg" alt="ScreenClub Logo" width="64" />
 </p>
 
-# <p align="center">OpenScreen</p>
+# <p align="center">ScreenClub</p>
 
 <p align="center"><strong>A free, open-source desktop app for recording your screen and turning the result into polished product demos and walkthroughs.</strong></p>
 
 <p align="center">
-  <img src="public/demo.gif" alt="Editing a recording in OpenScreen: wallpaper and video effects, an AI-assisted cut driven from the chat, then export" width="100%" />
+  <img src="public/demo.gif" alt="Editing a recording in ScreenClub: wallpaper and video effects, an AI-assisted cut driven from the chat, then export" width="100%" />
 </p>
 
 <p align="center">
@@ -19,13 +19,13 @@
 </p>
 
 > [!NOTE]
-> **This is OpenScreen, continued.** [Siddharth Vaddem](https://github.com/siddharthvaddem) created the project and [archived the original repository](https://github.com/siddharthvaddem/openscreen) after v1.5.0. Development moved here with his approval, under the same name and the same MIT license.
+> **ScreenClub continues the original project.** [Siddharth Vaddem](https://github.com/siddharthvaddem) created it and [archived the original repository](https://github.com/siddharthvaddem/openscreen) after v1.5.0. Development moved here with his approval and the same MIT license; the product now uses the ScreenClub name.
 
-A raw capture goes in and comes out ready to post — on X, Reddit, YouTube, a docs page, or a landing page. That is the category Screen Studio defined; OpenScreen is the open-source entry in it, and not a clone.
+A raw capture goes in and comes out ready to post — on X, Reddit, YouTube, a docs page, or a landing page. That is the category Screen Studio defined; ScreenClub is the open-source entry in it, and not a clone.
 
 **100% free** for personal and commercial use, with nothing held behind a paywall.
 
-**Project status.** OpenScreen is under active development — expect rough edges and occasional breaking changes, including to the `.openscreen` project format and the CLI. Bug reports are welcome: [open an issue](https://github.com/getopenscreen/openscreen/issues).
+**Project status.** ScreenClub is under active development — expect rough edges and occasional breaking changes, including to the `.openscreen` project format and the CLI. Bug reports are welcome: [open an issue](https://github.com/getopenscreen/openscreen/issues).
 
 ## Core Features
 - Record a specific window, or your whole screen.
@@ -46,14 +46,14 @@ A raw capture goes in and comes out ready to post — on X, Reddit, YouTube, a d
 
 ## Command-line interface (headless)
 
-OpenScreen ships a CLI for scripts, CI, and AI coding agents: record the screen
+ScreenClub ships a CLI for scripts, CI, and AI coding agents: record the screen
 headlessly, edit the `.openscreen` project JSON programmatically (zooms,
 annotations, trims), and render MP4/GIF with the full export pipeline — no
 visible windows, NDJSON output with `--json`.
 
 ```bash
-openscreen record --duration 20 --project demo.openscreen --json
-openscreen export demo.openscreen -o demo.mp4 --json
+screenclub record --duration 20 --project demo.openscreen --json
+screenclub export demo.openscreen -o demo.mp4 --json
 ```
 
 See [docs/cli.md](./docs/cli.md).
@@ -67,7 +67,7 @@ Download the latest installer for your platform from the [GitHub Releases](https
 Download the `.dmg` installer directly from the [Releases page](https://github.com/getopenscreen/openscreen/releases). If Gatekeeper blocks the app, you can bypass it by running the following command in your terminal after installation:
 
 ```bash
-xattr -rd com.apple.quarantine /Applications/Openscreen.app
+xattr -rd com.apple.quarantine /Applications/ScreenClub.app
 ```
 
 Note: Give your terminal Full Disk Access in **System Settings > Privacy & Security** to grant you access and then run the above command.
@@ -75,7 +75,7 @@ Note: Give your terminal Full Disk Access in **System Settings > Privacy & Secur
 After running this command, proceed to **System Settings > Privacy & Security** to grant the necessary permissions for "screen recording" and "accessibility". Once permissions are granted, you can launch the app.
 
 > [!NOTE]
-> **Upgrading from an older version and hitting permission issues?** If you already had OpenScreen installed and the new version won't record (Screen Recording or Accessibility keep failing even after you grant them), uninstall the old version, remove OpenScreen's existing entries under **System Settings > Privacy & Security** (both Screen Recording and Accessibility), then do a fresh install and grant the permissions again when prompted.
+> **Upgrading from an older version and hitting permission issues?** If you already had ScreenClub installed and the new version won't record (Screen Recording or Accessibility keep failing even after you grant them), uninstall the old version, remove ScreenClub's existing entries under **System Settings > Privacy & Security** (both Screen Recording and Accessibility), then do a fresh install and grant the permissions again when prompted.
 
 ### Windows
 
@@ -87,23 +87,23 @@ Four packages are published to the [Releases page](https://github.com/getopenscr
 
 **Debian / Ubuntu / Pop!_OS (`.deb`)**
 ```bash
-sudo apt install ./Openscreen-Linux-*.deb
+sudo apt install ./ScreenClub-Linux-*.deb
 ```
 
 **Fedora / RHEL / CentOS (`.rpm`)**
 ```bash
-sudo dnf install ./Openscreen-Linux-*.rpm
+sudo dnf install ./ScreenClub-Linux-*.rpm
 ```
 
 **Arch / Manjaro (`.pacman`)**
 ```bash
-sudo pacman -U Openscreen-Linux-*.pacman
+sudo pacman -U ScreenClub-Linux-*.pacman
 ```
 
 **Any distro (`.AppImage`)**
 ```bash
-chmod +x Openscreen-Linux-*.AppImage
-./Openscreen-Linux-*.AppImage
+chmod +x ScreenClub-Linux-*.AppImage
+./ScreenClub-Linux-*.AppImage
 ```
 
 **NixOS / Nix (flake)**
@@ -140,7 +140,7 @@ You may need to grant screen recording permissions depending on your desktop env
 
 **Sandbox error:** If the AppImage fails to launch with a "sandbox" error, run it with `--no-sandbox`:
 ```bash
-./Openscreen-Linux-*.AppImage --no-sandbox
+./ScreenClub-Linux-*.AppImage --no-sandbox
 ```
 
 ### Platform differences
@@ -157,20 +157,20 @@ Everything in the editor and export is the same on macOS, Windows, and Linux: zo
 
 ## Official links
 
-This repository is the community-maintained continuation of OpenScreen.
+This repository is the community-maintained continuation of the original project, now named ScreenClub.
 
 Official / trusted links:
 
 * Original archived repository: https://github.com/siddharthvaddem/openscreen
 * Community continuation: https://github.com/getopenscreen/openscreen
 
-For safety, download OpenScreen only from the official GitHub Releases linked from this repository. Third-party websites using the OpenScreen name are not affiliated with this continuation unless explicitly listed here.
+For safety, download ScreenClub only from the official GitHub Releases linked from this repository. Third-party websites using the ScreenClub name are not affiliated with this continuation unless explicitly listed here.
 
 ## Community
 
-OpenScreen is community-driven. If you need help, want to report a bug, or just want to chat with other users and contributors:
+ScreenClub is community-driven. If you need help, want to report a bug, or just want to chat with other users and contributors:
 
-- 💬 **Discord** — [Join the OpenScreen Discord](https://discord.gg/VvT6Vtnyh) for real-time help, showcase, and discussion
+- 💬 **Discord** — [Join the ScreenClub Discord](https://discord.gg/VvT6Vtnyh) for real-time help, showcase, and discussion
 - 🐞 **[GitHub Issues](https://github.com/getopenscreen/openscreen/issues)** — bug reports and feature requests
 - 🗺️ **[Roadmap](./ROADMAP.md)** — see what we're building next
 
