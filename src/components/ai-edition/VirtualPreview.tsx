@@ -611,12 +611,9 @@ export function VirtualPreview({
 							ref={videoRef}
 							src={activeSource.src}
 							className={`${styles.video}${isIdentityCrop ? "" : ` ${styles.videoCropped}`}`}
-							// When a synthetic cursor is being drawn on top (CursorPreviewLayer),
-							// hide the real OS pointer here so it doesn't compete with it.
 							style={{
 								...cropVideoStyle,
 								...videoStyle,
-								cursor: settings.cursorShow ? "none" : undefined,
 							}}
 							preload="metadata"
 							playsInline

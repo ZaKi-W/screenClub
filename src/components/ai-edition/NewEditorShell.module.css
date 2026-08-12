@@ -781,13 +781,13 @@
 .transport {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
 	flex: 1;
 	min-width: 0;
 }
 .transport .tbtn {
-	width: 28px;
-	height: 28px;
+	width: 24px;
+	height: 24px;
 	display: grid;
 	place-items: center;
 	border-radius: var(--r-sm);
@@ -803,8 +803,8 @@
 	color: var(--fg);
 }
 .transport .tbtn.play {
-	width: 28px;
-	height: 28px;
+	width: 26px;
+	height: 26px;
 	background: var(--fg);
 	color: var(--bg);
 	border-radius: 50%;
@@ -817,7 +817,7 @@
 	font-size: var(--fs-app-sm);
 	color: var(--fg);
 	letter-spacing: 0.02em;
-	min-width: 96px;
+	min-width: 90px;
 	text-align: center;
 	flex-shrink: 0;
 }
@@ -1944,7 +1944,7 @@
 	flex: 1;
 	min-width: 0;
 	position: relative;
-	height: 24px;
+	height: 20px;
 	display: flex;
 	align-items: center;
 	cursor: pointer;
@@ -1953,7 +1953,7 @@
 	position: absolute;
 	left: 0;
 	right: 0;
-	height: 4px;
+	height: 3px;
 	background: var(--border-hi);
 	border-radius: 9999px;
 	overflow: hidden;
@@ -1975,8 +1975,8 @@
 }
 .scrubThumb {
 	position: absolute;
-	width: 10px;
-	height: 10px;
+	width: 9px;
+	height: 9px;
 	background: #ffffff;
 	border-radius: 50%;
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);

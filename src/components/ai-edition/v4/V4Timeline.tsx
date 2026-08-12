@@ -35,10 +35,6 @@ import { useTimelineTranscriptGate } from "@/lib/ai-edition/store/transcriptionS
 import { useChatPromptBus } from "@/lib/ai-edition/store/useChatPromptBus";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
-import {
-	newRegionDurationSec,
-	setTimelineScale,
-} from "@/lib/ai-edition/timeline/newRegionDuration";
 import { ventilateSpanAcrossClips } from "@/lib/ai-edition/timeline/region-ventilation";
 import { coalesceRegionsForRuler } from "@/lib/ai-edition/timeline/timelineMap";
 import {
@@ -123,9 +119,8 @@ const PILL_HANDLE_OUT_PX = PILL_HANDLE_PX + PILL_MOVE_GAP_PX;
 const PILL_CONTENT_MIN_PX = 34;
 /** Edge-snap radius while dragging a pill, in screen px. */
 const PILL_SNAP_PX = 8;
-// The size a newly created pill aims for (PILL_CREATE_PX) lives in
-// timeline/newRegionDuration, because the keyboard shortcuts create regions too
-// and they are handled in NewEditorShell, outside this component.
+/** A click on the zoom lane always creates one second of zoom. */
+const CLICK_ZOOM_DURATION_SEC = 1;
 /** Visual separation between two clip cards. Taken off each clip's own width
  *  (see .tlClip) rather than inserted between them, so it cannot displace the
  *  clips that follow — which is what a flex `gap` did, once per junction. */
@@ -628,9 +623,9 @@ export function V4Timeline({
 		shiftPx: number;
 	} | null>(null);
 	const [splitMode, setSplitMode] = useState(false);
-	const [splitGuideTimeSec, setSplitGuideTimeSec] = useState<number | null>(null);
-	const splitGuideRafRef = useRef(0);
-	const pendingSplitGuideXRef = useRef<number | null>(null);
+	const [pointerGuideTimeSec, setPointerGuideTimeSec] = useState<number | null>(null);
+	const pointerGuideRafRef = useRef(0);
+	const pendingPointerGuideXRef = useRef<number | null>(null);
 	const { settings, set: setSettings } = useEditorSettings();
 	const [autoEnhanceOpen, setAutoEnhanceOpen] = useState(false);
 	const [autoBusy, setAutoBusy] = useState(false);
@@ -678,30 +673,21 @@ export function V4Timeline({
 	const showLanes = variant === "edit";
 
 	useEffect(() => {
-		if (!splitMode) {
-			if (splitGuideRafRef.current !== 0) {
-				cancelAnimationFrame(splitGuideRafRef.current);
-				splitGuideRafRef.current = 0;
-			}
-			pendingSplitGuideXRef.current = null;
-			setSplitGuideTimeSec(null);
-			return;
-		}
+		if (!splitMode) return;
 		const exitSplitMode = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
 			setSplitMode(false);
-			setSplitGuideTimeSec(null);
 		};
 		window.addEventListener("keydown", exitSplitMode);
-		return () => {
-			window.removeEventListener("keydown", exitSplitMode);
-			if (splitGuideRafRef.current !== 0) {
-				cancelAnimationFrame(splitGuideRafRef.current);
-				splitGuideRafRef.current = 0;
-			}
-			pendingSplitGuideXRef.current = null;
-		};
+		return () => window.removeEventListener("keydown", exitSplitMode);
 	}, [splitMode]);
+
+	useEffect(
+		() => () => {
+			if (pointerGuideRafRef.current !== 0) cancelAnimationFrame(pointerGuideRafRef.current);
+		},
+		[],
+	);
 
 	const timelineTimeAtClientX = useCallback(
 		(clientX: number): number | null => {
@@ -714,29 +700,28 @@ export function V4Timeline({
 		[total],
 	);
 
-	const updateSplitGuide = useCallback(
+	const updatePointerGuide = useCallback(
 		(clientX: number) => {
-			if (!splitMode) return;
-			pendingSplitGuideXRef.current = clientX;
-			if (splitGuideRafRef.current !== 0) return;
-			splitGuideRafRef.current = requestAnimationFrame(() => {
-				splitGuideRafRef.current = 0;
-				const pendingX = pendingSplitGuideXRef.current;
-				pendingSplitGuideXRef.current = null;
+			pendingPointerGuideXRef.current = clientX;
+			if (pointerGuideRafRef.current !== 0) return;
+			pointerGuideRafRef.current = requestAnimationFrame(() => {
+				pointerGuideRafRef.current = 0;
+				const pendingX = pendingPointerGuideXRef.current;
+				pendingPointerGuideXRef.current = null;
 				if (pendingX === null) return;
 				const timeSec = timelineTimeAtClientX(pendingX);
-				if (timeSec !== null) setSplitGuideTimeSec(timeSec);
+				if (timeSec !== null) setPointerGuideTimeSec(timeSec);
 			});
 		},
-		[splitMode, timelineTimeAtClientX],
+		[timelineTimeAtClientX],
 	);
-	const clearSplitGuide = useCallback(() => {
-		if (splitGuideRafRef.current !== 0) {
-			cancelAnimationFrame(splitGuideRafRef.current);
-			splitGuideRafRef.current = 0;
+	const clearPointerGuide = useCallback(() => {
+		if (pointerGuideRafRef.current !== 0) {
+			cancelAnimationFrame(pointerGuideRafRef.current);
+			pointerGuideRafRef.current = 0;
 		}
-		pendingSplitGuideXRef.current = null;
-		setSplitGuideTimeSec(null);
+		pendingPointerGuideXRef.current = null;
+		setPointerGuideTimeSec(null);
 	}, []);
 
 	// The visible fraction of the timeline, and what one second is worth on screen
@@ -752,14 +737,6 @@ export function V4Timeline({
 			endSec: Math.min(total, (nav.end + overscan) * total),
 		};
 	}, [nav.start, nav.end, navSpan, total]);
-	// Publish the scale so the keyboard shortcuts (NewEditorShell) size a new
-	// region exactly like the buttons below do — `nav` never leaves this
-	// component, so without this they fall back to a flat default and a pill
-	// created with `Z` comes out invisible on a long recording.
-	useEffect(() => {
-		setTimelineScale(pxPerSec);
-	}, [pxPerSec]);
-
 	// ── region lanes ────────────────────────────────────────────────
 	// Zoom regions carry distinct per-instance content (depth/focus) that two
 	// touching-but-different regions must not silently merge into one.
@@ -1623,7 +1600,6 @@ export function V4Timeline({
 							aria-label={t("toolbar.splitClip")}
 							onClick={() => {
 								setSplitMode((active) => !active);
-								setSplitGuideTimeSec(null);
 							}}
 						>
 							<Scissors size={15} />
@@ -1682,7 +1658,12 @@ export function V4Timeline({
 			    (below) can span both — one continuous line whose head aligns with the
 			    clips regardless of the tracks' scrollbar (scrollbar-gutter keeps all
 			    three canvases the same width). */}
-			<div className={styles.tlBody}>
+			<div
+				className={styles.tlBody}
+				onPointerEnter={(event) => updatePointerGuide(event.clientX)}
+				onPointerMove={(event) => updatePointerGuide(event.clientX)}
+				onPointerLeave={clearPointerGuide}
+			>
 				{/* Fixed ruler header: the ruler ticks stay pinned right below the toolbar
 			    so they don't scroll off when the panel is short — only the lanes/clips
 			    below scroll. Shares the tracks' zoom/pan transform so ticks line up. */}
@@ -1704,14 +1685,7 @@ export function V4Timeline({
 					</div>
 				</div>
 
-				<div
-					ref={tracksRef}
-					className={styles.tlTracks}
-					onPointerDown={startScrub}
-					onPointerEnter={(event) => updateSplitGuide(event.clientX)}
-					onPointerMove={(event) => updateSplitGuide(event.clientX)}
-					onPointerLeave={clearSplitGuide}
-				>
+				<div ref={tracksRef} className={styles.tlTracks} onPointerDown={startScrub}>
 					<div ref={canvasRef} className={styles.tlCanvas} style={canvasStyle}>
 						{snapPct !== null ? (
 							<div aria-hidden className={styles.tlSnapGuide} style={{ left: `${snapPct}%` }} />
@@ -1798,9 +1772,14 @@ export function V4Timeline({
 								onPointerDown={(event) => event.stopPropagation()}
 								onClick={(event) => {
 									if ((event.target as HTMLElement).closest(`.${styles.lanePill}`)) return;
-									const startSec = timelineTimeAtClientX(event.clientX);
-									if (startSec === null) return;
-									void tl.addZoom(newRegionDurationSec(), startSec);
+									const clickedSec = timelineTimeAtClientX(event.clientX);
+									if (clickedSec === null) return;
+									// Keep the full second inside the timeline when clicking near its end.
+									const startSec = Math.min(
+										clickedSec,
+										Math.max(0, total - CLICK_ZOOM_DURATION_SEC),
+									);
+									void tl.addZoom(CLICK_ZOOM_DURATION_SEC, startSec);
 								}}
 							>
 								{renderPills(zoomPills, t("hints.clickZoom"))}
@@ -1823,14 +1802,25 @@ export function V4Timeline({
 						playheadRef={playheadElRef}
 					/>
 				) : null}
-				{showLanes && splitMode && splitGuideTimeSec !== null ? (
-					<div className={`${styles.tlPlayheadLayer} ${styles.tlSplitGuideLayer}`} aria-hidden>
+				{showLanes && pointerGuideTimeSec !== null ? (
+					<div
+						className={`${styles.tlPlayheadLayer} ${
+							splitMode ? styles.tlSplitGuideLayer : styles.tlHoverGuideLayer
+						}`}
+						aria-hidden
+					>
 						<div className={styles.tlCanvas} style={canvasStyle}>
 							<div
-								className={`${styles.tlPlayhead} ${styles.tlSplitGuide}`}
-								style={{ left: `${pctOf(splitGuideTimeSec)}%` }}
+								className={`${styles.tlPlayhead} ${
+									splitMode ? styles.tlSplitGuide : styles.tlHoverGuide
+								}`}
+								style={{ left: `${pctOf(pointerGuideTimeSec)}%` }}
 							>
-								<span className={`${styles.tlPlayheadHead} ${styles.tlSplitGuideHead}`} />
+								<span
+									className={`${styles.tlPlayheadHead} ${
+										splitMode ? styles.tlSplitGuideHead : styles.tlHoverGuideHead
+									}`}
+								/>
 							</div>
 						</div>
 					</div>

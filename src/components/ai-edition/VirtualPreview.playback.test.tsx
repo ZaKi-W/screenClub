@@ -119,6 +119,12 @@ const reportedTimes = (onTimeChange: ReturnType<typeof vi.fn>) =>
 	onTimeChange.mock.calls.map((call) => call[0] as number);
 
 describe("VirtualPreview playback across a clip boundary", () => {
+	it("keeps the editor pointer visible over the video preview", () => {
+		const { element } = mount([clip("clip_1", "a1", 0, 10, 0)]);
+
+		expect(element.style.cursor).not.toBe("none");
+	});
+
 	// The reported bug: with two clips over ONE recording, playback stopped on reaching
 	// the second clip and the playhead landed at the end of the timeline.
 	it("crosses into the second clip of the same recording instead of stopping", () => {
