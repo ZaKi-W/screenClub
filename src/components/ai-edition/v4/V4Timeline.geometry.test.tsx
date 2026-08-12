@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 // The regression under test is geometric, so the environment has to have a size:
@@ -159,7 +159,18 @@ describe("V4Timeline lane pills", () => {
 		fireEvent.click(zoomLane as HTMLElement, { clientX: VIEWPORT_PX / 2 });
 
 		expect(tl.addZoom).toHaveBeenCalledOnce();
+		expect(tl.addZoom.mock.calls[0]?.[0]).toBe(1);
 		expect(tl.addZoom.mock.calls[0]?.[1]).toBeCloseTo(TOTAL_SEC / 2, 6);
+	});
+
+	it("keeps the full one-second zoom inside the timeline near its end", () => {
+		const { pill, tl } = renderTimeline();
+		const zoomLane = pill.parentElement;
+		expect(zoomLane).not.toBeNull();
+
+		fireEvent.click(zoomLane as HTMLElement, { clientX: VIEWPORT_PX });
+
+		expect(tl.addZoom).toHaveBeenCalledWith(1, TOTAL_SEC - 1);
 	});
 
 	it("does not add another zoom when an existing zoom pill is clicked", () => {
@@ -226,6 +237,33 @@ describe("V4Timeline lane pills", () => {
 		// was nowhere near, the more so the longer the recording.
 		dragHandle(right, 885.5);
 		expect(tl.updateZoomSpan).toHaveBeenLastCalledWith("zoom1", 10_000, 1_782_000);
+	});
+});
+
+describe("V4Timeline pointer guide", () => {
+	it.each([
+		["ruler", "[class*=tlRulerRow]"],
+		["tracks", "[class*=tlTracks]"],
+	])("shows a neutral guide while the pointer is over the %s", async (_area, selector) => {
+		renderTimeline();
+		const area = document.querySelector<HTMLElement>(selector);
+		expect(area).not.toBeNull();
+
+		fireEvent.pointerMove(area as HTMLElement, { clientX: VIEWPORT_PX / 2 });
+
+		await waitFor(() => expect(document.querySelector("[class*=tlHoverGuide]")).not.toBeNull());
+		expect(document.querySelector("[class*=tlHoverGuideHead]")).not.toBeNull();
+	});
+
+	it("clears the neutral guide when the pointer leaves the timeline tracks", async () => {
+		renderTimeline();
+		const { tracks } = timelineNavigationElements();
+		fireEvent.pointerMove(tracks, { clientX: VIEWPORT_PX / 2 });
+		await waitFor(() => expect(document.querySelector("[class*=tlHoverGuide]")).not.toBeNull());
+
+		fireEvent.pointerLeave(tracks);
+
+		expect(document.querySelector("[class*=tlHoverGuide]")).toBeNull();
 	});
 });
 

@@ -4,6 +4,10 @@
  * look, light is a full token swap handled by the token layer. */
 
 .app {
+	/* The studio uses a true-black workspace. Elevated panels keep their surface
+	   tokens so controls remain legible against the page rather than flattening
+	   into one indistinguishable plane. */
+	--bg: #000;
 	display: grid;
 	/* Single column pinned to the window width. Without an explicit column the
 	   implicit `auto` track is sized to its widest row's content, so any wide
@@ -299,7 +303,7 @@
 	min-height: 0;
 	min-width: 0;
 }
-/* ─── RESIZE HANDLES (chat panel width, timeline height) ───────────── */
+/* ─── RESIZE HANDLE (chat panel width) ────────────────────────────── */
 .chatResizeHandle {
 	position: absolute;
 	top: 0;
@@ -314,27 +318,12 @@
 .chatResizeHandle:hover {
 	background: var(--accent-soft);
 }
-.timelineResizeHandle {
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	height: 8px;
-	margin-top: -4px;
-	cursor: row-resize;
-	z-index: 30;
-	background: transparent;
-	touch-action: none;
-}
-.timelineResizeHandle:hover {
-	background: var(--accent-soft);
-}
 .agent {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	min-width: 0;
-	background: var(--surface);
+	background: var(--bg);
 	border-right: 1px solid var(--border);
 	overflow: hidden;
 }
@@ -343,7 +332,7 @@
 	min-width: 0;
 	min-height: 0;
 	overflow: hidden;
-	background: radial-gradient(ellipse 68% 54% at 52% 32%, var(--surface-1) 0%, var(--bg) 66%);
+	background: var(--bg);
 }
 
 /* Fixed canvas toolbar, matching the reference editor: one horizontal strip
@@ -1183,6 +1172,11 @@
 	min-height: 0;
 	height: 100%;
 	overflow: hidden;
+	/* Track colors are local to the editor timeline: warm amber identifies source
+	   video, while cool indigo identifies a zoom/effect span. Keeping them off the
+	   app-wide accent prevents every editable object from reading as the same type. */
+	--timeline-video: #f59e0b;
+	--timeline-zoom: #818cf8;
 	/* The playhead's head sits ENTIRELY above the ruler, its tip landing on the
 	   line's top edge — that's what keeps it clear of the tick labels below. It
 	   deliberately overshoots the timeline body by --playhead-head-overshoot, so
@@ -1193,23 +1187,23 @@
 	   pulled up by the overshoot, so both content boxes still start on the same
 	   line. Derive, don't hand-tune: only -w/-h/-overshoot should ever change. */
 	--playhead-head-w: 16px;
-	--playhead-head-h: 18px;
+	--playhead-head-h: 15px;
 	--playhead-head-overshoot: 4px;
 	--playhead-head-clear: calc(var(--playhead-head-h) - var(--playhead-head-overshoot));
 	/* The pan/zoom bar's band, kept here (not just on .tlNav) because the playhead
 	   layer stretches by exactly this much to run behind it, down to the panel's
 	   bottom edge. */
-	--tl-nav-h: 20px;
-	--tl-nav-gap-top: 8px;
-	--tl-nav-gap-bottom: 12px;
+	--tl-nav-h: 16px;
+	--tl-nav-gap-top: 5px;
+	--tl-nav-gap-bottom: 7px;
 	--tl-nav-band: calc(var(--tl-nav-h) + var(--tl-nav-gap-top) + var(--tl-nav-gap-bottom));
 }
 .tlToolbar {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 0 16px;
-	height: 40px;
+	gap: 6px;
+	padding: 0 14px;
+	height: 34px;
 	flex-shrink: 0;
 	border-bottom: 1px solid var(--border-soft);
 }
@@ -1219,8 +1213,8 @@
 	gap: 1px;
 }
 .tlToolBtn {
-	width: 28px;
-	height: 28px;
+	width: 24px;
+	height: 24px;
 	display: grid;
 	place-items: center;
 	border: 0;
@@ -1261,35 +1255,32 @@
 .tlRulerRow {
 	position: relative;
 	flex-shrink: 0;
-	padding: var(--playhead-head-clear) 20px 0;
+	padding: var(--playhead-head-clear) 16px 0;
 	overflow: hidden;
-	cursor: text;
+	cursor: default;
 }
 .tlTracks {
 	position: relative;
 	flex: 1;
-	min-height: 0;
+	/* Two compact 48px tracks plus their 4px gap. This floor keeps the video and
+	   zoom tracks completely visible without reintroducing vertical scrolling. */
+	min-height: 100px;
 	/* Top padding lives on .tlRulerRow now; keep the sides + bottom gap here. */
-	padding: 0 20px 8px;
-	/* Horizontal zoom/pan is done by transforming .tlCanvas, so x stays clipped;
-	   y scrolls when the panel is too short to show every lane + the main track. */
+	padding: 0 16px 6px;
+	/* Horizontal zoom/pan is done by transforming .tlCanvas, so x stays clipped. */
 	overflow-x: hidden;
-	overflow-y: auto;
+	overflow-y: hidden;
 	/* Hide the scrollbar so it NEVER consumes layout width. A space-taking
 	   scrollbar narrowed the content box only while visible, shifting the clips
 	   (and ruler/playhead) horizontally when it appeared and desyncing clicks from
-	   times. With it hidden, all three canvases stay full width and identical;
-	   scrolling still works via the wheel (see the wheel handler). */
+	   times. With it hidden, all three canvases stay full width and identical. */
 	scrollbar-width: none;
 	/* Bottom-anchor via column-reverse (the single child is .tlCanvas, so its
-	   internal clip→zoom-lane order is untouched): the zoom lane sits beneath
-	   the main clip track and both stay grouped at the panel's bottom edge.
-	   Overflow remains reachable by scrolling up. `flex-end`
-	   would bottom-anchor too, but content it pushes past the top edge isn't
-	   scrollable — which is why the lanes couldn't be reached before. */
+	   internal video→zoom order is untouched): both fixed tracks stay grouped
+	   at the panel's bottom edge. */
 	display: flex;
 	flex-direction: column-reverse;
-	cursor: text;
+	cursor: default;
 }
 .tlTracks::-webkit-scrollbar {
 	display: none;
@@ -1297,8 +1288,7 @@
 .tlCanvas {
 	position: relative;
 	min-width: 100%;
-	/* Keep natural height so .tlTracks (not the canvas) is what scrolls; without
-	   this the flex column would shrink the canvas and clip its own content. */
+	/* Keep natural height so the flex column cannot shrink the two tracks. */
 	flex-shrink: 0;
 	will-change: transform, width;
 }
@@ -1320,7 +1310,7 @@
 	right: 0;
 	bottom: calc(-1 * var(--tl-nav-band));
 	left: 0;
-	padding: var(--playhead-head-h) 20px 0;
+	padding: var(--playhead-head-h) 16px 0;
 	overflow: hidden;
 	pointer-events: none;
 	z-index: 6;
@@ -1367,6 +1357,17 @@
 .tlSplitGuideLayer {
 	z-index: 7;
 }
+.tlHoverGuideLayer {
+	z-index: 5;
+}
+.tlHoverGuide {
+	background: color-mix(in srgb, var(--fg-2) 60%, transparent);
+	box-shadow: 0 0 18px color-mix(in srgb, var(--fg-2) 35%, transparent);
+}
+.tlHoverGuideHead {
+	background: color-mix(in srgb, var(--fg-2) 75%, transparent);
+	filter: drop-shadow(0 1px 3px color-mix(in srgb, var(--fg-2) 35%, transparent));
+}
 .tlSplitGuide {
 	background: #ff4d4f;
 	box-shadow: 0 0 12px color-mix(in srgb, #ff4d4f 58%, transparent);
@@ -1381,8 +1382,8 @@
    V4Timeline#rulerTicks. */
 .tlRuler {
 	position: relative;
-	height: 28px;
-	margin-bottom: 6px;
+	height: 24px;
+	margin-bottom: 4px;
 	border-bottom: 1px solid var(--border-soft);
 }
 /* Ticks hang from the TOP of the band and the label sits under them, so the
@@ -1400,7 +1401,7 @@
 }
 .tlTickLabel {
 	position: absolute;
-	top: 12px;
+	top: 10px;
 	left: 50%;
 	transform: translateX(-50%);
 	font-family: var(--font-mono);
@@ -1411,9 +1412,9 @@
 }
 .tlLane {
 	position: relative;
-	height: 66px;
-	margin-top: 6px;
-	border-radius: 11px;
+	height: 48px;
+	margin-top: 4px;
+	border-radius: 8px;
 	background: transparent;
 	cursor: pointer;
 }
@@ -1437,14 +1438,14 @@
 .lanePill {
 	position: absolute;
 	top: 0;
-	height: 66px;
+	height: 48px;
 	/* The ONLY floor on a pill's width, and it is in px so it is the same hairline
 	   at every zoom: the box's width is the effect's duration, full stop. A `%`
 	   minimum is a duration in disguise (the old 1.5% drew everything shorter than
 	   27 s as 27 s on a 30-minute timeline). */
 	min-width: 1px;
 	padding: 0;
-	border-radius: 11px;
+	border-radius: 8px;
 	border: 1.5px solid var(--accent);
 	background: var(--accent-soft);
 	color: var(--fg);
@@ -1490,15 +1491,15 @@
 }
 .lanePillContent {
 	position: absolute;
-	left: 10px;
-	top: 8px;
+	left: 7px;
+	top: 6px;
 	z-index: 2;
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	max-width: calc(100% - 20px);
-	padding: 3px 9px 3px 6px;
-	border-radius: 8px;
+	gap: 6px;
+	max-width: calc(100% - 14px);
+	padding: 2px 7px 2px 5px;
+	border-radius: 6px;
 	background: color-mix(in srgb, #080a0d 55%, transparent);
 	border: 1px solid rgba(255, 255, 255, 0.08);
 	backdrop-filter: blur(8px);
@@ -1506,11 +1507,11 @@
 	pointer-events: none;
 }
 .lanePillContent > svg {
-	width: 16px;
-	height: 16px;
+	width: 14px;
+	height: 14px;
 	padding: 2px;
 	box-sizing: border-box;
-	border-radius: 5px;
+	border-radius: 4px;
 	background: color-mix(in srgb, var(--accent) 16%, var(--surface));
 	color: var(--accent);
 	flex-shrink: 0;
@@ -1535,8 +1536,16 @@
 	background: var(--danger-soft);
 }
 .laneZoom {
-	border-color: var(--accent);
-	background: color-mix(in srgb, var(--accent) 14%, var(--surface-1));
+	border-color: color-mix(in srgb, var(--timeline-zoom) 82%, var(--border));
+	background: color-mix(in srgb, var(--timeline-zoom) 20%, var(--surface-1));
+	box-shadow: inset 0 1px 8px color-mix(in srgb, var(--timeline-zoom) 12%, transparent);
+}
+.laneZoom .lanePillContent > svg {
+	background: color-mix(in srgb, var(--timeline-zoom) 18%, var(--surface));
+	color: var(--timeline-zoom);
+}
+.laneZoom.lanePillSel {
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--timeline-zoom) 30%, transparent);
 }
 .laneCameraFullscreen {
 	border-color: #a855f7;
@@ -1552,7 +1561,7 @@
 	   its true start time — measured at +2px and +6px for clips 2 and 3 of a
 	   three-clip timeline, which is 5 s and 15 s of a 30-minute recording when
 	   zoomed out, and a fraction of a second when zoomed in. See .tlClip. */
-	height: 66px;
+	height: 48px;
 	width: 100%;
 	padding: 0;
 	border: 0;
@@ -1571,7 +1580,7 @@
 	position: absolute;
 	inset: 0;
 	border: 2px dashed var(--accent);
-	border-radius: 11px;
+	border-radius: 8px;
 	background: var(--accent-wash);
 	pointer-events: none;
 }
@@ -1589,13 +1598,13 @@
 	/* px, like .lanePill's: the gutter is subtracted from the clip's width, so a
 	   clip narrower than 6px would otherwise compute to nothing. */
 	min-width: 1px;
-	border-radius: 11px;
-	border: 1.5px solid var(--border);
-	background: var(--surface-1);
+	border-radius: 8px;
+	border: 1.5px solid color-mix(in srgb, var(--timeline-video) 72%, var(--border));
+	background: color-mix(in srgb, var(--timeline-video) 22%, var(--surface-1));
 	overflow: hidden;
 	cursor: grab;
 	box-sizing: border-box;
-	box-shadow: inset 0 1px 8px rgba(255, 255, 255, 0.06);
+	box-shadow: inset 0 1px 8px color-mix(in srgb, var(--timeline-video) 12%, transparent);
 	/* pointer-driven reorder: suppress native touch scroll + text selection */
 	touch-action: none;
 	user-select: none;
@@ -1603,7 +1612,8 @@
 		transform 150ms var(--ease);
 }
 .tlClipSel {
-	border-color: var(--accent);
+	border-color: var(--timeline-video);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--timeline-video) 28%, transparent);
 }
 /* The clip being carried during a reorder drag — follows the pointer 1:1
    (no transition lag) while its siblings slide out of the way with the
@@ -1612,7 +1622,7 @@
 	cursor: grabbing;
 	opacity: 0.9;
 	z-index: 5;
-	border-color: var(--accent);
+	border-color: var(--timeline-video);
 	box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), inset 0 1px 8px rgba(255, 255, 255, 0.06);
 	transition: box-shadow var(--motion-fast) var(--ease), opacity var(--motion-fast) var(--ease);
 }
@@ -1632,32 +1642,32 @@
 	min-height: 2px;
 	max-width: 2px;
 	border-radius: 2px;
-	background: var(--accent);
+	background: color-mix(in srgb, var(--timeline-video) 86%, #fff);
 }
 .tlClipLabel {
 	position: absolute;
-	left: 10px;
-	top: 8px;
+	left: 7px;
+	top: 6px;
 	z-index: 2;
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	max-width: calc(100% - 50px);
-	padding: 3px 9px 3px 6px;
-	border-radius: 8px;
+	gap: 6px;
+	max-width: calc(100% - 42px);
+	padding: 2px 7px 2px 5px;
+	border-radius: 6px;
 	background: color-mix(in srgb, #080a0d 55%, transparent);
 	border: 1px solid rgba(255, 255, 255, 0.08);
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
 }
 .tlClipIcon {
-	width: 16px;
-	height: 16px;
+	width: 14px;
+	height: 14px;
 	display: grid;
 	place-items: center;
-	border-radius: 5px;
-	background: var(--surface);
-	color: var(--fg);
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--timeline-video) 20%, var(--surface));
+	color: color-mix(in srgb, var(--timeline-video) 86%, #fff);
 	flex-shrink: 0;
 }
 .tlClipName {
@@ -1670,14 +1680,14 @@
 }
 .tlClipDelete {
 	position: absolute;
-	right: 8px;
-	top: 8px;
+	right: 6px;
+	top: 6px;
 	z-index: 2;
-	width: 26px;
-	height: 26px;
+	width: 24px;
+	height: 24px;
 	display: grid;
 	place-items: center;
-	border-radius: 7px;
+	border-radius: 6px;
 	color: var(--muted);
 	background: color-mix(in srgb, #080a0d 55%, transparent);
 	border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1698,7 +1708,7 @@
 	justify-content: center;
 	gap: 8px;
 	border: 2px dashed var(--accent);
-	border-radius: 11px;
+	border-radius: 8px;
 	background: var(--accent-wash);
 	color: var(--accent);
 	font-size: 12.5px;
@@ -1708,7 +1718,7 @@
 .tlNav {
 	position: relative;
 	height: var(--tl-nav-h);
-	margin: var(--tl-nav-gap-top) 20px var(--tl-nav-gap-bottom);
+	margin: var(--tl-nav-gap-top) 16px var(--tl-nav-gap-bottom);
 	flex-shrink: 0;
 	/* Above .tlPlayheadLayer's z-index: the playhead line now runs the full height
 	   of the panel, and this bar is meant to sit ON TOP of it, not be crossed. */
@@ -1716,17 +1726,17 @@
 }
 .tlNavTrack {
 	position: absolute;
-	top: 7px;
+	top: 6px;
 	left: 0;
 	right: 0;
-	height: 6px;
+	height: 4px;
 	border-radius: 3px;
 	background: var(--surface-3);
 }
 .tlNavWindow {
 	position: absolute;
-	top: 5px;
-	height: 10px;
+	top: 4px;
+	height: 8px;
 	border-radius: 5px;
 	background: var(--surface-hi);
 	border: 1px solid var(--border-hi);
@@ -1749,7 +1759,7 @@
 }
 .tlNavHandle span {
 	width: 4px;
-	height: 14px;
+	height: 12px;
 	border-radius: 2px;
 	background: var(--fg-2);
 	box-shadow: 0 0 0 2px var(--surface);
@@ -1773,7 +1783,7 @@
 /* V4Timeline — snap guide during region drag/resize */
 .tlSnapGuide {
 	position: absolute;
-	top: 71px;
+	top: 52px;
 	bottom: 0;
 	width: 2px;
 	background: var(--danger);

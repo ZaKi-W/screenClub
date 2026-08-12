@@ -32,11 +32,9 @@ import { dropTrimPillsByIds, resolveTimelineSpanToTrim } from "../timeline/trim-
 import type { AutoZoomSuggestion } from "../timeline/zoom-suggestions";
 import { useProjectStore } from "./projectStore";
 
-// How long a region lasts when the caller doesn't say. The timeline's toolbar
-// passes its own duration instead, derived from the current zoom so the new pill
-// always comes out the same WIDTH on screen (see PILL_CREATE_PX in V4Timeline).
-// Every other entry point — keyboard shortcuts, the agent, auto-zooms — gets
-// these 2 s, which is what all five add* used to hardcode.
+// How long a region lasts when the caller doesn't say. Direct timeline gestures
+// pass their intended duration explicitly; keyboard shortcuts and other entry
+// points retain this established two-second default.
 const DEFAULT_NEW_REGION_SEC = 2;
 
 // NaN-guarded floors. Timeline inputs arrive from drag deltas and persisted

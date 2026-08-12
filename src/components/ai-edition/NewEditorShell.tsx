@@ -129,9 +129,6 @@ export function NewEditorShell() {
 	const [chatWidthPx, setChatWidthPx] = useState(
 		() => Number(localStorage.getItem("os-editor-chat-width")) || 392,
 	);
-	const [timelineHeightPx, setTimelineHeightPx] = useState(
-		() => Number(localStorage.getItem("os-editor-timeline-height")) || 308,
-	);
 	const [inspectorOpen, setInspectorOpen] = useState(true);
 	const [facet, setFacet] = useState<Facet>("effects");
 	const [openProjectOpen, setOpenProjectOpen] = useState(false);
@@ -1016,15 +1013,11 @@ export function NewEditorShell() {
 	]);
 
 	const showTimeline = mode !== "rec";
-	const timelineRow = mode === "media" ? "188px" : `${timelineHeightPx}px`;
+	const timelineRow = mode === "media" ? "188px" : "216px";
 	const bodyColumns = mode === "edit" && chatOpen ? `${chatWidthPx}px 1fr` : "1fr";
 
-	// Drag the chat/stage divider (col-resize) or the timeline's top edge
-	// (row-resize) to resize. Pointer-driven like V4Timeline's pill/nav/clip
-	// drags — pointerdown arms a window-level pointermove/pointerup pair, no
-	// drag library. Persisted to localStorage (a UI layout preference, not
-	// project content, so it doesn't belong in the document/useEditorSettings
-	// round-trip).
+	// Drag the chat/stage divider to resize the agent column. Pointer-driven
+	// like V4Timeline's pill/nav/clip drags, and persisted as a UI preference.
 	const startChatResize = useCallback(
 		(e: React.PointerEvent) => {
 			e.preventDefault();
@@ -1044,29 +1037,6 @@ export function NewEditorShell() {
 			window.addEventListener("pointerup", up);
 		},
 		[chatWidthPx],
-	);
-
-	const startTimelineResize = useCallback(
-		(e: React.PointerEvent) => {
-			e.preventDefault();
-			const startY = e.clientY;
-			const startHeight = timelineHeightPx;
-			let latest = startHeight;
-			const move = (ev: PointerEvent) => {
-				// Dragging the handle up (negative clientY delta) enlarges the
-				// timeline, since it sits below the handle.
-				latest = Math.min(480, Math.max(160, startHeight - (ev.clientY - startY)));
-				setTimelineHeightPx(latest);
-			};
-			const up = () => {
-				window.removeEventListener("pointermove", move);
-				window.removeEventListener("pointerup", up);
-				localStorage.setItem("os-editor-timeline-height", String(latest));
-			};
-			window.addEventListener("pointermove", move);
-			window.addEventListener("pointerup", up);
-		},
-		[timelineHeightPx],
 	);
 
 	const transcriptProps = {
@@ -1237,19 +1207,10 @@ export function NewEditorShell() {
 						position: "relative",
 						gridRow: 3,
 						minHeight: 0,
-						background: "var(--surface)",
+						background: "var(--bg)",
 						borderTop: "1px solid var(--border)",
 					}}
 				>
-					{mode !== "media" ? (
-						<div
-							className={v4.timelineResizeHandle}
-							role="separator"
-							aria-orientation="horizontal"
-							aria-label={te("shell.resizeTimeline")}
-							onPointerDown={startTimelineResize}
-						/>
-					) : null}
 					<V4Timeline
 						tl={tl}
 						setCurrentTime={handleSeek}
