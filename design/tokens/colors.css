@@ -1,8 +1,8 @@
 /* ============================================================
-   OpenScreen — Color tokens
+   ScreenClub — Color tokens
    Base palette (shadcn "new-york", stone base) + signature
-   OpenScreen green. Values lifted verbatim from src/index.css.
-   OpenScreen is DARK-FIRST: the recorder HUD, source selector,
+   ScreenClub green. Values lifted verbatim from src/index.css.
+   ScreenClub is DARK-FIRST: the recorder HUD, source selector,
    and video-editor studio all run on near-black surfaces. The
    light theme exists (shadcn :root) but is rarely the product.
    ============================================================ */
@@ -11,12 +11,12 @@
 	/* ---- Signature brand green -------------------------------- */
 	/* The one saturated accent in the whole product: record CTAs,
 	   active toggles, slider fills, selection rings, progress. */
-	--brand-green: #34b27b;          /* primary accent            */
-	--brand-green-hover: #2d9e6c;    /* button hover              */
-	--brand-green-active: #27885c;   /* button press              */
-	--brand-green-ring: rgba(52, 178, 123, 0.5);  /* focus ring   */
-	--brand-green-glow: rgba(74, 222, 128, 0.4);  /* active drop-shadow (green-400) */
-	--brand-green-tint: rgba(52, 178, 123, 0.13); /* selected surface wash */
+	--brand-green: #27e0c1;          /* primary accent            */
+	--brand-green-hover: #17bfa5;    /* button hover              */
+	--brand-green-active: #079b85;   /* button press              */
+	--brand-green-ring: rgba(39, 224, 193, 0.5);  /* focus ring   */
+	--brand-green-glow: rgba(138, 247, 227, 0.4);  /* active drop-shadow (green-400) */
+	--brand-green-tint: rgba(39, 224, 193, 0.13); /* selected surface wash */
 
 	/* ---- Recording state colors ------------------------------ */
 	--rec-red: #ef4444;       /* recording (red-500)              */

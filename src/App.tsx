@@ -147,9 +147,9 @@ export default function App() {
 					<ShortcutsProvider>
 						<Suspense
 							fallback={
-								<div className="flex flex-col items-center justify-center gap-3 h-screen bg-[#09090b]">
+								<div className="flex flex-col items-center justify-center gap-3 h-screen bg-black">
 									<svg
-										className="animate-spin text-[#34B27B]"
+										className="animate-spin text-[#27E0C1]"
 										xmlns="http://www.w3.org/2000/svg"
 										fill="none"
 										viewBox="0 0 24 24"
@@ -183,7 +183,7 @@ export default function App() {
 				return (
 					<div>
 						<div className="w-full h-full bg-background text-foreground">
-							<h1>Openscreen</h1>
+							<h1>ScreenClub</h1>
 						</div>
 					</div>
 				);

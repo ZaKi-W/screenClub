@@ -30,7 +30,7 @@ export default function Home() {
 	return (
 		<Layout
 			title="Free open-source screen recorder & video editor"
-			description="OpenScreen is a free, open-source screen recorder and video editor for Windows, macOS, and Linux — native capture, on-device captions, no watermarks."
+			description="ScreenClub is a free, open-source screen recorder and video editor for Windows, macOS, and Linux — native capture, on-device captions, no watermarks."
 		>
 			<Head>
 				{/* The product entity, distinct from the Organization/WebSite pair
@@ -45,7 +45,7 @@ export default function Home() {
 					    subject. Rendered as a block at the old tagline's size, so the
 					    visual hierarchy is unchanged — big wordmark, descriptor under it. */}
 					<Heading as="h1" className={styles.title}>
-						OpenScreen
+						ScreenClub
 						<span className={styles.titleTagline}>
 							A free, open-source screen recorder and video editor
 						</span>
@@ -61,7 +61,7 @@ export default function Home() {
 						</Link>
 					</div>
 					<p className={styles.note}>
-						OpenScreen is <strong>not production-grade</strong>. Expect rough edges while we build
+						ScreenClub is <strong>not production-grade</strong>. Expect rough edges while we build
 						in the open.
 					</p>
 				</div>
@@ -90,14 +90,14 @@ export default function Home() {
 					<div className={styles.visualBody}>
 						<aside className={styles.agentPanel}>
 							<div className={styles.agentHeader}>
-								<span>OpenScreen Agent</span>
+								<span>ScreenClub Agent</span>
 								<span className={styles.contextBadge}>0% context</span>
 							</div>
 							<div className={styles.chatBubbleUser}>
 								Clean up the intro — there&apos;s dead air while I read my notes.
 							</div>
 							<div className={styles.chatBubbleAssistant}>
-								<div className={styles.chatMeta}>OpenScreen · 10:41</div>
+								<div className={styles.chatMeta}>ScreenClub · 10:41</div>
 								On it — scanning track 1 for silences now. I&apos;ll flag anything over 600ms.
 							</div>
 							<div className={styles.chipRow}>
@@ -163,7 +163,7 @@ export default function Home() {
 
 			<section className={styles.features}>
 				<div className={styles.featuresInner}>
-					<div className={styles.sectionKicker}>Why OpenScreen</div>
+					<div className={styles.sectionKicker}>Why ScreenClub</div>
 					<Heading as="h2" className={styles.sectionTitle}>
 						Recorder-first. AI, if you want it.
 					</Heading>
@@ -287,10 +287,10 @@ export default function Home() {
 								<span className={styles.artifactChip}>.dmg</span>
 							</div>
 							<pre className={styles.terminalBody}>
-								<span className={styles.meta}># drag OpenScreen to Applications, then</span>
+								<span className={styles.meta}># drag ScreenClub to Applications, then</span>
 								{"\n"}
 								<span className={styles.accentText}>xattr</span> -rd com.apple.quarantine
-								/Applications/Openscreen.app
+								/Applications/ScreenClub.app
 							</pre>
 							<p className={styles.paneFoot}>
 								ScreenCaptureKit native capture, real cursor + click effects, native webcam.
@@ -322,7 +322,7 @@ export default function Home() {
 							<pre className={styles.terminalBody}>
 								<span className={styles.meta}># download the .deb from Releases, then</span>
 								{"\n"}
-								<span className={styles.accentText}>sudo</span> apt install ./Openscreen-Linux-*.deb
+								<span className={styles.accentText}>sudo</span> apt install ./ScreenClub-Linux-*.deb
 							</pre>
 							<p className={styles.paneFoot}>
 								Browser-pipeline capture; needs PipeWire for system audio.

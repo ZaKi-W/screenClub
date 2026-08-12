@@ -1,4 +1,4 @@
-//! Le compositeur natif multiplateforme d'OpenScreen : décodage, pipeline, effets, scène,
+//! Le compositeur natif multiplateforme d'ScreenClub : décodage, pipeline, effets, scène,
 //! curseur, audio, et la vue live embarquable (`live`).
 //!
 //! C'est du code de PRODUCTION. `compositor-view-napi` s'y lie pour produire

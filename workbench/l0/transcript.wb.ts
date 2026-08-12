@@ -44,7 +44,7 @@ describe("wordsFromWhisper", () => {
 		]);
 	});
 
-	it("reads OpenScreen's own SttResult word segments", () => {
+	it("reads ScreenClub's own SttResult word segments", () => {
 		// `electron/stt/index.ts:104` — the shape the app already produces.
 		const loaded = wordsFromWhisper({
 			wordSegments: [

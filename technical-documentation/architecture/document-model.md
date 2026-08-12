@@ -1,6 +1,6 @@
 # Document model
 
-The single source of truth for an OpenScreen project is `AxcutDocument`, a Zod-typed
+The single source of truth for an ScreenClub project is `AxcutDocument`, a Zod-typed
 JSON object defined in `src/lib/ai-edition/schema/index.ts` and persisted as one file
 per project on disk. The renderer holds one instance in a Zustand store
 (`src/lib/ai-edition/store/projectStore.ts`); the main process owns persistence
@@ -27,7 +27,7 @@ and anything unknown is rejected by the `z.literal(axcutSchemaVersion)` check in
 | `timeline` | `{ clips[], gaps[], trimRanges[], muteRanges[], speedRanges[], captionRanges[] }` | Clips carry their own in/out (`sourceStartSec`/`sourceEndSec`); trims are anchored to a clip (`clipId?`) since v7. See [timeline-model.md](timeline-model.md). |
 | `annotations[]` | `AxcutAnnotationRegion[]` | Text/image/figure/blur overlays, anchored to a clip (`clipId?`). |
 | `zoomRanges[]` | `AxcutZoomRegion[]` | Zoom-in effects, depth 1–6, anchored to a clip (`clipId?`). |
-| `legacyEditor` | OpenScreen v2 `ProjectEditorState` passthrough | Appearance/cursor settings not yet first-class in the AI-edition schema. |
+| `legacyEditor` | ScreenClub v2 `ProjectEditorState` passthrough | Appearance/cursor settings not yet first-class in the AI-edition schema. |
 | `agent` | `{ baseIntent?, pendingQuestions[], suggestions[], lastAppliedOperations[], lastReasoningSummary? }` | LLM agent state. |
 | `preview` | `{ strategy: "seek" \| "mse-proxy", revision: number }` | `revision` is the bump used to invalidate cached frames after an edit. |
 | `export` | `{ preset, lastJobId }` | The last export run. |
@@ -121,7 +121,7 @@ pre-v7 asset-wide meaning, which is what makes the fallback lossless.
 
 ### Legacy v2 → current (`migrateProjectDataToAxcutDocument`, `document/migrate.ts`)
 
-OpenScreen's pre-merge editor stored projects as `EditorProjectData` (an envelope
+ScreenClub's pre-merge editor stored projects as `EditorProjectData` (an envelope
 versioned `PROJECT_VERSION = 2`, defined at
 `src/components/video-editor/projectPersistence.ts:66`). On first open in the new
 editor, the renderer calls this function to produce a current-shape document. The

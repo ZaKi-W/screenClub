@@ -218,7 +218,7 @@ still inserts Google Fonts imports and waits for each font in those consumers.
 
 [`main.tsx`](../../src/main.tsx) wraps the renderer in `React.StrictMode`. In development, React
 intentionally repeats mount/effect work, while Vite also adds unoptimized module loading, source
-maps, and HMR. A development OpenScreen build must not be compared directly with a packaged Screen
+maps, and HMR. A development ScreenClub build must not be compared directly with a packaged Screen
 Studio release.
 
 ## Hidden and compatibility-only features
@@ -252,7 +252,7 @@ this implementation in packaged builds on macOS and Windows with at least:
 - foreground versus obscured windows and GPU versus software fallback;
 - cold-start/module parsing in separate HUD and editor windows.
 
-The comparison baseline must use packaged OpenScreen and packaged Screen Studio on the same
+The comparison baseline must use packaged ScreenClub and packaged Screen Studio on the same
 machine, source media, output size, and display scaling.
 
 ## Screen Studio comparison
@@ -318,7 +318,7 @@ found in the package.
 The available evidence best fits an Electron/React editing UI whose preview uses a
 Chromium-resident WebCodecs and PixiJS/WebGL path, while recording and specialized media jobs use
 native or task-specific helpers. This keeps decoded frames close to the browser GPU compositor and
-avoids the exact OpenScreen path recorded in PERF-001:
+avoids the exact ScreenClub path recorded in PERF-001:
 
 ```text
 native GPU -> CPU RGBA -> N-API -> Electron IPC -> ImageData -> ImageBitmap -> canvas/GPU
@@ -328,9 +328,9 @@ This is still an inference because the application code is bundled and closed so
 evidence to claim that Screen Studio preview uses IOSurface, CAMetalLayer, a native Metal editor,
 proxy media, or an end-to-end shared Metal texture.
 
-### What OpenScreen borrowed and what remains
+### What ScreenClub borrowed and what remains
 
-| Priority | Screen Studio lesson | OpenScreen status |
+| Priority | Screen Studio lesson | ScreenClub status |
 |---|---|---|
 | P0 | Keep the active frame inside one process presentation path | Done for the default renderer-resident preview; a shared native surface remains for Quality |
 | P0 | Preview quality is an explicit budget | Quality, Performance and Power Saving shipped; the latter modes omit native-only expensive effects |

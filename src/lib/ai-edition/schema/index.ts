@@ -1,11 +1,11 @@
 // Vendored from @axcut/schema (https://github.com/EtienneLescot/axcut) —
 // original file: packages/axcut-schema/src/index.ts. Modifications for
-// OpenScreen's AI-edition merge (Phase 0, see technical-documentation/architecture/document-model.md):
+// ScreenClub's AI-edition merge (Phase 0, see technical-documentation/architecture/document-model.md):
 //
 //   1. axcutSchemaVersion bumped 2 -> 3.
 //   2. clip.sourceEndSec made optional (duration is unknown until asset is probed).
 //   3. documentSchema gains annotations[], zoomRanges[], legacyEditor envelopes
-//      so OpenScreen's existing regions + appearance settings survive the merge.
+//      so ScreenClub's existing regions + appearance settings survive the merge.
 //
 // ponytail: this exists as the SSOT project model. Phase 0 only touches the
 // shape — runtime ops, IPC, and exporter integration land in Phase 1+.
@@ -346,7 +346,7 @@ export const timelineOperationSchema = z.discriminatedUnion("type", [
 	}),
 ]);
 
-// OpenScreen additions to the axcut document. Mirrors src/components/video-editor/types.ts
+// ScreenClub additions to the axcut document. Mirrors src/components/video-editor/types.ts
 // (AnnotationRegion / ZoomRegion) — duplicated here so the schema package has no
 // dependency on the React editor module.
 
@@ -368,7 +368,7 @@ const figureDataSchema = z
 		arrowDirection: z
 			.enum(["up", "down", "left", "right", "up-right", "up-left", "down-right", "down-left"])
 			.default("right"),
-		color: z.string().default("#34B27B"),
+		color: z.string().default("#27E0C1"),
 		strokeWidth: z.number().nonnegative().default(4),
 	})
 	.optional();
@@ -460,7 +460,7 @@ export const zoomRegionSchema = endGteStart(
 	"startMs",
 );
 
-// Legacy OpenScreen appearance / export settings that the v3 schema doesn't
+// Legacy ScreenClub appearance / export settings that the v3 schema doesn't
 // normalize into the timeline / assets model. They are applied at export time
 // by the existing pipeline (see technical-documentation/architecture/document-model.md).
 //

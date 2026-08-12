@@ -4,15 +4,12 @@ import {
 	FolderOpen,
 	FolderPlus,
 	Languages,
-	Moon,
 	PanelLeft,
 	Save,
 	Settings,
-	Sun,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
-import { useTheme } from "@/hooks/useTheme";
 import { getAvailableLocales, getLocaleName, getLocaleShort } from "@/i18n/loader";
 import styles from "./EditorShellV4.module.css";
 
@@ -53,7 +50,6 @@ export function EditorTopBar({
 	chatOpen,
 	actions,
 }: EditorTopBarProps) {
-	const { theme, toggle: toggleTheme } = useTheme();
 	const t = useScopedT("editor");
 
 	// ponytail: the left side panel only renders in "edit" mode (see
@@ -163,15 +159,6 @@ export function EditorTopBar({
 				))}
 			</div>
 
-			<button
-				type="button"
-				className={styles.iconBtn}
-				title={theme === "dark" ? t("topbar.switchToLightTheme") : t("topbar.switchToDarkTheme")}
-				aria-label={t("topbar.toggleTheme")}
-				onClick={toggleTheme}
-			>
-				{theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
-			</button>
 			<button
 				type="button"
 				className={styles.iconBtn}

@@ -43,7 +43,7 @@
 		"permissionDenied": "녹화 권한이 거부되었습니다. 화면 녹화를 허용해 주세요.",
 		"cameraDisconnected": "웹캠 연결이 끊어졌습니다.",
 		"cameraNotFound": "카메라를 찾을 수 없습니다.",
-		"accessibilityAllowAndRetry": "OpenScreen의 손쉬운 사용 접근을 허용한 다음, 카운트다운을 시작하려면 다시 녹화를 누르세요.",
+		"accessibilityAllowAndRetry": "ScreenClub의 손쉬운 사용 접근을 허용한 다음, 카운트다운을 시작하려면 다시 녹화를 누르세요.",
 		"selectSource": "녹화할 소스를 선택해 주세요"
 	},
 	"emptyState": {
@@ -82,9 +82,6 @@
 		"saveProject": "프로젝트 저장",
 		"unsaved": "저장 안 됨",
 		"saved": "저장됨",
-		"switchToLightTheme": "라이트 테마로 전환",
-		"switchToDarkTheme": "다크 테마로 전환",
-		"toggleTheme": "테마 전환",
 		"settings": "설정",
 		"export": "내보내기",
 		"renameProject": "프로젝트 이름 변경",
@@ -282,7 +279,7 @@
 			"disclaimer": "영상 전사본은 선택한 공급자에게 전송됩니다. 공급자를 연결하기 전까지는 아무것도 공유되지 않습니다."
 		},
 		"authorUser": "나",
-		"authorAssistant": "OpenScreen",
+		"authorAssistant": "ScreenClub",
 		"rewindToMessage": "이 메시지로 되감기",
 		"copyMessage": "메시지 복사",
 		"copiedToClipboard": "클립보드에 복사됨",

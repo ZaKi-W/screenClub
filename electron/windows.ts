@@ -67,7 +67,7 @@ const CONTENT_PROTECTION_FORCED = process.env["OPENSCREEN_FORCE_CONTENT_PROTECTI
  * no evidence.
  *
  * NOTE: ScreenCaptureKit ignores `sharingType`, so native display capture must
- * explicitly exclude our HUD and Notes windows. The OpenScreen helper does that
+ * explicitly exclude our HUD and Notes windows. The ScreenClub helper does that
  * with `SCContentFilter(display:excludingWindows:)`; other recording apps may
  * still capture these windows on macOS 26.
  */
@@ -806,13 +806,13 @@ export function createEditorWindow(query: Record<string, string> = {}): BrowserW
 		titleBarStyle: "hidden",
 		...(isMac
 			? { trafficLightPosition: { x: 18, y: 21 } }
-			: { titleBarOverlay: { color: "#09090b", symbolColor: "#a1a1aa", height: 58 } }),
+			: { titleBarOverlay: { color: "#000000", symbolColor: "#95a4aa", height: 58 } }),
 		transparent: false,
 		resizable: true,
 		alwaysOnTop: false,
 		skipTaskbar: false,
-		title: "OpenScreen",
-		backgroundColor: "#09090b",
+		title: "ScreenClub",
+		backgroundColor: "#000000",
 		show: false, // shown via ready-to-show to avoid white flash on first load
 		webPreferences: {
 			preload: path.join(__dirname, "preload.mjs"),
@@ -978,8 +978,8 @@ export function createNotesWindow(): BrowserWindow {
 		minHeight: 400,
 		maxWidth: 640,
 		maxHeight: 720,
-		title: "OpenScreen - Notes",
-		backgroundColor: "#09090b",
+		title: "ScreenClub - Notes",
+		backgroundColor: "#000000",
 		resizable: true,
 		alwaysOnTop: true,
 		skipTaskbar: false,

@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen MediaCard — a clip tile in the media library. Gradient
+ * ScreenClub MediaCard — a clip tile in the media library. Gradient
  * thumbnail with a film-strip glyph, a drag-handle affordance, and a
  * name/duration/size footer. Selected → 1.5px emerald border.
  */
@@ -9,7 +9,7 @@ export function MediaCard({
   name,
   duration,
   size,
-  from = '#10b981',
+  from = '#27e0c1',
   to = '#0d986a',
   selected = false,
   draggable = true,

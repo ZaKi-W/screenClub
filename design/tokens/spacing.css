@@ -1,5 +1,5 @@
 /* ============================================================
-   OpenScreen — Spacing, radius & sizing tokens
+   ScreenClub — Spacing, radius & sizing tokens
    The chrome is compact: 8px grid at heart, but control heights
    land on real values from the source (h-7=28, h-8=32, h-9=36,
    h-10=40). Radii run large & soft — the product's whole look is

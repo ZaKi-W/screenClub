@@ -27,4 +27,5 @@ export const I18N_NAMESPACES = [
 export type Locale = string;
 export type I18nNamespace = (typeof I18N_NAMESPACES)[number];
 
-export const LOCALE_STORAGE_KEY = "openscreen-locale";
+export const LOCALE_STORAGE_KEY = "screenclub-locale";
+export const LEGACY_LOCALE_STORAGE_KEY = "openscreen-locale";

@@ -1519,7 +1519,7 @@ describe("buildSceneDescription.annotations", () => {
 		);
 		expect(scene.annotations[0].figure).toEqual({
 			direction: "right",
-			color: "#34B27B",
+			color: "#27E0C1",
 			strokeWidth: 4,
 		});
 		expect(scene.annotations[0].text).toBeUndefined();

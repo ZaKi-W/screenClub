@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen Switch — the pill toggle used in inspector setting rows
+ * ScreenClub Switch — the pill toggle used in inspector setting rows
  * (Blur background, Mirror webcam, Shrink on zoom, Show cursor…).
  * Track fills emerald when on; knob slides right.
  */

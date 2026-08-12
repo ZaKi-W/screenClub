@@ -1,6 +1,6 @@
 # Workbench — banc d'essai headless de l'agent d'édition
 
-Fait tourner l'agent LLM d'OpenScreen **sans interface graphique**, pour itérer vite sur les
+Fait tourner l'agent LLM d'ScreenClub **sans interface graphique**, pour itérer vite sur les
 prompts et sur le contexte fourni au modèle.
 
 Deux axes sont notés séparément, jamais moyennés ensemble :

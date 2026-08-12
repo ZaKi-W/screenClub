@@ -208,7 +208,7 @@ export function AreaSelector() {
 				</button>
 				<button
 					type="button"
-					className="flex h-9 items-center gap-1.5 rounded-xl bg-[#10b981] px-4 text-[13px] font-semibold text-[#07130f] hover:bg-[#21c991]"
+					className="flex h-9 items-center gap-1.5 rounded-xl bg-[#27e0c1] px-4 text-[13px] font-semibold text-[#001b16] hover:bg-[#8af7e3]"
 					onClick={finish}
 				>
 					<Check size={16} /> {commonT("actions.done")}

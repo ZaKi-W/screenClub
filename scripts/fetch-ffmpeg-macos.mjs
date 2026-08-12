@@ -160,7 +160,7 @@ if (fs.existsSync(path.join(DEST, "include")) && isLgpl(DEST)) {
 if (fs.existsSync(path.join(DEST, "include"))) {
 	throw new Error(
 		`${DEST} exists but is not an LGPL build (checked with \`ffmpeg -L\`).\n` +
-			"Refusing to reuse it — linking a GPL ffmpeg would relicense OpenScreen.\n" +
+			"Refusing to reuse it — linking a GPL ffmpeg would relicense ScreenClub.\n" +
 			"Delete the directory and re-run to rebuild it from source.",
 	);
 }

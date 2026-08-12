@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen ChatBubble — a single agent-conversation row. Handles the
+ * ScreenClub ChatBubble — a single agent-conversation row. Handles the
  * three roles: assistant (avatar + left bubble, meta header), user
  * (right, emerald-tinted), system (centered pill).
  */

@@ -53,15 +53,15 @@ describe("ColorField", () => {
 	it("applies a preset and commits it in one click", () => {
 		const { onChange, onCommit, trigger } = renderField();
 		fireEvent.click(trigger);
-		fireEvent.click(screen.getByLabelText("inspector.setColor:#22c55e"));
-		expect(onChange).toHaveBeenCalledWith("#22c55e");
+		fireEvent.click(screen.getByLabelText("inspector.setColor:#27e0c1"));
+		expect(onChange).toHaveBeenCalledWith("#27e0c1");
 		expect(onCommit).toHaveBeenCalledTimes(1);
 	});
 
 	it("marks the current colour as pressed so the picker shows where you are", () => {
-		const { trigger } = renderField("#22c55e");
+		const { trigger } = renderField("#27e0c1");
 		fireEvent.click(trigger);
-		expect(screen.getByLabelText("inspector.setColor:#22c55e")).toHaveAttribute(
+		expect(screen.getByLabelText("inspector.setColor:#27e0c1")).toHaveAttribute(
 			"aria-pressed",
 			"true",
 		);
@@ -77,17 +77,17 @@ describe("ColorField", () => {
 		const hex = screen.getByLabelText("annotation.colorWheel");
 		fireEvent.change(hex, { target: { value: "#22c5" } });
 		expect(onChange).not.toHaveBeenCalled();
-		fireEvent.change(hex, { target: { value: "#22c55e" } });
-		expect(onChange).toHaveBeenCalledWith("#22c55e");
+		fireEvent.change(hex, { target: { value: "#27e0c1" } });
+		expect(onChange).toHaveBeenCalledWith("#27e0c1");
 	});
 
 	it("accepts a hex typed without its leading #", () => {
 		const { onChange, trigger } = renderField();
 		fireEvent.click(trigger);
 		fireEvent.change(screen.getByLabelText("annotation.colorWheel"), {
-			target: { value: "22c55e" },
+			target: { value: "27e0c1" },
 		});
-		expect(onChange).toHaveBeenCalledWith("#22c55e");
+		expect(onChange).toHaveBeenCalledWith("#27e0c1");
 	});
 
 	it("commits once when the picker closes, not on every wheel event", () => {

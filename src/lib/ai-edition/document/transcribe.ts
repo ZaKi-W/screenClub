@@ -1,4 +1,4 @@
-// Adapter: wraps OpenScreen's existing local Whisper pipeline (transformers.js,
+// Adapter: wraps ScreenClub's existing local Whisper pipeline (transformers.js,
 // src/lib/captioning/) as a transcribeAsset function that returns an
 // AxcutTranscript and persists it into the document.
 //

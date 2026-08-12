@@ -790,7 +790,7 @@ export function buildSceneDescription(
 						...base,
 						figure: {
 							direction: figure?.arrowDirection ?? "right",
-							color: figure?.color ?? "#34B27B",
+							color: figure?.color ?? "#27E0C1",
 							strokeWidth: figure?.strokeWidth ?? 4,
 						},
 					};

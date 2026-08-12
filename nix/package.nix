@@ -37,7 +37,7 @@ buildNpmPackage {
       );
     };
 
-  npmDepsHash = "sha256-ArM73XLVYUB+92Pz7sCbh4Fj67xwakEusaaOSjxMEe8=";
+  npmDepsHash = "sha256-GstNTt6MEcAAIKVKwmod5e8U/Dr7jORo8f8SxdQc7y4=";
 
   env.ELECTRON_SKIP_BINARY_DOWNLOAD = "1";
 
@@ -79,9 +79,10 @@ buildNpmPackage {
 
     # Wrap system electron with the app directory
     mkdir -p "$out/bin"
-    makeWrapper "${electron}/bin/electron" "$out/bin/openscreen" \
+    makeWrapper "${electron}/bin/electron" "$out/bin/screenclub" \
       --add-flags "$out/lib/openscreen" \
       --set ELECTRON_IS_DEV 0
+    ln -s screenclub "$out/bin/openscreen"
 
     # Install icons to hicolor theme
     for size in 16 24 32 48 64 128 256 512 1024; do
@@ -102,10 +103,10 @@ buildNpmPackage {
 
   desktopItems = [
     (makeDesktopItem {
-      name = "openscreen";
-      desktopName = "OpenScreen";
+      name = "screenclub";
+      desktopName = "ScreenClub";
       genericName = "Screen Recorder";
-      exec = "openscreen %U";
+      exec = "screenclub %U";
       icon = "openscreen";
       comment = "Desktop screen recorder with built-in editor";
       categories = [
@@ -113,7 +114,7 @@ buildNpmPackage {
         "Video"
         "Recorder"
       ];
-      startupWMClass = "Openscreen";
+      startupWMClass = "ScreenClub";
       terminal = false;
     })
   ];
@@ -122,7 +123,7 @@ buildNpmPackage {
     description = "Desktop screen recorder with built-in editor";
     homepage = "https://github.com/EtienneLescot/openscreen";
     license = lib.licenses.mit;
-    mainProgram = "openscreen";
+    mainProgram = "screenclub";
     platforms = lib.platforms.linux;
   };
 }

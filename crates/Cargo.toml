@@ -1,4 +1,4 @@
-# Workspace Rust d'OpenScreen.
+# Workspace Rust d'ScreenClub.
 #
 #   compositor/            la bibliothèque : D3D11, pipeline, effets HLSL, scène, curseur, audio,
 #                          vue live. C'est du code de PRODUCTION — l'addon Electron s'y lie.

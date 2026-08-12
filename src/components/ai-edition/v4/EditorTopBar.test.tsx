@@ -7,17 +7,13 @@ import { describe, expect, it, vi } from "vitest";
 // the public topbar instead. The translator echoes keys; assertions read better
 // against keys than against prose that drifts with copy edits.
 vi.mock("@/contexts/I18nContext", () => ({
-	useI18n: () => ({ locale: "en", setLocale: () => {} }),
+	useI18n: () => ({ locale: "en", setLocale: () => undefined }),
 	useScopedT: () => (key: string) => key,
-}));
-
-vi.mock("@/hooks/useTheme", () => ({
-	useTheme: () => ({ theme: "dark", toggle: () => {} }),
 }));
 
 import { EditorTopBar } from "./EditorTopBar";
 
-const noop = () => {};
+const noop = () => undefined;
 
 function renderTopBar(projectTitle: string | null) {
 	const onRename = vi.fn();
@@ -44,9 +40,9 @@ function renderTopBar(projectTitle: string | null) {
 }
 
 describe("ProjectNameField (issue #180)", () => {
-	it("does not render OpenScreen branding in the studio top bar", () => {
+	it("does not render ScreenClub branding in the studio top bar", () => {
 		renderTopBar("Demo Project");
-		expect(screen.queryByText("OpenScreen")).not.toBeInTheDocument();
+		expect(screen.queryByText("ScreenClub")).not.toBeInTheDocument();
 	});
 
 	it("renders the project title on the button", () => {

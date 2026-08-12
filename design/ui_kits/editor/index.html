@@ -1,8 +1,8 @@
-<!-- @dsCard group="Editor" viewport="1360x840" subtitle="Full OpenScreen editor — Edit mode" -->
-<!-- @startingPoint section="Editor" subtitle="OpenScreen editor shell (chat + stage + timeline)" viewport="1360x840" -->
+<!-- @dsCard group="Editor" viewport="1360x840" subtitle="Full ScreenClub editor — Edit mode" -->
+<!-- @startingPoint section="Editor" subtitle="ScreenClub editor shell (chat + stage + timeline)" viewport="1360x840" -->
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenScreen Editor</title>
+<title>ScreenClub Editor</title>
 <link rel="stylesheet" href="../../styles.css">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -56,7 +56,7 @@ function Editor(){
           <HR/>
           <span style={{display:'inline-flex',alignItems:'center',gap:9}}>
             <img src="../../assets/logo-icon.png" alt="" style={{width:22,height:22,objectFit:'contain'}}/>
-            <span style={{fontSize:15,fontWeight:600,letterSpacing:'-0.015em',color:'var(--fg-emphasis)'}}>OpenScreen</span>
+            <span style={{fontSize:15,fontWeight:600,letterSpacing:'-0.015em',color:'var(--fg-emphasis)'}}>ScreenClub</span>
           </span>
           <HR/>
           <Button variant="ghost" size="sm" iconRight={I('chevron-down',11)}>demo2</Button>
@@ -81,7 +81,7 @@ function Editor(){
           <aside style={{display:'grid',gridTemplateRows:'auto 1fr auto',minHeight:0,background:'var(--surface)',borderRight:'1px solid var(--border)'}}>
             <div style={{padding:'12px 18px 0',borderBottom:'1px solid var(--border-soft)'}}>
               <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-                <span style={{fontSize:13.5,fontWeight:600,color:'var(--fg-emphasis)',letterSpacing:'-0.01em'}}>OpenScreen Agent</span>
+                <span style={{fontSize:13.5,fontWeight:600,color:'var(--fg-emphasis)',letterSpacing:'-0.01em'}}>ScreenClub Agent</span>
                 <Badge dot>0% context</Badge>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
@@ -95,7 +95,7 @@ function Editor(){
             <div style={{overflowY:'auto',minHeight:0,padding:'14px 20px'}}>
               <div style={{display:'flex',flexDirection:'column',gap:16}}>
                 <ChatBubble role="user" author="YOU">Hey, can you clean up the intro on this recording? There's a bunch of dead air while I was reading my notes.</ChatBubble>
-                <ChatBubble role="assistant" author="OpenScreen" time="10:41" avatar={Bot}>On it — scanning track 1 for silences and filler words now. I'll flag anything over 600ms.</ChatBubble>
+                <ChatBubble role="assistant" author="ScreenClub" time="10:41" avatar={Bot}>On it — scanning track 1 for silences and filler words now. I'll flag anything over 600ms.</ChatBubble>
                 <ProposalCard total="0:44.1" applyLabel="Apply 3 cuts"
                   items={[{range:'0:31.0 – 0:37.3',dur:'6.3s'},{range:'1:23.0 – 1:27.0',dur:'4.0s'},{range:'1:35.0 – 2:34.0',dur:'30.3s'}]}
                   rationale="Detected 3 silences over 600ms and 4 filler words across the intro. Pacing tightened to 1.1×."/>

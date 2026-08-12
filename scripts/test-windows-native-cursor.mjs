@@ -669,7 +669,7 @@ function buildVisualReportHtml(report, recordingData) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenScreen native cursor diagnostic</title>
+<title>ScreenClub native cursor diagnostic</title>
 <style>
 body { margin: 0; background: #111; color: #eee; font-family: Arial, sans-serif; }
 main { max-width: 1180px; margin: 0 auto; padding: 24px; }
@@ -686,7 +686,7 @@ canvas { width: 100%; height: auto; background: #181818; border: 1px solid #333;
 </head>
 <body>
 <main>
-<h1>OpenScreen native cursor diagnostic</h1>
+<h1>ScreenClub native cursor diagnostic</h1>
 <div class="metrics">
 <div class="metric"><b>${report.sampleCount}</b>samples</div>
 <div class="metric"><b>${report.assetCount}</b>assets</div>
@@ -918,7 +918,7 @@ function buildRealCaptureHtml(report, recordingData, screenFrames) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenScreen native cursor real capture diagnostic</title>
+<title>ScreenClub native cursor real capture diagnostic</title>
 <style>
 body { margin: 0; background: #080808; color: #eee; font-family: Arial, sans-serif; }
 main { max-width: 1180px; margin: 0 auto; padding: 20px; }

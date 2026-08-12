@@ -25,7 +25,7 @@ const PAGE_URL = "https://getopenscreen.com/download/";
 // structured-data description that contradicts the meta one is worse than none.
 const PAGE_TITLE = "Download for Windows, macOS & Linux";
 const PAGE_DESCRIPTION =
-	"Download OpenScreen free for Windows, macOS, and Linux — .dmg, .exe, .deb, .rpm, .pacman, AppImage, and a Nix flake. Open source, no account, no watermark.";
+	"Download ScreenClub free for Windows, macOS, and Linux — .dmg, .exe, .deb, .rpm, .pacman, AppImage, and a Nix flake. Open source, no account, no watermark.";
 
 type PlatformSpec = {
 	id: string;
@@ -108,7 +108,7 @@ export default function DownloadPage() {
 						{release ? `${release.tag} · MIT licensed` : "MIT licensed · free forever"}
 					</span>
 					<Heading as="h1" className={styles.title}>
-						Download OpenScreen
+						Download ScreenClub
 					</Heading>
 					<p className={styles.tagline}>
 						A free, open-source screen recorder and video editor. No account, no watermark, no
@@ -163,7 +163,7 @@ export default function DownloadPage() {
 							</div>
 							<pre className={styles.code}>
 								<span className={styles.accentText}>xattr</span> -rd com.apple.quarantine
-								/Applications/Openscreen.app
+								/Applications/ScreenClub.app
 							</pre>
 							<p className={styles.panelFoot}>
 								Give your terminal Full Disk Access in System Settings first, then run it.

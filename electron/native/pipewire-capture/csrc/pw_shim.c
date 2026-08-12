@@ -1,5 +1,5 @@
 /*
- * PipeWire glue for the OpenScreen Linux capture helper.
+ * PipeWire glue for the ScreenClub Linux capture helper.
  *
  * WHY THIS FILE IS C AND NOT RUST.
  *

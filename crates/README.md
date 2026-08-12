@@ -14,7 +14,7 @@ en un mot : sur Windows, packager avec `npm run build:win`, jamais `npm run buil
 
 Le reste de ce document est l'historique du POC qui a produit ce compositeur.
 
-Troisième POC de rendu d'OpenScreen, à côté de [`poc/`](../poc) (web, WebCodecs + WebGPU)
+Troisième POC de rendu d'ScreenClub, à côté de [`poc/`](../poc) (web, WebCodecs + WebGPU)
 et [`poc-native/`](../poc-native) (Rust + wgpu/Vulkan). Voir la spec :
 [`technical-documentation/engineering/rendering-performance.md`](../technical-documentation/engineering/rendering-performance.md),
 annexe D (D.6 en particulier).

@@ -1,6 +1,8 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  // Keep the original bundle identifier so existing installs retain projects,
+  // preferences, screen-recording permission and update continuity after rebranding.
   "appId": "com.etiennelescot.openscreen",
   "asar": true,
   // .node binaries can't be dlopen'd from inside an asar — must live unpacked.
@@ -9,7 +11,7 @@
   "asarUnpack": [
     "**/*.node"
   ],
-  "productName": "Openscreen",
+  "productName": "ScreenClub",
   // Fails the build when compositor_view.node is older than the crates/ Rust sources. Plain
   // `npm run build` does not rebuild the addon, and a stale one fails SILENTLY at runtime
   // (unknown scene fields are #[serde(default)]) rather than erroring. See the script header
@@ -104,10 +106,10 @@
       }
     ],
     "extendInfo": {
-      "NSAudioCaptureUsageDescription": "OpenScreen needs audio capture permission to record system audio.",
-      "NSMicrophoneUsageDescription": "OpenScreen needs microphone access to record voice audio.",
-      "NSCameraUsageDescription": "OpenScreen needs camera access to record webcam video.",
-      "NSScreenCaptureUsageDescription": "OpenScreen needs screen recording permission to detect and capture windows.",
+      "NSAudioCaptureUsageDescription": "ScreenClub needs audio capture permission to record system audio.",
+      "NSMicrophoneUsageDescription": "ScreenClub needs microphone access to record voice audio.",
+      "NSCameraUsageDescription": "ScreenClub needs camera access to record webcam video.",
+      "NSScreenCaptureUsageDescription": "ScreenClub needs screen recording permission to detect and capture windows.",
       "NSCameraUseContinuityCameraDeviceType": true
     }
   },
@@ -259,13 +261,14 @@
     "allowToChangeInstallationDirectory": true
   },
   // Microsoft Store packaging identity, from Partner Center's "Product identity" page
-  // (Applications et jeux > OpenScreen > Product identity).
+  // Keep the assigned Partner Center identity for update compatibility. The
+  // user-visible application name is ScreenClub.
   "appx": {
     "identityName": "EtienneLescot.OpenScreen",
     "publisher": "CN=03B0FC8C-2067-45D9-BE82-9F15CE264B4A",
     "publisherDisplayName": "Etienne Lescot",
     "applicationId": "Openscreen",
-    "displayName": "OpenScreen",
+    "displayName": "ScreenClub",
     "backgroundColor": "transparent",
     "capabilities": ["runFullTrust", "microphone", "webcam"],
     // Mirrors SUPPORTED_LOCALES in src/i18n/config.ts. This list is what the Store

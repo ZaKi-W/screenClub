@@ -221,7 +221,7 @@ function assertLgpl(exePath, extraEnv) {
 		throw new Error(
 			"This ffmpeg is NOT an LGPL build and must not be shipped:\n" +
 				`${problems.map((p) => `  - ${p}`).join("\n")}\n` +
-				"Bundling it would relicense OpenScreen under the GPL.",
+				"Bundling it would relicense ScreenClub under the GPL.",
 		);
 	}
 	const ver = run(exePath, ["-hide_banner", "-version"], opts).stdout ?? "";

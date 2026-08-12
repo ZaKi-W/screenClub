@@ -2,7 +2,7 @@
 id: intro
 title: Introduction
 sidebar_position: 1
-description: "OpenScreen is a free, open-source screen recorder and video editor for Windows, macOS, and Linux. Native capture, GPU compositing, MIT licensed."
+description: "ScreenClub is a free, open-source screen recorder and video editor for Windows, macOS, and Linux. Native capture, GPU compositing, MIT licensed."
 keywords:
   - screen recorder
   - open source screen recorder
@@ -13,12 +13,12 @@ keywords:
   - Linux
 ---
 
-# Welcome to OpenScreen
+# Welcome to ScreenClub
 
-OpenScreen is a **free, open-source screen recorder and editor**. It uses native capture APIs (ScreenCaptureKit on macOS, Windows Graphics Capture on Windows) for low-overhead recording, and composites both the live preview and the final export on the GPU through a native Rust + Direct3D 11 renderer — one path, so what you see in the editor is what comes out of the export.
+ScreenClub is a **free, open-source screen recorder and editor**. It uses native capture APIs (ScreenCaptureKit on macOS, Windows Graphics Capture on Windows) for low-overhead recording, and composites both the live preview and the final export on the GPU through a native Rust + Direct3D 11 renderer — one path, so what you see in the editor is what comes out of the export.
 
 :::warning
-OpenScreen is **not production-grade**. The project is in active development and rough edges are expected.
+ScreenClub is **not production-grade**. The project is in active development and rough edges are expected.
 :::
 
 ## What you can do

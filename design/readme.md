@@ -1,6 +1,6 @@
-# OpenScreen Design System
+# ScreenClub Design System
 
-A design system extracted from the **OpenScreen Editor** — an AI-native screen-recording
+A design system extracted from the **ScreenClub Editor** — an AI-native screen-recording
 studio and video editor. Think "Screen Studio meets a chat agent": you record your screen,
 and an AI agent cleans up dead air, filler words, and pacing, proposes cuts you approve, and
 lets you restyle backgrounds, cursors, captions, zoom and layout from a floating inspector.
@@ -12,10 +12,10 @@ Geist / Geist Mono type, glassy floating panels, and a rich multi-lane timeline.
 
 Everything here was extracted from a single ground-truth file in this project:
 
-- **`OpenScreen Editor v4.dc.html`** — the most complete build of the editor (chat + stage + timeline).
+- **`ScreenClub Editor v4.dc.html`** — the most complete build of the editor (chat + stage + timeline).
 
 No external codebase or Figma was provided; the `.dc.html` source IS the ground truth. Related
-earlier files (`OpenScreen Editor v2/v3`, `OpenScreen Recording Widget`) were left out of scope
+earlier files (`ScreenClub Editor v2/v3`, `ScreenClub Recording Widget`) were left out of scope
 per the request (v4 only).
 
 > **Sharing:** to let others in your org use this, open the **Share** menu and set the file
@@ -25,7 +25,7 @@ per the request (v4 only).
 
 ## CONTENT FUNDAMENTALS
 
-How OpenScreen writes.
+How ScreenClub writes.
 
 - **Voice:** calm, competent, first-person-as-agent. The agent says *"On it — scanning track 1
   for silences now"* and *"I'll flag anything over 600ms."* It narrates what it's doing in plain
@@ -103,15 +103,15 @@ How OpenScreen writes.
   `currentColor` so icons inherit the control's text colour (muted → fg on hover, accent when
   active).
 - **No emoji, no icon font, no PNG icons** anywhere. One raster asset only: the logo mark.
-- A few icons in the source are hand-tuned (the OpenScreen agent avatar built from `<rect>`s, the
+- A few icons in the source are hand-tuned (the ScreenClub agent avatar built from `<rect>`s, the
   waveform bars, the cursor arrow). Treat those as bespoke; use Lucide for everything standard.
 
 ### Brand mark
 
-- **`assets/logo-icon.png`** — the OpenScreen app icon, transparent (24×24 in the topbar; the
+- **`assets/logo-icon.png`** — the ScreenClub app icon, transparent (24×24 in the topbar; the
   mark is a disc, so it needs a little more box than a filled tile to carry the same optical
   weight). This is the only provided brand asset. There is **no wordmark file**; the product sets
-  "OpenScreen" in Geist 600, 15px, `-0.015em` tracking next to the icon. Do not redraw or
+  "ScreenClub" in Geist 600, 15px, `-0.015em` tracking next to the icon. Do not redraw or
   recolour the mark.
 
 ---
@@ -140,7 +140,7 @@ Root:
 - `display/` — Badge, Chip, Card, ProgressBar
 - `editor/` — ChatBubble, ProposalCard, MediaCard, TimelinePill, FacetRailButton
 
-`ui_kits/editor/` — high-fidelity recreation of the OpenScreen Editor (chat + stage + timeline).
+`ui_kits/editor/` — high-fidelity recreation of the ScreenClub Editor (chat + stage + timeline).
 
 ## Intentional additions
 

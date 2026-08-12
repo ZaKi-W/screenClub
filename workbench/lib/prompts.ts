@@ -11,7 +11,7 @@
 export const AI_ENHANCE_PROMPT =
 	"Automatically enhance this recording: (1) add smart zoom-ins on the moments where the cursor dwells or interacts with the UI, each focused on the cursor's location; and (2) cut the dead time — long pauses, silences, and idle stretches where nothing happens — to keep the pacing tight and natural. Apply the edits directly to the timeline.";
 
-/** The 19 tools OpenScreen builds in `deep-agent/service.ts` (`buildTools`).
+/** The 19 tools ScreenClub builds in `deep-agent/service.ts` (`buildTools`).
  * `moveClip` reordering a clip had NO tool while the system prompt promised one,
  * which is what pushed the model onto `replaceTimeline` (D-DESTRUCT).
  * `getCursorTrack` is the newest: the app records pointer telemetry and loads it

@@ -28,7 +28,7 @@ import { scoreRun } from "../lib/score";
 import { wireFromRequests } from "../lib/wire";
 import { getScenario } from "../scenarios/registry";
 
-const SYSTEM_TEXT = "You are OpenScreen's editing agent. Ten thousand characters, abridged.";
+const SYSTEM_TEXT = "You are ScreenClub's editing agent. Ten thousand characters, abridged.";
 const scenario = getScenario("describe-project");
 
 function capturedRequests(options: { resultJson: string }): CapturedRequest[] {

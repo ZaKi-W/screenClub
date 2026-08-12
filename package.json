@@ -1,5 +1,5 @@
 {
-	"name": "openscreen",
+	"name": "screenclub",
 	"private": true,
 	"version": "1.9.0",
 	"type": "module",
@@ -66,7 +66,7 @@
 		"test:wgc-mixed-audio:win": "node scripts/test-windows-wgc-helper.mjs --system-audio --microphone",
 		"test:wgc-webcam:win": "node scripts/test-windows-wgc-helper.mjs --webcam",
 		"test:wgc-full:win": "node scripts/test-windows-wgc-helper.mjs --webcam --system-audio --microphone",
-		"capture:openscreen-preview": "node scripts/capture-openscreen-preview.mjs",
+		"capture:screenclub-preview": "node scripts/capture-openscreen-preview.mjs",
 		"inspect:cursor-click-bounce": "node scripts/inspect-native-cursor-click-bounce.mjs",
 		"diagnostic:run": "node scripts/diagnostic-tool/diagnostic.mjs",
 		"diagnostic:smoke:win": "node scripts/diagnostic-tool/diagnostic.mjs --duration 3",

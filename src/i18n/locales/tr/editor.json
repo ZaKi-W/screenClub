@@ -35,7 +35,7 @@
 		"permissionDenied": "Kayıt izni reddedildi. Lütfen ekran kaydına izin verin.",
 		"cameraDisconnected": "Webcam bağlantısı kesildi.",
 		"cameraNotFound": "Kamera bulunamadı.",
-		"accessibilityAllowAndRetry": "OpenScreen için Erişilebilirlik erişimine izin verin, ardından geri sayımı başlatmak için tekrar kayda basın.",
+		"accessibilityAllowAndRetry": "ScreenClub için Erişilebilirlik erişimine izin verin, ardından geri sayımı başlatmak için tekrar kayda basın.",
 		"selectSource": "Lütfen kayıt için bir kaynak seçin"
 	},
 	"loadingVideo": "Video yükleniyor...",
@@ -82,9 +82,6 @@
 		"saveProject": "Projeyi kaydet",
 		"unsaved": "Kaydedilmedi",
 		"saved": "Kaydedildi",
-		"switchToLightTheme": "Açık temaya geç",
-		"switchToDarkTheme": "Koyu temaya geç",
-		"toggleTheme": "Temayı değiştir",
 		"settings": "Ayarlar",
 		"export": "Dışa aktar",
 		"renameProject": "Projeyi yeniden adlandır",
@@ -282,7 +279,7 @@
 			"disclaimer": "Videonuzun transkripsiyonu seçtiğiniz sağlayıcıya gönderilecek. Bir sağlayıcı bağlamadan hiçbir şey paylaşılmaz."
 		},
 		"authorUser": "Siz",
-		"authorAssistant": "OpenScreen",
+		"authorAssistant": "ScreenClub",
 		"rewindToMessage": "Bu mesaja geri sar",
 		"copyMessage": "Mesajı kopyala",
 		"copiedToClipboard": "Panoya kopyalandı",

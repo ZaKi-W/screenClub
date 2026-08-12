@@ -1,4 +1,4 @@
-// Pure argv parser for the OpenScreen CLI. No Electron imports so it can be
+// Pure argv parser for the ScreenClub CLI. No Electron imports so it can be
 // unit-tested under plain vitest.
 
 import path from "node:path";
@@ -41,17 +41,17 @@ const SUBCOMMANDS = new Set([
 	"-h",
 ]);
 
-export const CLI_USAGE = `OpenScreen CLI
+export const CLI_USAGE = `ScreenClub CLI
 
 Usage:
-  openscreen export <project.openscreen> [options]   Render a project to MP4/GIF
-  openscreen record [options]                        Record the screen headlessly
-  openscreen sources [--json]                        List displays, windows and microphones
-  openscreen pack <project.openscreen> --out <dir>   Copy project + media into one portable folder
-  openscreen captions <project.openscreen>           Add auto-captions (on-device Whisper) to a project
+  screenclub export <project.openscreen> [options]   Render a project to MP4/GIF
+  screenclub record [options]                        Record the screen headlessly
+  screenclub sources [--json]                        List displays, windows and microphones
+  screenclub pack <project.openscreen> --out <dir>   Copy project + media into one portable folder
+  screenclub captions <project.openscreen>           Add auto-captions (on-device Whisper) to a project
                      [--min-words <n>] [--max-words <n>]
-  openscreen info <project.openscreen> [--json]      Inspect a project file
-  openscreen help                                    Show this help
+  screenclub info <project.openscreen> [--json]      Inspect a project file
+  screenclub help                                    Show this help
 
 Export options:
   -o, --out <path>          Output file (.mp4 or .gif). Default: next to the project file
@@ -110,7 +110,7 @@ export function parseCliArgs(
 	const rawArgs = argv.slice(firstArgIndex).filter((a) => !a.startsWith("--inspect"));
 
 	// Skip *leading* Chromium/Electron switches (e.g. the AppImage's required
-	// `--no-sandbox`) so `Openscreen --no-sandbox export demo.openscreen` still
+	// `--no-sandbox`) so `ScreenClub --no-sandbox export demo.openscreen` still
 	// enters CLI mode. Only leading dash-tokens are skipped — everything after
 	// the subcommand belongs to the subcommand parser. `--help`/`-h` are ours.
 	let subIndex = 0;

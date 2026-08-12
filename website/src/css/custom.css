@@ -1,43 +1,41 @@
 /**
- * OpenScreen docs site — global theme.
+ * ScreenClub docs site — global theme.
  *
- * Tokens and light/dark values are lifted verbatim from the OpenScreen
- * Design System ("OpenScreen Docs Site.dc.html", claude.ai/design) —
- * same --os-* names, same values, including its light-theme token swap.
- * Infima's variables are retargeted at --os-* instead of layering a
- * separate override on top, so the whole site — navbar, sidebar, TOC,
- * footer, code blocks — inherits the exact design palette in both modes.
+ * The docs share ScreenClub's black, graphite, electric-cyan and amber
+ * language while retaining their own --os-* compatibility namespace.
+ * Infima's variables are retargeted at those semantic tokens so the navbar,
+ * sidebar, TOC, footer and code blocks stay consistent in both modes.
  */
 
 :root,
 [data-theme="dark"] {
-	--os-bg: #080a0d;
-	--os-surface: #0f1216;
-	--os-surface-1: #14171c;
-	--os-surface-2: #1a1e25;
-	--os-surface-3: #232830;
-	--os-surface-hi: #2b313b;
+	--os-bg: #000000;
+	--os-surface: #0a0c0f;
+	--os-surface-1: #0f1216;
+	--os-surface-2: #161b20;
+	--os-surface-3: #20272e;
+	--os-surface-hi: #2a333c;
 	--os-border: rgba(255, 255, 255, 0.09);
 	--os-border-soft: rgba(255, 255, 255, 0.06);
-	--os-border-hi: #333a45;
+	--os-border-hi: #34414a;
 	--os-fg-emphasis: #ffffff;
 	--os-fg-2: #f5f7fa;
-	--os-fg: #e9edf3;
-	--os-muted: #828c99;
-	--os-meta: #565f6b;
-	--os-accent: #10b981;
-	--os-brand-lo: #0d986a;
-	--os-accent-soft: rgba(16, 185, 129, 0.14);
-	--os-accent-wash: rgba(16, 185, 129, 0.07);
-	--os-accent-border: rgba(16, 185, 129, 0.26);
-	--os-accent-ring: rgba(16, 185, 129, 0.32);
-	--os-danger: #f87171;
-	--os-danger-soft: rgba(248, 113, 113, 0.14);
-	--os-annotation: #fbbf24;
-	--os-annotation-wash: rgba(251, 191, 36, 0.14);
-	--os-speed: #fb923c;
-	--os-speed-wash: rgba(251, 146, 60, 0.14);
-	--os-nav-bg: rgba(8, 10, 13, 0.82);
+	--os-fg: #e8f0f1;
+	--os-muted: #95a4aa;
+	--os-meta: #66767d;
+	--os-accent: #27e0c1;
+	--os-brand-lo: #17bfa5;
+	--os-accent-soft: rgba(39, 224, 193, 0.14);
+	--os-accent-wash: rgba(39, 224, 193, 0.07);
+	--os-accent-border: rgba(39, 224, 193, 0.3);
+	--os-accent-ring: rgba(39, 224, 193, 0.34);
+	--os-danger: #ff5f6d;
+	--os-danger-soft: rgba(255, 95, 109, 0.15);
+	--os-annotation: #ffb454;
+	--os-annotation-wash: rgba(255, 180, 84, 0.15);
+	--os-speed: #ff8a5b;
+	--os-speed-wash: rgba(255, 138, 91, 0.16);
+	--os-nav-bg: rgba(0, 0, 0, 0.84);
 	--os-elev-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -12px rgba(0, 0, 0, 0.5);
 	--os-elev-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.65);
 }
@@ -57,12 +55,12 @@
 	--os-fg: #3a3f47;
 	--os-muted: #6b7280;
 	--os-meta: #98a0aa;
-	--os-accent: #0d9668;
-	--os-brand-lo: #0b7f59;
-	--os-accent-soft: rgba(13, 150, 104, 0.11);
-	--os-accent-wash: rgba(13, 150, 104, 0.06);
-	--os-accent-border: rgba(13, 150, 104, 0.25);
-	--os-accent-ring: rgba(13, 150, 104, 0.28);
+	--os-accent: #079b85;
+	--os-brand-lo: #067865;
+	--os-accent-soft: rgba(7, 155, 133, 0.11);
+	--os-accent-wash: rgba(7, 155, 133, 0.06);
+	--os-accent-border: rgba(7, 155, 133, 0.26);
+	--os-accent-ring: rgba(7, 155, 133, 0.3);
 	--os-danger: #dc2626;
 	--os-danger-soft: rgba(220, 38, 38, 0.11);
 	--os-annotation: #b45309;
@@ -144,7 +142,7 @@ body {
 }
 
 /* ---- navbar ----
-   Matches "OpenScreen Docs Site.dc.html" header 1:1: 60px height,
+   Matches "ScreenClub Docs Site.dc.html" header 1:1: 60px height,
    28px side padding, 18px item gap, divider after the brand lockup,
    muted secondary nav links, a bordered icon-box theme toggle, a
    bordered GitHub pill, and a filled Download pill — in that order. */
@@ -397,7 +395,7 @@ body {
 
 /* ===================================================================
    Docs layout — sidebar / article / TOC restyled after the
-   OpenScreen Design System's docs screen: rounded active states,
+   ScreenClub Design System's docs screen: rounded active states,
    quiet borders, monospace kickers, borderless "fact card" tables.
    =================================================================== */
 

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+	<defs>
+		<radialGradient id="glow" cx="50%" cy="0%" r="82%">
+			<stop offset="0" stop-color="#172027" />
+			<stop offset="0.68" stop-color="#000000" />
+		</radialGradient>
+		<linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+			<stop stop-color="#8af7e3" />
+			<stop offset="1" stop-color="#27e0c1" />
+		</linearGradient>
+	</defs>
+	<rect width="1200" height="630" fill="#000000" />
+	<rect width="1200" height="630" fill="url(#glow)" />
+	<rect x="72" y="72" width="1056" height="486" rx="36" fill="#0a0c0f" stroke="#20272e" stroke-width="2" />
+	<g transform="translate(128 153)">
+		<rect width="180" height="180" rx="42" fill="#000000" stroke="#20272e" stroke-width="2" />
+		<path d="M132 54c-12-13-27-20-46-20-35 0-62 25-62 56s27 56 62 56c19 0 34-7 46-20" fill="none" stroke="url(#cyan)" stroke-width="17" stroke-linecap="round" />
+		<path d="M92 71l48 28-48 28z" fill="#ffb454" />
+		<circle cx="145" cy="35" r="8" fill="#27e0c1" />
+	</g>
+	<text x="352" y="245" fill="#ffffff" font-family="Inter, system-ui, sans-serif" font-size="78" font-weight="700" letter-spacing="-3">ScreenClub</text>
+	<text x="356" y="310" fill="#95a4aa" font-family="Inter, system-ui, sans-serif" font-size="27" font-weight="500">Record. Edit. Share.</text>
+	<path d="M356 367h500" stroke="#20272e" stroke-width="2" />
+	<rect x="356" y="406" width="240" height="14" rx="7" fill="#ffb454" />
+	<rect x="608" y="406" width="322" height="14" rx="7" fill="#27e0c1" />
+	<circle cx="702" cy="413" r="15" fill="#5aa7ff" />
+	<path d="M702 389v71" stroke="#5aa7ff" stroke-width="4" />
+	<text x="356" y="486" fill="#66767d" font-family="ui-monospace, monospace" font-size="20">FREE · OPEN SOURCE · DESKTOP</text>
+</svg>

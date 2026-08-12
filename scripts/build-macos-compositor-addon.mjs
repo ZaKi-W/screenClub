@@ -52,7 +52,7 @@ const FFMPEG_RECIPE = `
   --disable-x86asm --arch=arm64 --enable-neon --cc=clang
 make -j"$(sysctl -n hw.ncpu)" && make install
 
-# No --enable-gpl, no --enable-nonfree: either one relicenses OpenScreen under the GPL.
+# No --enable-gpl, no --enable-nonfree: either one relicenses ScreenClub under the GPL.
 `.trim();
 
 function run(command, args, options = {}) {

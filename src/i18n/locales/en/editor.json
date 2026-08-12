@@ -43,7 +43,7 @@
 		"cameraDisconnected": "Webcam disconnected.",
 		"cameraNotFound": "Camera not found.",
 		"permissionDenied": "Recording permission denied. Please allow screen recording.",
-		"accessibilityAllowAndRetry": "Allow Accessibility access for OpenScreen, then press record again to start the countdown.",
+		"accessibilityAllowAndRetry": "Allow Accessibility access for ScreenClub, then press record again to start the countdown.",
 		"selectSource": "Please select a source to record"
 	},
 	"emptyState": {
@@ -82,9 +82,6 @@
 		"saveProject": "Save project",
 		"unsaved": "Unsaved",
 		"saved": "Saved",
-		"switchToLightTheme": "Switch to light theme",
-		"switchToDarkTheme": "Switch to dark theme",
-		"toggleTheme": "Toggle theme",
 		"settings": "Settings",
 		"export": "Export",
 		"renameProject": "Rename project",
@@ -282,7 +279,7 @@
 			"disclaimer": "Your video's transcript will be sent to the provider you choose. Nothing is shared until you connect one."
 		},
 		"authorUser": "You",
-		"authorAssistant": "OpenScreen",
+		"authorAssistant": "ScreenClub",
 		"rewindToMessage": "Rewind to this message",
 		"copyMessage": "Copy message",
 		"copiedToClipboard": "Copied to clipboard",

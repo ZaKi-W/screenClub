@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: openscreen-windows
-          path: release/**/Openscreen.Setup.*.exe
+          path: release/**/ScreenClub.Setup.*.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -184,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: openscreen-windows-store
-          path: release/**/Openscreen.Setup.*.appx
+          path: release/**/ScreenClub.Setup.*.appx
           if-no-files-found: error
           retention-days: 30
 
@@ -375,7 +375,7 @@ jobs:
       # slow enough to be unusable, so a mislabelled DMG is a real user harm.
       - name: Verify .app architecture matches the job
         run: |
-          BIN="${{ steps.find_app.outputs.app_bundle }}/Contents/MacOS/Openscreen"
+          BIN="${{ steps.find_app.outputs.app_bundle }}/Contents/MacOS/ScreenClub"
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then EXPECTED="arm64"; else EXPECTED="x86_64"; fi
           ACTUAL="$(lipo -archs "$BIN")"
           echo "job arch=${{ matrix.arch }}  expected=${EXPECTED}  actual=${ACTUAL}"
@@ -446,7 +446,7 @@ jobs:
             x64)   ARCH_LABEL="Intel" ;;
             *)     ARCH_LABEL="$ARCH" ;;
           esac
-          DMG_NAME="Openscreen-macOS-${ARCH_LABEL}-${VERSION}.dmg"
+          DMG_NAME="ScreenClub-macOS-${ARCH_LABEL}-${VERSION}.dmg"
           RELEASE_DIR="release/${VERSION}"
           DMG_OUTPUT="${RELEASE_DIR}/${DMG_NAME}"
           STAGING="${RELEASE_DIR}/dmg-staging"
@@ -459,7 +459,7 @@ jobs:
 
           hdiutil create \
             -srcfolder "$STAGING" \
-            -volname "Openscreen" \
+            -volname "ScreenClub" \
             -fs HFS+ \
             -fsargs "-c c=64,a=16,e=16" \
             -format UDBZ \

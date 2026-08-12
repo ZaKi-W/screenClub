@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen SegmentedControl — the pill-in-a-trough tab switcher.
+ * ScreenClub SegmentedControl — the pill-in-a-trough tab switcher.
  * Used for Media/Edit/Rec stage modes, Image/Color/Gradient background
  * tabs, Screen/Window source, etc. The active segment gets a raised
  * surface chip; inactive segments are muted text.

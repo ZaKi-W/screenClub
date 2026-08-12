@@ -43,7 +43,7 @@
 		"cameraDisconnected": "Веб-камера отключена.",
 		"cameraNotFound": "Камера не найдена.",
 		"permissionDenied": "Разрешение на запись запрещено. Пожалуйста, разрешите запись экрана.",
-		"accessibilityAllowAndRetry": "Разрешите OpenScreen доступ к Универсальному доступу, затем снова нажмите запись, чтобы начать обратный отсчет.",
+		"accessibilityAllowAndRetry": "Разрешите ScreenClub доступ к Универсальному доступу, затем снова нажмите запись, чтобы начать обратный отсчет.",
 		"selectSource": "Пожалуйста, выберите источник для записи"
 	},
 	"emptyState": {
@@ -82,9 +82,6 @@
 		"saveProject": "Сохранить проект",
 		"unsaved": "Не сохранено",
 		"saved": "Сохранено",
-		"switchToLightTheme": "Переключить на светлую тему",
-		"switchToDarkTheme": "Переключить на тёмную тему",
-		"toggleTheme": "Переключить тему",
 		"settings": "Настройки",
 		"export": "Экспорт",
 		"renameProject": "Переименовать проект",
@@ -282,7 +279,7 @@
 			"disclaimer": "Транскрипция вашего видео будет отправлена выбранному провайдеру. Пока вы не подключите провайдера, ничего не отправляется."
 		},
 		"authorUser": "Вы",
-		"authorAssistant": "OpenScreen",
+		"authorAssistant": "ScreenClub",
 		"rewindToMessage": "Откатить к этому сообщению",
 		"copyMessage": "Скопировать сообщение",
 		"copiedToClipboard": "Скопировано в буфер обмена",

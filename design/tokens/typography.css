@@ -1,5 +1,5 @@
 /* ============================================================
-   OpenScreen — Typography tokens
+   ScreenClub — Typography tokens
    The app UI ships in Inter (via Tailwind default sans on the
    Electron shell). The editor ALSO bundles a large font picker
    for on-canvas captions/annotations — those Google families are
@@ -55,7 +55,7 @@
 
 	/* ---- Tracking ------------------------------------------- */
 	/* The inspector explicitly zeroes letter-spacing everywhere;
-	   OpenScreen UI text is never tracked out. */
+	   ScreenClub UI text is never tracked out. */
 	--tracking-tight: -0.01em;
 	--tracking-normal: 0;
 }

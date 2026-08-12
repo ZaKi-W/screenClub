@@ -1,5 +1,5 @@
 /* ============================================================
-   OpenScreen Design System — global entry point.
+   ScreenClub Design System — global entry point.
    Consumers link THIS file. It is a manifest of @imports only;
    never add rules here. Everything reachable from these imports
    (tokens + @font-face + Google font @imports) ships to

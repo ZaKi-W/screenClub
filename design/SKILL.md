@@ -1,6 +1,6 @@
 ---
 name: openscreen-design
-description: Use this skill to generate well-branded interfaces and assets for OpenScreen (an AI-native screen-recording studio & video editor), either for production or throwaway prototypes/mocks/etc. Contains essential design guidelines, colors, type, fonts, assets, and UI kit components for prototyping.
+description: Use this skill to generate well-branded interfaces and assets for ScreenClub (an AI-native screen-recording studio & video editor), either for production or throwaway prototypes/mocks/etc. Contains essential design guidelines, colors, type, fonts, assets, and UI kit components for prototyping.
 user-invocable: true
 ---
 

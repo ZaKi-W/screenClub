@@ -1,4 +1,4 @@
-# Git Workflow for OpenScreen
+# Git Workflow for ScreenClub
 
 Conventions for the Mavis reins when working in this repo.
 

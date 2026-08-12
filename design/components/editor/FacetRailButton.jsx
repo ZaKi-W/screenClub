@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen FacetRailButton — an icon button in the vertical facet
+ * ScreenClub FacetRailButton — an icon button in the vertical facet
  * rail beside the inspector. Active facet gets the emerald-soft fill.
  */
 export function FacetRailButton({ active = false, title, onClick, children, style = {} }) {

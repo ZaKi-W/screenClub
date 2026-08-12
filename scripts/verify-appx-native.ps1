@@ -38,7 +38,7 @@ The .appx to verify.
 Leave the package registered afterwards, to click through the app by hand.
 
 .EXAMPLE
-powershell -File scripts/verify-appx-native.ps1 -Appx release/1.9.1/Openscreen.Setup.1.9.1.appx
+powershell -File scripts/verify-appx-native.ps1 -Appx release/1.9.1/ScreenClub.Setup.1.9.1.appx
 
 .NOTES
 Loose registration needs Developer Mode (Settings > System > For developers).
@@ -86,7 +86,7 @@ if ($InPackage) {
 	# LOAD_WITH_ALTERED_SEARCH_PATH is the flag Node passes for a .node addon, so
 	# the module's own directory is searched for its dependencies. Using the same
 	# flag is what makes this a test of require() rather than of something adjacent.
-	Add-Type -Namespace OpenScreen -Name Loader -MemberDefinition @'
+	Add-Type -Namespace ScreenClub -Name Loader -MemberDefinition @'
 [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
 public static extern System.IntPtr LoadLibraryExW(string path, System.IntPtr file, uint flags);
 '@
@@ -111,7 +111,7 @@ public static extern System.IntPtr LoadLibraryExW(string path, System.IntPtr fil
 	}
 
 	foreach ($file in Get-ChildItem -Path $dir -File | Where-Object { $_.Extension -match '^\.(dll|node)$' }) {
-		$handle = [OpenScreen.Loader]::LoadLibraryExW($file.FullName, [IntPtr]::Zero, 0x00000008)
+		$handle = [ScreenClub.Loader]::LoadLibraryExW($file.FullName, [IntPtr]::Zero, 0x00000008)
 		$lastError = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
 		$loaded = ($handle -ne [IntPtr]::Zero)
 		# 126 is ERROR_MOD_NOT_FOUND: a dependency of this binary is missing, which

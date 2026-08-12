@@ -120,7 +120,7 @@ describe("axcut-schema v7", () => {
 		]);
 	});
 
-	it("annotationRegionSchema accepts OpenScreen-shape regions", () => {
+	it("annotationRegionSchema accepts ScreenClub-shape regions", () => {
 		const region = annotationRegionSchema.parse({
 			id: "ann_1",
 			startMs: 0,

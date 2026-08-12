@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * OpenScreen ProgressBar — thin track with an emerald (or gradient)
+ * ScreenClub ProgressBar — thin track with an emerald (or gradient)
  * fill. Used for the recipe step progress and generic determinate
  * progress. Height defaults to the 3px recipe bar.
  */

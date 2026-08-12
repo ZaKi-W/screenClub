@@ -1,4 +1,4 @@
-# OpenScreen CLI
+# ScreenClub CLI
 
 Headless command-line interface for recording the screen and exporting `.openscreen`
 projects — no visible windows, machine-readable output. Designed so scripts, CI
@@ -31,16 +31,16 @@ Packaged app (the CLI ships inside the normal binary):
 
 ```bash
 # macOS
-/Applications/Openscreen.app/Contents/MacOS/Openscreen export demo.openscreen -o demo.mp4
+/Applications/ScreenClub.app/Contents/MacOS/ScreenClub export demo.openscreen -o demo.mp4
 # Windows
-"C:\Program Files\Openscreen\Openscreen.exe" export demo.openscreen -o demo.mp4
+"C:\Program Files\ScreenClub\ScreenClub.exe" export demo.openscreen -o demo.mp4
 ```
 
 CLI runs skip the single-instance lock, so they work while the GUI app is open.
 
 ## Commands
 
-### `openscreen record`
+### `screenclub record`
 
 Records headlessly through the same pipeline as the GUI: the native
 ScreenCaptureKit helper on macOS, the WGC helper on Windows (browser capture as
@@ -49,9 +49,9 @@ fallback). Recordings land in the app's recordings directory
 `.cursor.json` cursor-telemetry sidecar used for editable cursors and auto-zoom.
 
 ```bash
-openscreen record --duration 30 --project demo.openscreen --json
-openscreen record --window "My App" --mic --system-audio
-openscreen record --display 1 --cursor system
+screenclub record --duration 30 --project demo.openscreen --json
+screenclub record --window "My App" --mic --system-audio
+screenclub record --display 1 --cursor system
 ```
 
 | Option | Meaning |
@@ -83,15 +83,15 @@ Platform notes:
   which may show a system picker dialog and requires a desktop session
   (headless/SSH sessions without a portal cannot record).
 
-### `openscreen sources`
+### `screenclub sources`
 
 Lists capturable displays, windows, and microphones — the same enumeration the
 GUI picker uses — so scripts and agents can choose `--display`, `--window`, and
 `--mic-device` values without guesswork.
 
 ```bash
-openscreen sources          # human-readable
-openscreen sources --json
+screenclub sources          # human-readable
+screenclub sources --json
 ```
 
 `--json` emits the payload on the final `done` event:
@@ -109,7 +109,7 @@ openscreen sources --json
 }
 ```
 
-### `openscreen export`
+### `screenclub export`
 
 Renders a project to MP4 or GIF using the app's real export pipeline (WebCodecs +
 PixiJS, faster than realtime) in a hidden window. Falls back to SwiftShader when
@@ -117,10 +117,10 @@ no GPU is available (CI), and applies everything the editor would: zooms, trims,
 speed regions, wallpaper/padding, annotations, cursor rendering, webcam layouts.
 
 ```bash
-openscreen export demo.openscreen                    # format/quality from the project
-openscreen export demo.openscreen -o out.mp4 --quality source
-openscreen export demo.openscreen -o out.gif --gif-fps 20 --gif-size large
-openscreen export demo.openscreen --json | while read line; do ...; done
+screenclub export demo.openscreen                    # format/quality from the project
+screenclub export demo.openscreen -o out.mp4 --quality source
+screenclub export demo.openscreen -o out.gif --gif-fps 20 --gif-size large
+screenclub export demo.openscreen --json | while read line; do ...; done
 ```
 
 | Option | Meaning |
@@ -150,21 +150,21 @@ the recordings directory).
 **No cancel**: the native compositor has no abort mechanism — killing the CLI
 mid-export stops output but the render worker runs until process exit.
 
-### `openscreen pack`
+### `screenclub pack`
 
 Copies a project and everything it references (screen/webcam video, cursor
 telemetry sidecar) into one portable folder and rewrites the project's media
 paths:
 
 ```bash
-openscreen pack demo.openscreen --out bundle/
+screenclub pack demo.openscreen --out bundle/
 ```
 
 The folder survives being moved or shipped as a CI artifact: when the stored
 absolute paths go stale, the loader falls back to files with the same basename
 next to the project file.
 
-### `openscreen captions`
+### `screenclub captions`
 
 Transcribes the project's audio with the app's on-device Whisper model (no
 upload; language auto-detected) and writes the resulting caption annotations
@@ -172,8 +172,8 @@ into the project. Re-running replaces earlier auto-captions; manual annotations
 are preserved.
 
 ```bash
-openscreen captions demo.openscreen --min-words 2 --max-words 7
-openscreen export demo.openscreen -o demo.mp4   # subtitles are burned in
+screenclub captions demo.openscreen --min-words 2 --max-words 7
+screenclub export demo.openscreen -o demo.mp4   # subtitles are burned in
 ```
 
 Requires an audio track in the project's video (e.g. `record --mic`, or a
@@ -181,13 +181,13 @@ voiceover mixed in with a re-recorded source). Transcription runs on the
 native whisper.cpp engine (ggml-small); the model downloads automatically on
 first use.
 
-### `openscreen info`
+### `screenclub info`
 
 Prints a project summary (referenced media and whether it exists, format,
 region counts). Exits non-zero if the referenced video is missing.
 
 ```bash
-openscreen info demo.openscreen --json
+screenclub info demo.openscreen --json
 ```
 
 ## Machine-readable output (`--json`)
@@ -209,7 +209,7 @@ failure, 2 on bad arguments.
 
 ```bash
 # 1. Record 20 seconds of the running app
-openscreen record --window "MyProduct" --duration 20 --project demo.openscreen --json
+screenclub record --window "MyProduct" --duration 20 --project demo.openscreen --json
 
 # 2. Edit the project: add a zoom and a caption (plain JSON)
 node -e '
@@ -229,7 +229,7 @@ say -o voice.m4a --file-format=m4af "Welcome to my product. Here's a quick tour.
 
 # 4. Render with auto-zooms; the voiceover replaces the recording's own audio
 #    (drop --audio-mode replace to duck the original under the narration instead)
-openscreen export demo.openscreen -o demo.mp4 --auto-zoom --audio voice.m4a --audio-mode replace --json
+screenclub export demo.openscreen -o demo.mp4 --auto-zoom --audio voice.m4a --audio-mode replace --json
 ```
 
 ## Architecture
