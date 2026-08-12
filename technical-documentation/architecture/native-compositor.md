@@ -1,12 +1,14 @@
 # Native compositor
 
-`crates/compositor/` is the Rust + Direct3D 11 crate behind both the live preview and the MP4
-export. It exposes its compositor and pipeline to Electron through a small
+`crates/compositor/` is the Rust compositor behind MP4 export and the editor's optional Quality
+preview. It exposes its compositor and pipeline to Electron through a small
 napi-rs addon (`compositor-view-napi/`) loaded by
 [`compositorViewService`](../../electron/native-bridge/services/compositorViewService.ts).
-The whole GPU-resident path lives here — `demux → decode → composite → encode → mux`,
-zero CPU readback between stages — and is shared, with the same scene contract, by
-[preview.md](preview.md) (frame-by-frame RGBA8 pull) and
+The whole GPU-resident export path lives here — `demux → decode → composite → encode → mux`,
+zero CPU readback between those export stages. Quality preview shares the compositor and scene
+contract, but its final presentation is different: it reads each composed frame back to RGBA8 and
+sends it to the renderer. Performance and Power Saving preview bypass this crate and present media
+inside Chromium. The two native consumers are [preview.md](preview.md) (Quality-mode RGBA8 pull) and
 [export-pipeline.md](export-pipeline.md) (multiclip MP4 write). The performance
 numbers and the rejected alternatives that drove the design live in
 [engineering/rendering-performance.md](../engineering/rendering-performance.md).

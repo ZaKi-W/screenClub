@@ -53,7 +53,8 @@
 		"noneFound": "Nessuna fotocamera trovata",
 		"unavailable": "Fotocamera non disponibile",
 		"camera": "Fotocamera",
-		"cameraDevice": "Dispositivo fotocamera"
+		"cameraDevice": "Dispositivo fotocamera",
+		"hidePreview": "Nascondi anteprima fotocamera"
 	},
 	"cursor": {
 		"useEditableCursor": "Usa cursore modificabile",

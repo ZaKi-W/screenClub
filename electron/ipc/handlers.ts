@@ -16,6 +16,7 @@ import {
 	shell,
 	systemPreferences,
 } from "electron";
+import { isNativeCameraPreviewFrame } from "../../src/lib/cameraOverlay";
 import {
 	type NativeLinuxRecordingRequest,
 	portalCursorMode,
@@ -41,20 +42,9 @@ import type {
 	ProjectFileResult,
 	ProjectPathResult,
 } from "../../src/native/contracts";
-import {
-	compactSessionNow,
-	createSession,
-	deleteSession,
-	getSessionContextUsage,
-	listSessions,
-	renameSession,
-	rewindToMessage,
-	runChat,
-	selectSession,
-} from "../ai-edition/chat-service";
 import type { CursorTelemetryReader } from "../ai-edition/deep-agent/service";
 import { DocumentService } from "../ai-edition/document-service";
-import { LlmConfigStore } from "../ai-edition/llm-config-store";
+import type { LlmConfigStore } from "../ai-edition/llm-config-store";
 import { mainLogBuffer } from "../diagnostics/main-log-buffer";
 import { mainT } from "../i18n";
 import { RECORDINGS_DIR } from "../main";
@@ -1260,10 +1250,32 @@ function waitForNativeWindowsCaptureStart(proc: ChildProcessWithoutNullStreams) 
  * (`attachNativeMacCaptureOutputDrain`); Windows never did.
  */
 function attachNativeWindowsCaptureOutputDrain(proc: ChildProcessWithoutNullStreams) {
-	const drain = (chunk: Buffer) => {
-		nativeWindowsCaptureOutput += chunk.toString();
+	const lineBuffers = new Map<NodeJS.ReadableStream, string>();
+	const drain = function (this: NodeJS.ReadableStream, chunk: Buffer) {
+		const text = (lineBuffers.get(this) ?? "") + chunk.toString();
+		const lines = text.split(/\r?\n/);
+		lineBuffers.set(this, lines.pop() ?? "");
+		for (const line of lines) {
+			if (line.includes('"event":"webcam-preview-frame"')) {
+				const event = tryParseNativeHelperEvent(line);
+				if (event && isNativeCameraPreviewFrame(event)) {
+					const cameraWindow = BrowserWindow.getAllWindows().find((window) =>
+						window.webContents.getURL().includes("windowType=camera-overlay"),
+					);
+					cameraWindow?.webContents.send("camera-overlay-native-frame", event);
+				}
+				continue;
+			}
+			nativeWindowsCaptureOutput += `${line}\n`;
+		}
 	};
 	const cleanup = () => {
+		for (const [stream, pending] of lineBuffers) {
+			if (pending && !pending.includes('"event":"webcam-preview-frame"')) {
+				nativeWindowsCaptureOutput += pending;
+			}
+			lineBuffers.delete(stream);
+		}
 		proc.stdout.off("data", drain);
 		proc.stderr.off("data", drain);
 	};
@@ -1661,6 +1673,7 @@ export function registerIpcHandlers(
 	getSourceSelectorWindow: () => BrowserWindow | null,
 	getNotesWindow: () => BrowserWindow | null,
 	getCountdownOverlayWindow?: () => BrowserWindow | null,
+	getCameraOverlayWindow?: () => BrowserWindow | null,
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
@@ -1671,6 +1684,7 @@ export function registerIpcHandlers(
 			// after switching to Studio. Never exclude the editor from a display capture.
 			mainWindow?.webContents.getURL().includes("windowType=hud-overlay") ? mainWindow : null,
 			getNotesWindow(),
+			getCameraOverlayWindow?.(),
 		];
 		const excludedWindowIds = new Set<number>();
 
@@ -1978,14 +1992,17 @@ export function registerIpcHandlers(
 		overlayWindow.webContents.send("countdown-overlay-value", value, runId);
 	});
 
-	ipcMain.handle("countdown-overlay-hide", (_, runId: number) => {
+	ipcMain.handle("countdown-overlay-hide", (_, _runId: number) => {
 		const overlayWindow = getCountdownOverlayWindow?.();
 		if (!overlayWindow || overlayWindow.isDestroyed()) {
 			return;
 		}
 
-		overlayWindow.webContents.send("countdown-overlay-value", null, runId);
-		overlayWindow.hide();
+		// A countdown is used for only a few seconds, but a hidden BrowserWindow
+		// retains its WebContents, React tree, locale resources and renderer memory.
+		// Recreate it for the next recording instead of carrying that process state
+		// for the rest of the app session.
+		overlayWindow.destroy();
 	});
 
 	ipcMain.handle("is-native-windows-capture-available", async () => {
@@ -4038,12 +4055,19 @@ export function registerIpcHandlers(
 	// ad-hoc-signed build has no stable code identity for the item's ACL to trust —
 	// signing is the other half of that fix, and is not this function's business.)
 	// Memoised, so the "one instance" guarantee above still holds.
-	let aiEditionLlmConfigInstance: LlmConfigStore | null = null;
-	const getAiEditionLlmConfig = (): LlmConfigStore => {
-		if (!aiEditionLlmConfigInstance) {
-			aiEditionLlmConfigInstance = new LlmConfigStore(app.getPath("userData"));
+	let aiEditionLlmConfigPromise: Promise<LlmConfigStore> | null = null;
+	const getAiEditionLlmConfig = (): Promise<LlmConfigStore> => {
+		if (!aiEditionLlmConfigPromise) {
+			aiEditionLlmConfigPromise = import("../ai-edition/llm-config-store").then(
+				({ LlmConfigStore }) => new LlmConfigStore(app.getPath("userData")),
+			);
 		}
-		return aiEditionLlmConfigInstance;
+		return aiEditionLlmConfigPromise;
+	};
+	let chatServicePromise: Promise<typeof import("../ai-edition/chat-service")> | null = null;
+	const getChatService = () => {
+		chatServicePromise ??= import("../ai-edition/chat-service");
+		return chatServicePromise;
 	};
 
 	registerNativeBridgeHandlers({
@@ -4081,24 +4105,39 @@ export function registerIpcHandlers(
 		},
 		getAiEditionDocuments: () => aiEditionDocuments,
 		getAiEditionLlmConfig,
-		runAiEditionChat: (projectId, sessionId, message, document, sink) =>
-			runChat(projectId, sessionId, message, getAiEditionLlmConfig(), document, sink, {
+		runAiEditionChat: async (projectId, sessionId, message, document, sink) => {
+			const [{ runChat }, llmConfig] = await Promise.all([
+				getChatService(),
+				getAiEditionLlmConfig(),
+			]);
+			return runChat(projectId, sessionId, message, llmConfig, document, sink, {
 				cursor: agentCursorTelemetryReader,
-			}),
+			});
+		},
 		undoAiEditionToolBatch: (_projectId, _sessionId) => ({
 			success: false,
 			error: "Per-tool-batch undo retired in favor of per-message rewind.",
 		}),
-		rewindToMessage: (projectId, sessionId, messageId) =>
-			rewindToMessage(projectId, sessionId, messageId),
-		compactNow: (projectId, sessionId) =>
-			compactSessionNow(projectId, sessionId, getAiEditionLlmConfig()),
-		getContextUsage: getSessionContextUsage,
-		listAiEditionChatSessions: (projectId) => listSessions(projectId),
-		createAiEditionChatSession: (projectId, title) => createSession(projectId, title),
-		selectAiEditionChatSession: (projectId, sessionId) => selectSession(projectId, sessionId),
-		renameAiEditionChatSession: (projectId, sessionId, title) =>
-			renameSession(projectId, sessionId, title),
-		deleteAiEditionChatSession: (projectId, sessionId) => deleteSession(projectId, sessionId),
+		rewindToMessage: async (projectId, sessionId, messageId) =>
+			(await getChatService()).rewindToMessage(projectId, sessionId, messageId),
+		compactNow: async (projectId, sessionId) => {
+			const [{ compactSessionNow }, llmConfig] = await Promise.all([
+				getChatService(),
+				getAiEditionLlmConfig(),
+			]);
+			return compactSessionNow(projectId, sessionId, llmConfig);
+		},
+		getContextUsage: async (projectId, sessionId) =>
+			(await getChatService()).getSessionContextUsage(projectId, sessionId),
+		listAiEditionChatSessions: async (projectId) =>
+			(await getChatService()).listSessions(projectId),
+		createAiEditionChatSession: async (projectId, title) =>
+			(await getChatService()).createSession(projectId, title),
+		selectAiEditionChatSession: async (projectId, sessionId) =>
+			(await getChatService()).selectSession(projectId, sessionId),
+		renameAiEditionChatSession: async (projectId, sessionId, title) =>
+			(await getChatService()).renameSession(projectId, sessionId, title),
+		deleteAiEditionChatSession: async (projectId, sessionId) =>
+			(await getChatService()).deleteSession(projectId, sessionId),
 	});
 }

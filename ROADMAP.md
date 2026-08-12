@@ -34,7 +34,7 @@ Still open on this axis:
 - [ ] **Sanctioned ChatGPT / GitHub Copilot sign-in** — both were removed in 1.8.0: reaching a user's subscription meant shipping GitHub's and OpenAI's own client IDs and an editor `User-Agent` against endpoints reserved for first-party clients, from inside a signed installer. They come back on the vendors' sanctioned surfaces — GitHub's Copilot SDK (we register our own OAuth App) and `codex app-server` (drives the user's own `codex login`, no client ID shipped at all). Separate integrations, not a header swap.
 
 ## 🖥️ Rendering & platform parity
-The live preview and MP4 export run on one native Rust compositor: demux → decode → composite → hardware encode → mux, GPU-resident, no CPU readback between stages. Both consume the same scene description, so the frame you see in the editor is the frame the export writes — there is no second renderer that can drift.
+MP4 export stays GPU-resident across demux → decode → composite → hardware encode → mux. Quality preview uses the same native Rust compositor and scene contract. The default Performance preview now keeps video presentation inside Chromium, avoiding the old native RGBA readback and duplicate decode; it deliberately trades some native-only effect fidelity for responsiveness. The delivery trade-offs are tracked in [editor-performance-audit.md](technical-documentation/engineering/editor-performance-audit.md).
 
 That engine ran on Direct3D 11 only until 1.8.0, which made this the largest gap on the roadmap. It now has three backends behind the same scene contract:
 
@@ -44,6 +44,8 @@ That engine ran on Direct3D 11 only until 1.8.0, which made this the largest gap
 
 Still open on this axis:
 
+- [x] **Remove frame readback from the default preview.** Performance and Power Saving present Chromium media directly, use one display-rate visual clock independent of VFR delivery, and never mount the native decoder/readback/IPC canvas path. Outer UI remains budgeted separately.
+- [ ] **Remove Quality-mode frame readback.** Present a shared native GPU surface/texture directly instead of copying every composed RGBA frame through N-API, Electron IPC and Canvas while preserving exact export parity. See [editor-performance-audit.md](technical-documentation/engineering/editor-performance-audit.md).
 - [ ] **Hardware encode on Linux** — the export path is correct but software-encoded, so it is slower than the Windows and macOS ones. The capture helper already uses a hardware H.264 encoder; the export pipeline does not.
 - [ ] **A discrete-GPU and Intel QSV measurement.** Every number in [rendering-performance.md](technical-documentation/engineering/rendering-performance.md) comes from one passive-iGPU laptop, deliberately chosen as the weak case. Nothing is measured on the hardware most users have.
 

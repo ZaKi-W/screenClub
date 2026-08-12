@@ -53,7 +53,8 @@
 		"noneFound": "Камера не найдена",
 		"unavailable": "Камера недоступна",
 		"camera": "Камера",
-		"cameraDevice": "Устройство камеры"
+		"cameraDevice": "Устройство камеры",
+		"hidePreview": "Скрыть предпросмотр камеры"
 	},
 	"sourceSelector": {
 		"loading": "Загрузка источников...",

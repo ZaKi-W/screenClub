@@ -53,7 +53,8 @@
 		"noneFound": "カメラが見つかりません",
 		"unavailable": "カメラが利用できません",
 		"camera": "カメラ",
-		"cameraDevice": "カメラデバイス"
+		"cameraDevice": "カメラデバイス",
+		"hidePreview": "カメラプレビューを非表示"
 	},
 	"cursor": {
 		"useEditableCursor": "編集可能なカーソルを使う",

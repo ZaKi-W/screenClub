@@ -1695,8 +1695,14 @@ unsafe fn render_thread(
                     }
                 }
             }
-        } else {
+        } else if shared.playing.load(Ordering::Relaxed) {
+            // Between two 60 Hz presentation deadlines, yield briefly without
+            // delaying the next logical frame.
             std::thread::sleep(Duration::from_millis(4));
+        } else {
+            // Paused previews used to spin this state-poll loop at ~250 Hz even
+            // though parameter/scene edits only need display-frame latency.
+            std::thread::sleep(Duration::from_millis(16));
         }
     }
     Ok(())

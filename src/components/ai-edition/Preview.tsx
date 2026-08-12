@@ -32,7 +32,13 @@ interface PreviewProps {
 	selectedAnnotationId?: string | null;
 	onSelectAnnotation?: (id: string) => void;
 	onAnnotationPositionChange?: (id: string, position: { x: number; y: number }) => void;
-	onAnnotationSizeChange?: (id: string, size: { width: number; height: number }) => void;
+	onAnnotationRectChange?: (
+		id: string,
+		patch: {
+			position: { x: number; y: number };
+			size: { width: number; height: number };
+		},
+	) => void;
 	onAnnotationBlurDataChange?: (id: string, blurData: BlurData) => void;
 	onAnnotationCommit?: () => void;
 	seekTarget: { timeSec: number; requestId: number } | null;
@@ -63,7 +69,7 @@ export function Preview({
 	selectedAnnotationId,
 	onSelectAnnotation,
 	onAnnotationPositionChange,
-	onAnnotationSizeChange,
+	onAnnotationRectChange,
 	onAnnotationBlurDataChange,
 	onAnnotationCommit,
 	seekTarget,
@@ -75,11 +81,10 @@ export function Preview({
 }: PreviewProps) {
 	const te = useScopedT("editor");
 	// Subscribed HERE rather than passed down from NewEditorShell: the playhead is
-	// rewritten every animation frame during playback, and reading it in the shell
-	// re-rendered the whole editor (timeline included) once per frame — see
-	// NativePlaybackSync in NewEditorShell.tsx. The preview subtree genuinely has to
-	// re-render at that rate (annotations, captions, crop, Full Camera all animate
-	// against it); the timeline does not.
+	// rewritten at the mode's outer-UI cadence during playback, and reading it in the shell
+	// re-rendered the whole editor (timeline included) at that cadence — see
+	// NativePlaybackSync in NewEditorShell.tsx. Smooth zoom/camera/cursor motion uses
+	// the separate visual clock and bypasses this subscription; the timeline does not.
 	const currentTimeSec = useProjectStore((s) => s.currentTimeSec);
 	// ponytail: the preview follows the TIMELINE, not the raw asset list. A
 	// document can hold an asset no clip references — an import whose file was
@@ -152,7 +157,7 @@ export function Preview({
 					selectedAnnotationId={selectedAnnotationId}
 					onSelectAnnotation={onSelectAnnotation}
 					onAnnotationPositionChange={onAnnotationPositionChange}
-					onAnnotationSizeChange={onAnnotationSizeChange}
+					onAnnotationRectChange={onAnnotationRectChange}
 					onAnnotationBlurDataChange={onAnnotationBlurDataChange}
 					onAnnotationCommit={onAnnotationCommit}
 					seekTarget={seekTarget}

@@ -53,7 +53,8 @@
 		"noneFound": "لم يتم العثور على كاميرا",
 		"unavailable": "الكاميرا غير متوفرة",
 		"camera": "الكاميرا",
-		"cameraDevice": "جهاز الكاميرا"
+		"cameraDevice": "جهاز الكاميرا",
+		"hidePreview": "إخفاء معاينة الكاميرا"
 	},
 	"sourceSelector": {
 		"loading": "جاري تحميل المصادر...",

@@ -53,7 +53,8 @@
 		"noneFound": "Không tìm thấy máy ảnh",
 		"unavailable": "Máy ảnh không khả dụng",
 		"camera": "Máy ảnh",
-		"cameraDevice": "Thiết bị máy ảnh"
+		"cameraDevice": "Thiết bị máy ảnh",
+		"hidePreview": "Ẩn bản xem trước máy ảnh"
 	},
 	"sourceSelector": {
 		"loading": "Đang tải nguồn...",

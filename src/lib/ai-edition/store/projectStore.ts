@@ -38,6 +38,10 @@ export interface ProjectState {
 	removeAsset: (assetId: string) => Promise<void>;
 	saveDocument: (document: AxcutDocument) => Promise<void>;
 	setDocument: (document: AxcutDocument) => void;
+	/** Update during a pointer gesture without cloning a full undo snapshot on every move. */
+	setDocumentLive: (document: AxcutDocument) => void;
+	/** Commit the single undo snapshot captured at the start of the current live gesture. */
+	commitLiveDocumentHistory: () => void;
 	replaceTimeline: (intervals: Interval[], reason: string) => Promise<void>;
 	restoreFullTimeline: () => Promise<void>;
 	setSourceDuration: (sec: number) => void;
@@ -50,6 +54,8 @@ export interface ProjectState {
 function parseDocument(value: unknown): AxcutDocument {
 	return documentSchema.parse(value);
 }
+
+let liveGestureSnapshot: { projectId: string; doc: AxcutDocument } | null = null;
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
 	projectId: null,
@@ -226,6 +232,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 	},
 
 	setDocument(document) {
+		liveGestureSnapshot = null;
 		const prev = get().document;
 		if (prev && prev !== document) {
 			// ponytail: push snapshot to undo history. Defer import to avoid
@@ -239,6 +246,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 			revision: get().revision + 1,
 			dirty: true,
 		});
+	},
+
+	setDocumentLive(document) {
+		const prev = get().document;
+		if (prev && prev !== document && !liveGestureSnapshot) {
+			liveGestureSnapshot = {
+				projectId: prev.project.id,
+				doc: structuredClone(prev),
+			};
+		}
+		set({
+			document,
+			revision: get().revision + 1,
+			dirty: true,
+		});
+	},
+
+	commitLiveDocumentHistory() {
+		const snapshot = liveGestureSnapshot;
+		liveGestureSnapshot = null;
+		if (!snapshot) return;
+		void import("./undo").then(({ pushHistory }) => pushHistory(snapshot));
 	},
 
 	async replaceTimeline(intervals, reason) {
@@ -268,6 +297,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 	},
 
 	clear() {
+		liveGestureSnapshot = null;
 		set({
 			projectId: null,
 			document: null,

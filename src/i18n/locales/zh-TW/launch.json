@@ -53,7 +53,8 @@
 		"noneFound": "未找到攝影機",
 		"unavailable": "攝影機不可用",
 		"camera": "攝影機",
-		"cameraDevice": "攝影機裝置"
+		"cameraDevice": "攝影機裝置",
+		"hidePreview": "隱藏攝影機預覽"
 	},
 	"cursor": {
 		"useEditableCursor": "使用可編輯游標",

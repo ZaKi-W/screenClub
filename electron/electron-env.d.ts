@@ -412,6 +412,20 @@ interface Window {
 		dragHudOverlayTo: (deltaX: number, deltaY: number) => void;
 		endHudOverlayDrag: () => void;
 		setHudOverlaySize: (width: number, height: number) => void;
+		prepareCameraOverlay: (
+			request: import("../src/lib/cameraOverlay").CameraOverlayPrepareRequest,
+		) => Promise<{ shown: boolean; reason?: string }>;
+		hideCameraOverlay: () => void;
+		onCameraOverlayHidden: (callback: () => void) => () => void;
+		onNativeCameraPreviewFrame: (
+			callback: (frame: import("../src/lib/cameraOverlay").NativeCameraPreviewFrame) => void,
+		) => () => void;
+		publishRendererCameraPreviewFrame: (
+			frame: import("../src/lib/cameraOverlay").RendererCameraPreviewFrame,
+		) => void;
+		onRendererCameraPreviewFrame: (
+			callback: (frame: import("../src/lib/cameraOverlay").RendererCameraPreviewFrame) => void,
+		) => () => void;
 		showCountdownOverlay: (value: number, runId: number) => Promise<void>;
 		setCountdownOverlayValue: (value: number, runId: number) => Promise<void>;
 		hideCountdownOverlay: (runId: number) => Promise<void>;

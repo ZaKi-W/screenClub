@@ -15,21 +15,10 @@ import type {
 	AiEditionLlmSnapshot,
 	AiEditionProjectSummary,
 } from "../../../src/native/contracts";
-import {
-	type CaptionTranslateSegment,
-	translateCaptionSegments,
-} from "../../ai-edition/caption-translate";
+import type { CaptionTranslateSegment } from "../../ai-edition/caption-translate";
 import type { ChatEventSink } from "../../ai-edition/chat-service";
 import type { DocumentService } from "../../ai-edition/document-service";
 import type { LlmConfigStore, LlmCredential } from "../../ai-edition/llm-config-store";
-import {
-	listAnthropicModels,
-	listGoogleModels,
-	listMistralModels,
-	listOpenAiCompatibleModels,
-	listOpenRouterModels,
-	probeMiniMaxModels,
-} from "../../ai-edition/llm-provider-auth";
 import { PROVIDER_DEFINITIONS } from "../../ai-edition/provider-registry";
 
 export interface AiEditionServiceOptions {
@@ -43,7 +32,7 @@ export interface AiEditionServiceOptions {
 	 * Nothing here may call it at construction time; every use sits behind a
 	 * method the renderer has to invoke first.
 	 */
-	llmConfig: () => LlmConfigStore;
+	llmConfig: () => Promise<LlmConfigStore>;
 	runChat: (
 		projectId: string,
 		sessionId: string,
@@ -55,47 +44,53 @@ export interface AiEditionServiceOptions {
 		projectId: string,
 		sessionId: string,
 		messageId: string,
-	) =>
+	) => Promise<
 		| {
 				success: true;
 				prompt: string;
 				document: unknown;
 				messages: AiEditionChatMessage[];
 		  }
-		| { success: false; error: string };
+		| { success: false; error: string }
+	>;
 	compactNow: (projectId: string, sessionId: string) => Promise<AiEditionChatCompactResult | null>;
 	getContextUsage: (
 		projectId: string,
 		sessionId: string,
-	) => { usedTokens: number; budgetTokens: number; ratio: number; fillPercent: number } | null;
+	) => Promise<{
+		usedTokens: number;
+		budgetTokens: number;
+		ratio: number;
+		fillPercent: number;
+	} | null>;
 	// ponytail: legacy per-batch undo retired in favor of per-message rewind.
 	// Kept on the surface for IPC compatibility; always returns success=false.
 	undoLastToolBatch: (projectId: string, sessionId: string) => AiEditionChatResult;
-	listSessions: (projectId: string) => AiEditionChatSessionSummary[];
-	createSession: (projectId: string, title?: string) => AiEditionChatSessionSummary;
-	selectSession: (projectId: string, sessionId: string) => AiEditionChatSession | null;
+	listSessions: (projectId: string) => Promise<AiEditionChatSessionSummary[]>;
+	createSession: (projectId: string, title?: string) => Promise<AiEditionChatSessionSummary>;
+	selectSession: (projectId: string, sessionId: string) => Promise<AiEditionChatSession | null>;
 	renameSession: (
 		projectId: string,
 		sessionId: string,
 		title: string,
-	) => AiEditionChatSessionSummary | null;
-	deleteSession: (projectId: string, sessionId: string) => boolean;
+	) => Promise<AiEditionChatSessionSummary | null>;
+	deleteSession: (projectId: string, sessionId: string) => Promise<boolean>;
 }
 
 export class AiEditionService {
 	constructor(private readonly options: AiEditionServiceOptions) {}
 
-	private llmConfigInstance: LlmConfigStore | null = null;
+	private llmConfigPromise: Promise<LlmConfigStore> | null = null;
 
 	/**
 	 * Resolves the store on first use, then holds it — `llmGetSnapshot` alone
 	 * reads it once per provider definition. See `AiEditionServiceOptions.llmConfig`.
 	 */
-	private get llmConfig(): LlmConfigStore {
-		if (!this.llmConfigInstance) {
-			this.llmConfigInstance = this.options.llmConfig();
+	private getLlmConfig(): Promise<LlmConfigStore> {
+		if (!this.llmConfigPromise) {
+			this.llmConfigPromise = this.options.llmConfig();
 		}
-		return this.llmConfigInstance;
+		return this.llmConfigPromise;
 	}
 
 	async listProjects(): Promise<AiEditionProjectSummary[]> {
@@ -163,11 +158,12 @@ export class AiEditionService {
 	}
 
 	async llmGetSnapshot(): Promise<AiEditionLlmSnapshot> {
-		const config = this.llmConfig.getConfig();
+		const llmConfig = await this.getLlmConfig();
+		const config = llmConfig.getConfig();
 		const credentialSummary: AiEditionLlmSnapshot["credentialSummary"] = [];
 		const connectedProviders: string[] = [];
 		for (const def of PROVIDER_DEFINITIONS) {
-			const resolved = this.llmConfig.getCredential(def.id, def.envKeys);
+			const resolved = llmConfig.getCredential(def.id, def.envKeys);
 			const connected = Boolean(resolved);
 			if (connected) connectedProviders.push(def.id);
 			credentialSummary.push({
@@ -191,7 +187,7 @@ export class AiEditionService {
 
 	async llmSetConfig(config: AiEditionLlmConfig): Promise<AiEditionDocumentResult> {
 		try {
-			await this.llmConfig.setConfig(config);
+			await (await this.getLlmConfig()).setConfig(config);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -201,7 +197,7 @@ export class AiEditionService {
 	async llmSetApiKey(providerId: string, apiKey: string): Promise<AiEditionDocumentResult> {
 		try {
 			const entry: LlmCredential = { kind: "api-key", apiKey };
-			await this.llmConfig.setCredential(providerId, entry);
+			await (await this.getLlmConfig()).setCredential(providerId, entry);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -210,7 +206,7 @@ export class AiEditionService {
 
 	async llmRemoveApiKey(providerId: string): Promise<AiEditionDocumentResult> {
 		try {
-			await this.llmConfig.removeCredential(providerId);
+			await (await this.getLlmConfig()).removeCredential(providerId);
 			return { success: true };
 		} catch (error) {
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -218,10 +214,11 @@ export class AiEditionService {
 	}
 
 	async llmDisconnect(providerId: string): Promise<AiEditionLlmDisconnectResult> {
-		await this.llmConfig.removeCredential(providerId);
-		const active = this.llmConfig.getConfig();
+		const llmConfig = await this.getLlmConfig();
+		await llmConfig.removeCredential(providerId);
+		const active = llmConfig.getConfig();
 		if (active?.provider === providerId) {
-			await this.llmConfig.setConfig({
+			await llmConfig.setConfig({
 				provider: "",
 				model: "",
 			});
@@ -231,11 +228,20 @@ export class AiEditionService {
 
 	async llmListProviderModels(providerId: string): Promise<{ models: string[]; error?: string }> {
 		try {
+			const {
+				listAnthropicModels,
+				listGoogleModels,
+				listMistralModels,
+				listOpenAiCompatibleModels,
+				listOpenRouterModels,
+				probeMiniMaxModels,
+			} = await import("../../ai-edition/llm-provider-auth");
+			const llmConfig = await this.getLlmConfig();
 			const def = PROVIDER_DEFINITIONS.find((d) => d.id === providerId);
 			if (!def) return { models: [], error: `Unknown provider ${providerId}` };
-			const cred = this.llmConfig.getCredential(providerId, def.envKeys);
+			const cred = llmConfig.getCredential(providerId, def.envKeys);
 			if (!cred) return { models: [], error: "Not connected" };
-			const config = this.llmConfig.getConfig();
+			const config = llmConfig.getConfig();
 			const baseUrl = (config?.provider === providerId ? config.baseUrl : undefined) ?? def.baseUrl;
 
 			if (providerId === "anthropic") {
@@ -277,15 +283,18 @@ export class AiEditionService {
 		return { success: false, error: "Per-tool-batch undo retired in favor of per-message rewind." };
 	}
 
-	chatRewindToMessage(
+	async chatRewindToMessage(
 		projectId: string,
 		sessionId: string,
 		messageId: string,
-	): AiEditionChatRewindResult | { success: false; error: string } {
+	): Promise<AiEditionChatRewindResult | { success: false; error: string }> {
 		return this.options.rewindToMessage(projectId, sessionId, messageId);
 	}
 
-	chatContextUsage(projectId: string, sessionId: string): AiEditionChatBudget | null {
+	async chatContextUsage(
+		projectId: string,
+		sessionId: string,
+	): Promise<AiEditionChatBudget | null> {
 		return this.options.getContextUsage(projectId, sessionId);
 	}
 
@@ -293,37 +302,40 @@ export class AiEditionService {
 		return this.options.compactNow(projectId, sessionId);
 	}
 
-	chatListSessions(projectId: string): AiEditionChatSessionSummary[] {
+	async chatListSessions(projectId: string): Promise<AiEditionChatSessionSummary[]> {
 		return this.options.listSessions(projectId);
 	}
 
-	chatCreateSession(projectId: string, title?: string): AiEditionChatSessionSummary {
+	async chatCreateSession(projectId: string, title?: string): Promise<AiEditionChatSessionSummary> {
 		return this.options.createSession(projectId, title);
 	}
 
-	chatSelectSession(projectId: string, sessionId: string): AiEditionChatSession | null {
+	async chatSelectSession(
+		projectId: string,
+		sessionId: string,
+	): Promise<AiEditionChatSession | null> {
 		return this.options.selectSession(projectId, sessionId);
 	}
 
-	chatRenameSession(
+	async chatRenameSession(
 		projectId: string,
 		sessionId: string,
 		title: string,
-	): AiEditionChatSessionSummary | null {
+	): Promise<AiEditionChatSessionSummary | null> {
 		return this.options.renameSession(projectId, sessionId, title);
 	}
 
-	chatDeleteSession(projectId: string, sessionId: string): { success: boolean } {
-		return { success: this.options.deleteSession(projectId, sessionId) };
+	async chatDeleteSession(projectId: string, sessionId: string): Promise<{ success: boolean }> {
+		return { success: await this.options.deleteSession(projectId, sessionId) };
 	}
 
-	chatMessages(projectId: string, sessionId: string): AiEditionChatMessage[] {
-		const session = this.options.selectSession(projectId, sessionId);
+	async chatMessages(projectId: string, sessionId: string): Promise<AiEditionChatMessage[]> {
+		const session = await this.options.selectSession(projectId, sessionId);
 		return session?.messages ?? [];
 	}
 
-	chatBudget(projectId: string, sessionId: string): AiEditionChatBudget | null {
-		const usage = this.options.getContextUsage(projectId, sessionId);
+	async chatBudget(projectId: string, sessionId: string): Promise<AiEditionChatBudget | null> {
+		const usage = await this.options.getContextUsage(projectId, sessionId);
 		if (!usage) return null;
 		return {
 			usedTokens: usage.usedTokens,
@@ -353,7 +365,8 @@ export class AiEditionService {
 		targetLanguage: string;
 		sourceLanguage?: string;
 	}): Promise<AiEditionCaptionTranslateResult> {
-		const config = this.llmConfig.getConfig();
+		const llmConfig = await this.getLlmConfig();
+		const config = llmConfig.getConfig();
 		if (!config) {
 			return {
 				success: false,
@@ -362,7 +375,8 @@ export class AiEditionService {
 			};
 		}
 		const def = PROVIDER_DEFINITIONS.find((d) => d.id === config.provider);
-		const credential = def ? this.llmConfig.getCredential(def.id, def.envKeys) : null;
+		const credential = def ? llmConfig.getCredential(def.id, def.envKeys) : null;
+		const { translateCaptionSegments } = await import("../../ai-edition/caption-translate");
 		const result = await translateCaptionSegments({
 			segments: input.segments,
 			targetLanguage: input.targetLanguage,

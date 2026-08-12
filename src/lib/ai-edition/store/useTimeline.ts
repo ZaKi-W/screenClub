@@ -98,7 +98,8 @@ export function useTimeline() {
 	const document = useProjectStore((s) => s.document);
 	const projectId = useProjectStore((s) => s.projectId);
 	const saveDocument = useProjectStore((s) => s.saveDocument);
-	const setDocument = useProjectStore((s) => s.setDocument);
+	const setDocumentLive = useProjectStore((s) => s.setDocumentLive);
+	const commitLiveDocumentHistory = useProjectStore((s) => s.commitLiveDocumentHistory);
 	const [selection, setSelection] = useState<RegionHandle | null>(null);
 	// F2.7 — shift-click multi-selection. `selection` stays the inspector's
 	// focused region (the last one clicked); `multiSelection` is the full set
@@ -519,16 +520,17 @@ export function useTimeline() {
 					focus: { cx: finiteFraction(focus.cx), cy: finiteFraction(focus.cy) },
 				}) as AxcutDocument["zoomRanges"],
 			};
-			setDocument(next);
+			setDocumentLive(next);
 		},
-		[setDocument],
+		[setDocumentLive],
 	);
 
 	const commitZoomFocus = useCallback(async () => {
 		const doc = useProjectStore.getState().document;
 		if (!doc) return;
+		commitLiveDocumentHistory();
 		await saveDocument(doc);
-	}, [saveDocument]);
+	}, [commitLiveDocumentHistory, saveDocument]);
 
 	// Zoom-level control for the region-settings panel (1-6, matches
 	// zoomRegionSchema's depth literal union — 1.0x..3.5x in 0.5x steps per
@@ -620,16 +622,17 @@ export function useTimeline() {
 				...doc,
 				annotations: patchPillById(doc.annotations, id, patch),
 			};
-			setDocument(next);
+			setDocumentLive(next);
 		},
-		[setDocument],
+		[setDocumentLive],
 	);
 
 	const commitAnnotationChange = useCallback(async () => {
 		const doc = useProjectStore.getState().document;
 		if (!doc) return;
+		commitLiveDocumentHistory();
 		await saveDocument(doc);
-	}, [saveDocument]);
+	}, [commitLiveDocumentHistory, saveDocument]);
 
 	const updateSpeedSpan = useCallback(
 		async (id: string, startMs: number, endMs: number) => {

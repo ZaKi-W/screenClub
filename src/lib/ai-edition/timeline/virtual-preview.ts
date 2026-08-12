@@ -10,6 +10,117 @@ export type VirtualPosition = {
 	sourceTimeSec: number;
 };
 
+interface IndexedClipSet {
+	clips: AxcutClip[];
+	indexById: Map<string, number>;
+	indexesByAssetId: Map<string, number[]>;
+}
+
+/**
+ * Immutable lookup tables for the screen preview's hot playback path.
+ *
+ * Building the kept-segment ownership relation used to happen indirectly on
+ * every visual frame: `locateKeptSegment` filtered every segment and each
+ * filter item linearly scanned the raw clips via `findRawClipForSegment`.
+ * With C clips that made a nominally simple containment check O(C²) at 60 Hz.
+ * This index pays the ownership work once when clips/trims change, then keeps
+ * preferred-clip lookup O(1) and kept-segment containment O(number of segments
+ * belonging to the active clip).
+ */
+export interface PlaybackIndex {
+	raw: IndexedClipSet;
+	playback: IndexedClipSet;
+	rawClipBySegmentIndex: Array<AxcutClip | undefined>;
+	rawClipIdBySegmentIndex: Array<string | undefined>;
+	segmentIndexesByRawClipId: Map<string, number[]>;
+	rawVirtualStartBySegmentIndex: number[];
+}
+
+function indexClips(clips: AxcutClip[]): IndexedClipSet {
+	const indexById = new Map<string, number>();
+	const indexesByAssetId = new Map<string, number[]>();
+	clips.forEach((clip, index) => {
+		indexById.set(clip.id, index);
+		const assetIndexes = indexesByAssetId.get(clip.assetId);
+		if (assetIndexes) assetIndexes.push(index);
+		else indexesByAssetId.set(clip.assetId, [index]);
+	});
+	return { clips, indexById, indexesByAssetId };
+}
+
+function resolveRawClipForSegment(
+	segment: AxcutClip,
+	rawClips: AxcutClip[],
+	rawIndexById: Map<string, number>,
+	rawIndexesByAssetId: Map<string, number[]>,
+): AxcutClip | undefined {
+	const exactIndex = rawIndexById.get(segment.id);
+	if (exactIndex !== undefined) return rawClips[exactIndex];
+
+	// `resolvePlaybackSegments` appends `_segN` to the raw id. Remove the LAST
+	// suffix so raw ids that themselves contain `_seg` still resolve correctly.
+	const suffixAt = segment.id.lastIndexOf("_seg");
+	if (suffixAt > 0) {
+		const ownerIndex = rawIndexById.get(segment.id.slice(0, suffixAt));
+		if (ownerIndex !== undefined) return rawClips[ownerIndex];
+	}
+
+	// Compatibility path for hand-built/legacy segments whose ids do not use the
+	// producer convention. Scope the scan to the segment's asset instead of all
+	// raw clips; array order remains the tie-breaker, matching the old `.find`.
+	for (const index of rawIndexesByAssetId.get(segment.assetId) ?? []) {
+		const clip = rawClips[index];
+		if (
+			segment.sourceStartSec >= clip.sourceStartSec - 0.001 &&
+			(clip.sourceEndSec == null || segment.sourceStartSec <= clip.sourceEndSec + 0.001)
+		) {
+			return clip;
+		}
+	}
+	return undefined;
+}
+
+export function createPlaybackIndex(
+	rawClips: AxcutClip[],
+	playbackClips: AxcutClip[],
+): PlaybackIndex {
+	const raw = indexClips(rawClips);
+	const playback = indexClips(playbackClips);
+	const rawClipBySegmentIndex: Array<AxcutClip | undefined> = [];
+	const rawClipIdBySegmentIndex: Array<string | undefined> = [];
+	const segmentIndexesByRawClipId = new Map<string, number[]>();
+	const rawVirtualStartBySegmentIndex: number[] = [];
+
+	playbackClips.forEach((segment, segmentIndex) => {
+		const rawClip = resolveRawClipForSegment(
+			segment,
+			rawClips,
+			raw.indexById,
+			raw.indexesByAssetId,
+		);
+		rawClipBySegmentIndex.push(rawClip);
+		rawClipIdBySegmentIndex.push(rawClip?.id);
+		rawVirtualStartBySegmentIndex.push(
+			rawClip
+				? rawClip.timelineStartSec + (segment.sourceStartSec - rawClip.sourceStartSec)
+				: segment.timelineStartSec,
+		);
+		if (!rawClip) return;
+		const owned = segmentIndexesByRawClipId.get(rawClip.id);
+		if (owned) owned.push(segmentIndex);
+		else segmentIndexesByRawClipId.set(rawClip.id, [segmentIndex]);
+	});
+
+	return {
+		raw,
+		playback,
+		rawClipBySegmentIndex,
+		rawClipIdBySegmentIndex,
+		segmentIndexesByRawClipId,
+		rawVirtualStartBySegmentIndex,
+	};
+}
+
 export function totalVirtualDuration(clips: AxcutClip[]): number {
 	return clips.at(-1)?.timelineEndSec ?? 0;
 }
@@ -222,6 +333,70 @@ export function locateSourcePosition(
 	return toPositionAt(clips, clipIndex, sourceTimeSec);
 }
 
+function locateSourcePositionInIndexedSet(
+	set: IndexedClipSet,
+	sourceTimeSec: number,
+	assetId: string | undefined,
+	epsilon: number,
+	preferredClipId: string | undefined,
+	indexSubset?: readonly number[],
+): VirtualPosition | null {
+	const { clips, indexById, indexesByAssetId } = set;
+	if (preferredClipId) {
+		const preferredIndex = indexById.get(preferredClipId);
+		if (
+			preferredIndex !== undefined &&
+			(!indexSubset || indexSubset.includes(preferredIndex)) &&
+			(!assetId || clips[preferredIndex].assetId === assetId) &&
+			isWithinClipBounds(clips[preferredIndex], sourceTimeSec, epsilon, "inclusive")
+		) {
+			return toPositionAt(clips, preferredIndex, sourceTimeSec);
+		}
+	}
+
+	const candidates = indexSubset ?? (assetId ? indexesByAssetId.get(assetId) : undefined);
+	const scan = (closingEdge: ClosingEdge): number => {
+		if (candidates) {
+			for (const index of candidates) {
+				const clip = clips[index];
+				if (
+					(!assetId || clip.assetId === assetId) &&
+					isWithinClipBounds(clip, sourceTimeSec, epsilon, closingEdge)
+				) {
+					return index;
+				}
+			}
+			return -1;
+		}
+		return clips.findIndex(
+			(clip) =>
+				(!assetId || clip.assetId === assetId) &&
+				isWithinClipBounds(clip, sourceTimeSec, epsilon, closingEdge),
+		);
+	};
+
+	const strict = scan("exclusive");
+	const clipIndex = strict >= 0 ? strict : scan("inclusive");
+	return clipIndex >= 0 ? toPositionAt(clips, clipIndex, sourceTimeSec) : null;
+}
+
+/** Indexed counterpart used by the visual frame loop for raw document clips. */
+export function locateRawSourcePosition(
+	index: PlaybackIndex,
+	sourceTimeSec: number,
+	assetId?: string,
+	epsilon = 0.05,
+	preferredClipId?: string,
+): VirtualPosition | null {
+	return locateSourcePositionInIndexedSet(
+		index.raw,
+		sourceTimeSec,
+		assetId,
+		epsilon,
+		preferredClipId,
+	);
+}
+
 /**
  * "Where am I in the KEPT content of the clip that is playing?" — the trim-aware
  * counterpart of {@link locateSourcePosition}, resolved against the playback segments
@@ -249,6 +424,71 @@ export function locateKeptSegment(
 		: [];
 	if (ownSegments.length > 0) return locateSourcePosition(ownSegments, sourceTimeSec, assetId);
 	return locateSourcePosition(playbackClips, sourceTimeSec, assetId);
+}
+
+/**
+ * Trim-aware containment using the ownership relation precomputed by
+ * {@link createPlaybackIndex}. No arrays are filtered and no segment re-scans
+ * the raw clips on a visual frame.
+ */
+export function locateKeptSegmentIndexed(
+	index: PlaybackIndex,
+	sourceTimeSec: number,
+	assetId?: string,
+	activeClipId?: string,
+): VirtualPosition | null {
+	const ownSegmentIndexes = activeClipId
+		? index.segmentIndexesByRawClipId.get(activeClipId)
+		: undefined;
+	if (ownSegmentIndexes && ownSegmentIndexes.length > 0) {
+		return locateSourcePositionInIndexedSet(
+			index.playback,
+			sourceTimeSec,
+			assetId,
+			0.05,
+			undefined,
+			ownSegmentIndexes,
+		);
+	}
+	return locateSourcePositionInIndexedSet(index.playback, sourceTimeSec, assetId, 0.05, undefined);
+}
+
+export function findNextKeptSegmentIndexed(
+	index: PlaybackIndex,
+	currentRawTime: number,
+	activeSourceId?: string,
+	currentSourceTime?: number,
+	activeClipId?: string,
+): AxcutClip | undefined {
+	for (let segmentIndex = 0; segmentIndex < index.playback.clips.length; segmentIndex++) {
+		const segment = index.playback.clips[segmentIndex];
+		if (index.rawVirtualStartBySegmentIndex[segmentIndex] > currentRawTime + 0.001) {
+			return segment;
+		}
+		if (
+			activeSourceId &&
+			activeClipId &&
+			currentSourceTime !== undefined &&
+			segment.assetId === activeSourceId &&
+			index.rawClipIdBySegmentIndex[segmentIndex] === activeClipId &&
+			segment.sourceStartSec > currentSourceTime + 0.001
+		) {
+			return segment;
+		}
+	}
+	return undefined;
+}
+
+export function rawClipForSegment(index: PlaybackIndex, segment: AxcutClip): AxcutClip | undefined {
+	const segmentIndex = index.playback.indexById.get(segment.id);
+	return segmentIndex === undefined ? undefined : index.rawClipBySegmentIndex[segmentIndex];
+}
+
+export function rawVirtualStartForSegment(index: PlaybackIndex, segment: AxcutClip): number {
+	const segmentIndex = index.playback.indexById.get(segment.id);
+	return segmentIndex === undefined
+		? segment.timelineStartSec
+		: index.rawVirtualStartBySegmentIndex[segmentIndex];
 }
 
 export function keptWordIdSet(clips: AxcutClip[]): Set<string> {

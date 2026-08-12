@@ -13,6 +13,7 @@ import {
 	replaceTimeline as replaceTimelineOp,
 } from "@/lib/ai-edition/document/timeline";
 import { type AxcutClip, documentSchema } from "@/lib/ai-edition/schema";
+import { usePreviewPerformancePolicy } from "@/lib/ai-edition/store/previewPerformance";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
 import {
 	useAssetTranscriptions,
@@ -56,20 +57,20 @@ interface SeekTarget {
 }
 
 /**
- * Renders nothing. Exists purely so the per-frame `currentTimeSec` subscription
+ * Renders nothing. Exists purely so the budgeted `currentTimeSec` subscription
  * that feeds the native transport lives in a LEAF instead of in the shell.
  *
- * `currentTimeSec` is rewritten on every animation frame during playback
- * (VirtualPreview's rAF tick → onTimeChange → setCurrentTime). Reading it
+ * `currentTimeSec` is rewritten at the mode's outer-UI cadence during playback
+ * (visual tick → throttled onTimeChange → setCurrentTime). Reading it
  * directly in NewEditorShell re-rendered the entire editor — timeline, clips,
- * waveforms, inspector, preview — 60×/s, which is what made the playhead and
+ * waveforms, inspector, preview — at playback cadence, which made the playhead and
  * the transcript cue point stutter: the whole tree had to commit before the
  * playhead's own DOM node moved. Everything that genuinely needs the live
  * playhead now subscribes to it where it is actually rendered (PlayheadOverlay,
  * TransportBar, Preview, TranscriptPane, NativeCompositorOverlay, and this
  * component); the shell itself reads it imperatively via getState() in the
- * handlers that need it. The store write cadence is unchanged — `currentTimeSec`
- * is still the source of truth, still updated every frame.
+ * handlers that need it. Smooth preview effects use PlaybackClockRef directly;
+ * `currentTimeSec` remains the lower-frequency source of truth for outer UI.
  */
 function NativePlaybackSync({
 	visibleClips,
@@ -78,11 +79,20 @@ function NativePlaybackSync({
 	visibleClips: AxcutClip[];
 	clips: AxcutClip[];
 }) {
-	const playing = useProjectStore((s) => s.playing);
-	const currentTimeSec = useProjectStore((s) => s.currentTimeSec);
+	const previewPolicy = usePreviewPerformancePolicy();
+	const playing = useProjectStore((s) => (previewPolicy.useNativeCompositor ? s.playing : false));
+	const currentTimeSec = useProjectStore((s) =>
+		previewPolicy.useNativeCompositor ? s.currentTimeSec : 0,
+	);
 	// visibleClips = trim-compressed native stream; `clips` = RAW layout currentTimeSec
 	// is measured against. resolveNativePosition needs both (see timelineMap).
-	useNativePlaybackSync(playing, currentTimeSec, visibleClips, clips);
+	useNativePlaybackSync(
+		playing,
+		currentTimeSec,
+		visibleClips,
+		clips,
+		previewPolicy.useNativeCompositor,
+	);
 	return null;
 }
 
@@ -343,6 +353,7 @@ export function NewEditorShell() {
 		if (!document) return [];
 		return document.assets.map((asset) => ({
 			id: asset.id,
+			sourcePath: asset.originalPath,
 			// Real Electron assets are filesystem paths and go through toFileUrl.
 			// In the browser preview an asset can already point at an http(s)/
 			// blob/data URL served by Vite; toFileUrl would mangle those into a
@@ -1181,8 +1192,8 @@ export function NewEditorShell() {
 										// au relâchement, via `onAnnotationCommit`.
 										tl.updateAnnotationLive(id, { position });
 									}}
-									onAnnotationSizeChange={(id, size) => {
-										tl.updateAnnotationLive(id, { size });
+									onAnnotationRectChange={(id, patch) => {
+										tl.updateAnnotationLive(id, patch);
 									}}
 									onAnnotationBlurDataChange={(id, blurData) =>
 										tl.updateAnnotationLive(id, { blurData })

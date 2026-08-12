@@ -129,6 +129,7 @@ export function useNativePlaybackSync(
 	visibleSegments: readonly AxcutClip[],
 	/** RAW clip layout (`document.timeline.clips`) `currentTimeSec` is expressed against. */
 	rawClips: readonly AxcutClip[],
+	enabled = true,
 ): void {
 	const document = useProjectStore((state) => state.document);
 	const speedRegions = useMemo(
@@ -154,11 +155,11 @@ export function useNativePlaybackSync(
 
 	// Play/pause → native free-run.
 	useEffect(() => {
-		if (!active) {
+		if (!active || !enabled) {
 			return;
 		}
 		setNativePlaying(playing);
-	}, [active, playing]);
+	}, [active, enabled, playing]);
 
 	// Scrub/step while paused OR periodic resync during playback when drift > 100ms
 	const lastSyncedSourceTimeRef = useRef<number | null>(null);
@@ -167,7 +168,7 @@ export function useNativePlaybackSync(
 	const lastActiveClipIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
-		if (!active || sourceTimeSec === null || !activeClipId) {
+		if (!active || !enabled || sourceTimeSec === null || !activeClipId) {
 			return;
 		}
 		const now = performance.now();
@@ -215,5 +216,5 @@ export function useNativePlaybackSync(
 			lastSyncedTimelineTimeRef.current = currentTimeSec;
 			lastSyncedWallTimeRef.current = now;
 		}
-	}, [active, playing, activeClipId, sourceTimeSec, currentTimeSec, speedRegions]);
+	}, [active, enabled, playing, activeClipId, sourceTimeSec, currentTimeSec, speedRegions]);
 }

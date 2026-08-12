@@ -1,4 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import type {
+	CameraOverlayPrepareRequest,
+	NativeCameraPreviewFrame,
+	RendererCameraPreviewFrame,
+} from "../src/lib/cameraOverlay";
 import type { CaptureAreaSelection } from "../src/lib/captureArea";
 import type {
 	HudNativeInputMenuRequest,
@@ -113,6 +118,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	setHudOverlaySize: (width: number, height: number) => {
 		ipcRenderer.send("hud-overlay-set-size", width, height);
+	},
+	prepareCameraOverlay: (request: CameraOverlayPrepareRequest) =>
+		ipcRenderer.invoke("camera-overlay-prepare", request) as Promise<{
+			shown: boolean;
+			reason?: string;
+		}>,
+	hideCameraOverlay: () => {
+		ipcRenderer.send("camera-overlay-hide");
+	},
+	onCameraOverlayHidden: (callback: () => void) => {
+		const listener = () => callback();
+		ipcRenderer.on("camera-overlay-hidden", listener);
+		return () => ipcRenderer.removeListener("camera-overlay-hidden", listener);
+	},
+	onNativeCameraPreviewFrame: (callback: (frame: NativeCameraPreviewFrame) => void) => {
+		const listener = (_event: unknown, frame: NativeCameraPreviewFrame) => callback(frame);
+		ipcRenderer.on("camera-overlay-native-frame", listener);
+		return () => ipcRenderer.removeListener("camera-overlay-native-frame", listener);
+	},
+	publishRendererCameraPreviewFrame: (frame: RendererCameraPreviewFrame) => {
+		ipcRenderer.send("camera-overlay-renderer-frame", frame);
+	},
+	onRendererCameraPreviewFrame: (callback: (frame: RendererCameraPreviewFrame) => void) => {
+		const listener = (_event: unknown, frame: RendererCameraPreviewFrame) => callback(frame);
+		ipcRenderer.on("camera-overlay-renderer-frame", listener);
+		return () => ipcRenderer.removeListener("camera-overlay-renderer-frame", listener);
 	},
 	getSources: async (opts: Electron.SourcesOptions) => {
 		return await ipcRenderer.invoke("get-sources", opts);

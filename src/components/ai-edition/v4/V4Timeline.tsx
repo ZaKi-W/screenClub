@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
 	memo,
+	type MouseEvent as ReactMouseEvent,
 	type PointerEvent as ReactPointerEvent,
 	useCallback,
 	useEffect,
@@ -129,6 +130,15 @@ const PILL_SNAP_PX = 8;
  *  (see .tlClip) rather than inserted between them, so it cannot displace the
  *  clips that follow — which is what a flex `gap` did, once per junction. */
 const CLIP_GUTTER_PX = 6;
+/**
+ * Keep waveform work warm just outside the viewport so a short pan does not
+ * make bars pop in, while still avoiding audio extraction and hundreds of DOM
+ * nodes for clips that are far off-screen. The clip cards themselves are never
+ * virtualised: their full timeline geometry and pointer targets remain intact.
+ */
+const WAVEFORM_OVERSCAN_VIEWPORTS = 0.5;
+/** Below four 3px bars the waveform communicates no useful shape. */
+const MIN_WAVEFORM_WIDTH_PX = 12;
 /**
  * Shortest region a resize may leave behind — the storage grid itself (regions
  * are `Math.round`ed to whole ms, and coalesceRegionsForRuler's epsilon is 1 ms),
@@ -251,11 +261,14 @@ const ClipWaveform = memo(function ClipWaveform({
 	assetDurationSec,
 	sourceStartSec,
 	sourceEndSec,
+	renderedWidthPx,
 }: {
 	videoUrl: string | undefined;
 	assetDurationSec: number | undefined;
 	sourceStartSec: number;
 	sourceEndSec: number;
+	/** Width of this clip card at the current timeline zoom. */
+	renderedWidthPx: number;
 }) {
 	// The duration is what tells `useAudioPeaks` whether this recording is small
 	// enough to decode whole — the file's byte size does not, on compressed video.
@@ -268,11 +281,14 @@ const ClipWaveform = memo(function ClipWaveform({
 		const startBlock = Math.max(0, Math.floor(sourceStartSec * blocksPerSec));
 		const endBlock = Math.min(totalBlocks, Math.ceil(sourceEndSec * blocksPerSec));
 		const rangeBlocks = Math.max(1, endBlock - startBlock);
-		// One bar per ~120ms of clip duration — dense enough to read as a
-		// continuous waveform — but capped so a long recording doesn't spawn
-		// thousands of DOM nodes in a single clip (a clip is at most ~the timeline
-		// width on screen, so beyond a few hundred bars they're sub-pixel anyway).
-		const barCount = Math.min(400, Math.max(20, Math.round((sourceEndSec - sourceStartSec) * 8)));
+		// Never make more bars than the card can display. Duration-only sizing used
+		// to give every short/narrow clip at least 20 spans and long clips up to 400,
+		// even when those spans collapsed into the same few screen pixels. This cap
+		// keeps the useful temporal density while avoiding invisible DOM work in
+		// large, zoomed-out projects.
+		const temporalBarCount = Math.max(4, Math.round((sourceEndSec - sourceStartSec) * 8));
+		const pixelBarCount = Math.max(4, Math.floor(renderedWidthPx / 3));
+		const barCount = Math.min(400, temporalBarCount, pixelBarCount);
 		const result: number[] = [];
 		for (let i = 0; i < barCount; i++) {
 			const blockStart = startBlock + Math.floor((i / barCount) * rangeBlocks);
@@ -289,7 +305,7 @@ const ClipWaveform = memo(function ClipWaveform({
 			result.push(amp);
 		}
 		return result;
-	}, [peaks, assetDurationSec, sourceStartSec, sourceEndSec]);
+	}, [peaks, assetDurationSec, sourceStartSec, sourceEndSec, renderedWidthPx]);
 
 	if (!bars) return null;
 	return (
@@ -316,6 +332,243 @@ interface LanePill {
 	/** Underlying row ids this pill represents — >1 for a coalesced trim group. */
 	sourceIds: string[];
 }
+
+function laneClass(kind: LanePill["kind"]): string {
+	return kind === "annotation"
+		? styles.laneAnnotation
+		: kind === "speed"
+			? styles.laneSpeed
+			: kind === "trim"
+				? styles.laneTrim
+				: kind === "cameraFullscreen"
+					? styles.laneCameraFullscreen
+					: styles.laneZoom;
+}
+
+function PillKindIcon({ kind }: { kind: LanePill["kind"] }) {
+	return kind === "annotation" ? (
+		<MessageSquare size={11} />
+	) : kind === "speed" ? (
+		<Clock size={11} />
+	) : kind === "trim" ? (
+		<Scissors size={11} />
+	) : kind === "cameraFullscreen" ? (
+		<Maximize2 size={11} />
+	) : (
+		<ZoomIn size={11} />
+	);
+}
+
+interface TimelinePillSegmentProps {
+	pill: LanePill;
+	segStartPct: number;
+	segWidthPct: number;
+	durationSec: number;
+	pxPerSec: number;
+	shiftPx: number;
+	immediate: boolean;
+	showContent: boolean;
+	interactive: boolean;
+	selected: boolean;
+	clipDragActive: boolean;
+	suppressLeftSeam: boolean;
+	suppressRightSeam: boolean;
+	onStartDrag: (event: ReactPointerEvent, pill: LanePill, mode: "move" | "l" | "r") => void;
+}
+
+const TimelinePillSegment = memo(
+	function TimelinePillSegment({
+		pill,
+		segStartPct,
+		segWidthPct,
+		durationSec,
+		pxPerSec,
+		shiftPx,
+		immediate,
+		showContent,
+		interactive,
+		selected,
+		clipDragActive,
+		suppressLeftSeam,
+		suppressRightSeam,
+		onStartDrag,
+	}: TimelinePillSegmentProps) {
+		const { compact, roomForLabel } = pillAffordance(durationSec, pxPerSec);
+		return (
+			<div
+				role={interactive ? "button" : undefined}
+				tabIndex={interactive ? 0 : undefined}
+				className={`${styles.lanePill} ${laneClass(pill.kind)}${
+					compact ? ` ${styles.lanePillCompact}` : ""
+				}${interactive && selected ? ` ${styles.lanePillSel}` : ""}`}
+				style={{
+					left: `${segStartPct}%`,
+					width: `${segWidthPct}%`,
+					transform: shiftPx ? `translateX(${shiftPx}px)` : undefined,
+					transition: !clipDragActive
+						? undefined
+						: immediate
+							? "none"
+							: "transform 150ms cubic-bezier(0.2, 0, 0, 1)",
+					...(suppressLeftSeam
+						? { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeftWidth: 0 }
+						: {}),
+					...(suppressRightSeam
+						? { borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRightWidth: 0 }
+						: {}),
+				}}
+				onPointerDown={interactive ? (event) => onStartDrag(event, pill, "move") : undefined}
+				title={pill.label}
+			>
+				{interactive ? (
+					<span
+						className={styles.lanePillHandle}
+						style={{ left: compact ? -PILL_HANDLE_OUT_PX : 0 }}
+						onPointerDown={(event) => onStartDrag(event, pill, "l")}
+					/>
+				) : null}
+				{showContent && roomForLabel ? (
+					<span className={styles.lanePillContent}>
+						<PillKindIcon kind={pill.kind} />
+						<span className={styles.lanePillLabel}>{pill.label}</span>
+					</span>
+				) : null}
+				{interactive ? (
+					<span
+						className={styles.lanePillHandle}
+						style={{ right: compact ? -PILL_HANDLE_OUT_PX : 0 }}
+						onPointerDown={(event) => onStartDrag(event, pill, "r")}
+					/>
+				) : null}
+			</div>
+		);
+	},
+	(prev, next) =>
+		prev.pill.id === next.pill.id &&
+		prev.pill.kind === next.pill.kind &&
+		prev.pill.start === next.pill.start &&
+		prev.pill.end === next.pill.end &&
+		prev.pill.label === next.pill.label &&
+		prev.pill.sourceIds.length === next.pill.sourceIds.length &&
+		prev.pill.sourceIds.every((id, index) => id === next.pill.sourceIds[index]) &&
+		prev.segStartPct === next.segStartPct &&
+		prev.segWidthPct === next.segWidthPct &&
+		prev.durationSec === next.durationSec &&
+		prev.pxPerSec === next.pxPerSec &&
+		prev.shiftPx === next.shiftPx &&
+		prev.immediate === next.immediate &&
+		prev.showContent === next.showContent &&
+		prev.interactive === next.interactive &&
+		prev.selected === next.selected &&
+		prev.clipDragActive === next.clipDragActive &&
+		prev.suppressLeftSeam === next.suppressLeftSeam &&
+		prev.suppressRightSeam === next.suppressRightSeam &&
+		prev.onStartDrag === next.onStartDrag,
+);
+
+interface TimelineClipCardProps {
+	clip: AxcutClip;
+	leftPct: number;
+	widthPct: number;
+	label: string;
+	videoUrl: string | undefined;
+	assetDurationSec: number | undefined;
+	renderedWidthPx: number;
+	renderWaveform: boolean;
+	selected: boolean;
+	dragging: boolean;
+	transform: string | undefined;
+	splitMode: boolean;
+	dragTitle: string;
+	editTitle: string;
+	deleteTitle: string;
+	onStartDrag: (event: ReactPointerEvent, clip: AxcutClip) => void;
+	onClick: (event: ReactMouseEvent, clip: AxcutClip) => void;
+	onDoubleClick: (event: ReactMouseEvent, clip: AxcutClip) => void;
+	onEdit: (clip: AxcutClip) => void;
+	onRemove: (clipId: string) => void;
+}
+
+const TimelineClipCard = memo(function TimelineClipCard({
+	clip,
+	leftPct,
+	widthPct,
+	label,
+	videoUrl,
+	assetDurationSec,
+	renderedWidthPx,
+	renderWaveform,
+	selected,
+	dragging,
+	transform,
+	splitMode,
+	dragTitle,
+	editTitle,
+	deleteTitle,
+	onStartDrag,
+	onClick,
+	onDoubleClick,
+	onEdit,
+	onRemove,
+}: TimelineClipCardProps) {
+	const durationSec = clip.timelineEndSec - clip.timelineStartSec;
+	return (
+		<div
+			data-clip-id={clip.id}
+			className={`${styles.tlClip}${selected ? ` ${styles.tlClipSel}` : ""}${
+				dragging ? ` ${styles.tlClipDragging}` : ""
+			}`}
+			style={{
+				left: `${leftPct}%`,
+				width: `calc(${widthPct}% - ${CLIP_GUTTER_PX}px)`,
+				transform,
+			}}
+			onPointerDown={(event) => onStartDrag(event, clip)}
+			onClick={(event) => onClick(event, clip)}
+			onDoubleClick={(event) => onDoubleClick(event, clip)}
+			title={splitMode ? undefined : dragTitle}
+		>
+			{renderWaveform ? (
+				<ClipWaveform
+					videoUrl={videoUrl}
+					assetDurationSec={assetDurationSec}
+					sourceStartSec={clip.sourceStartSec}
+					sourceEndSec={clip.sourceEndSec ?? clip.sourceStartSec + durationSec}
+					renderedWidthPx={renderedWidthPx}
+				/>
+			) : null}
+			<div className={styles.tlClipLabel}>
+				<span
+					className={styles.tlClipIcon}
+					data-no-clip-drag
+					title={editTitle}
+					onClick={(event) => {
+						event.stopPropagation();
+						onEdit(clip);
+					}}
+				>
+					<Pencil size={9} />
+				</span>
+				<span className={styles.tlClipName}>{label}</span>
+			</div>
+			{selected ? (
+				<button
+					type="button"
+					data-no-clip-drag
+					className={styles.tlClipDelete}
+					title={deleteTitle}
+					aria-label={deleteTitle}
+					onClick={(event) => {
+						event.stopPropagation();
+						onRemove(clip.id);
+					}}
+				>
+					<Trash2 size={13} />
+				</button>
+			) : null}
+		</div>
+	);
+});
 
 export function V4Timeline({
 	tl,
@@ -376,6 +629,8 @@ export function V4Timeline({
 	} | null>(null);
 	const [splitMode, setSplitMode] = useState(false);
 	const [splitGuideTimeSec, setSplitGuideTimeSec] = useState<number | null>(null);
+	const splitGuideRafRef = useRef(0);
+	const pendingSplitGuideXRef = useRef<number | null>(null);
 	const { settings, set: setSettings } = useEditorSettings();
 	const [autoEnhanceOpen, setAutoEnhanceOpen] = useState(false);
 	const [autoBusy, setAutoBusy] = useState(false);
@@ -399,6 +654,18 @@ export function V4Timeline({
 							: t("toolbar.smartCutsNeedsTranscript");
 
 	const clips = tl.clips;
+	// Clip rendering is a hot path while arranging large projects. Looking up an
+	// asset/source with Array.find inside every clip made each render quadratic
+	// in the common case where every clip has its own asset.
+	const assetById = useMemo(
+		() => new Map(tl.assets.map((asset) => [asset.id, asset])),
+		[tl.assets],
+	);
+	const videoUrlByAssetId = useMemo(
+		() => new Map(videoSources.map((source) => [source.id, source.src])),
+		[videoSources],
+	);
+	const clipById = useMemo(() => new Map(clips.map((clip) => [clip.id, clip])), [clips]);
 	const total = useMemo(
 		() =>
 			Math.max(
@@ -412,6 +679,11 @@ export function V4Timeline({
 
 	useEffect(() => {
 		if (!splitMode) {
+			if (splitGuideRafRef.current !== 0) {
+				cancelAnimationFrame(splitGuideRafRef.current);
+				splitGuideRafRef.current = 0;
+			}
+			pendingSplitGuideXRef.current = null;
 			setSplitGuideTimeSec(null);
 			return;
 		}
@@ -421,7 +693,14 @@ export function V4Timeline({
 			setSplitGuideTimeSec(null);
 		};
 		window.addEventListener("keydown", exitSplitMode);
-		return () => window.removeEventListener("keydown", exitSplitMode);
+		return () => {
+			window.removeEventListener("keydown", exitSplitMode);
+			if (splitGuideRafRef.current !== 0) {
+				cancelAnimationFrame(splitGuideRafRef.current);
+				splitGuideRafRef.current = 0;
+			}
+			pendingSplitGuideXRef.current = null;
+		};
 	}, [splitMode]);
 
 	const timelineTimeAtClientX = useCallback(
@@ -438,11 +717,27 @@ export function V4Timeline({
 	const updateSplitGuide = useCallback(
 		(clientX: number) => {
 			if (!splitMode) return;
-			const timeSec = timelineTimeAtClientX(clientX);
-			if (timeSec !== null) setSplitGuideTimeSec(timeSec);
+			pendingSplitGuideXRef.current = clientX;
+			if (splitGuideRafRef.current !== 0) return;
+			splitGuideRafRef.current = requestAnimationFrame(() => {
+				splitGuideRafRef.current = 0;
+				const pendingX = pendingSplitGuideXRef.current;
+				pendingSplitGuideXRef.current = null;
+				if (pendingX === null) return;
+				const timeSec = timelineTimeAtClientX(pendingX);
+				if (timeSec !== null) setSplitGuideTimeSec(timeSec);
+			});
 		},
 		[splitMode, timelineTimeAtClientX],
 	);
+	const clearSplitGuide = useCallback(() => {
+		if (splitGuideRafRef.current !== 0) {
+			cancelAnimationFrame(splitGuideRafRef.current);
+			splitGuideRafRef.current = 0;
+		}
+		pendingSplitGuideXRef.current = null;
+		setSplitGuideTimeSec(null);
+	}, []);
 
 	// The visible fraction of the timeline, and what one second is worth on screen
 	// at that zoom. Every screen-space rule below — ruler step, pill affordances,
@@ -450,6 +745,13 @@ export function V4Timeline({
 	// `total`, which is a duration in disguise and so scales with the recording.
 	const navSpan = Math.max(0.02, nav.end - nav.start);
 	const pxPerSec = viewportWidthPx / navSpan / total;
+	const waveformWindow = useMemo(() => {
+		const overscan = navSpan * WAVEFORM_OVERSCAN_VIEWPORTS;
+		return {
+			startSec: Math.max(0, (nav.start - overscan) * total),
+			endSec: Math.min(total, (nav.end + overscan) * total),
+		};
+	}, [nav.start, nav.end, navSpan, total]);
 	// Publish the scale so the keyboard shortcuts (NewEditorShell) size a new
 	// region exactly like the buttons below do — `nav` never leaves this
 	// component, so without this they fall back to a flat default and a pill
@@ -625,6 +927,7 @@ export function V4Timeline({
 			const el = canvasRef.current;
 			if (!el) return;
 			const r = el.getBoundingClientRect();
+			if (r.width <= 0) return;
 			const startX = e.clientX;
 			const dur = pill.end - pill.start;
 			// A trim can span several clips; it's stored as one source-time entry per
@@ -650,6 +953,7 @@ export function V4Timeline({
 			// better to drop the edge exactly where it was released than to move it
 			// by a radius computed from a width we do not have.
 			const snapThresh = pxPerSec > 0 ? PILL_SNAP_PX / pxPerSec : 0;
+			let pendingSnapPct: number | null = null;
 			const snap = (v: number): number => {
 				let best = v;
 				let bestD = snapThresh;
@@ -660,7 +964,7 @@ export function V4Timeline({
 						best = t;
 					}
 				}
-				setSnapPct(best === v ? null : (best / total) * 100);
+				pendingSnapPct = best === v ? null : (best / total) * 100;
 				return best;
 			};
 			const apply = async (start: number, end: number): Promise<void> => {
@@ -693,6 +997,14 @@ export function V4Timeline({
 					await tl.setTrimEntries(entries, dropIds);
 				}
 			};
+			let frame = 0;
+			let pendingState: typeof activePillDragRef.current = null;
+			activePillDragRef.current = null;
+			const commitFrame = () => {
+				frame = 0;
+				if (pendingState) setActivePillDrag(pendingState);
+				setSnapPct(pendingSnapPct);
+			};
 			const move = (ev: PointerEvent) => {
 				const dxSec = ((ev.clientX - startX) / r.width) * total;
 				let ns = pill.start;
@@ -709,9 +1021,14 @@ export function V4Timeline({
 				}
 				const nextState = { id: pill.id, kind: pill.kind, start: ns, end: ne };
 				activePillDragRef.current = nextState;
-				setActivePillDrag(nextState);
+				pendingState = nextState;
+				if (frame === 0) frame = requestAnimationFrame(commitFrame);
 			};
 			const up = () => {
+				if (frame !== 0) {
+					cancelAnimationFrame(frame);
+					frame = 0;
+				}
 				setSnapPct(null);
 				window.removeEventListener("pointermove", move);
 				window.removeEventListener("pointerup", up);
@@ -739,10 +1056,16 @@ export function V4Timeline({
 			e.preventDefault();
 			e.stopPropagation();
 			const r = navRef.current?.getBoundingClientRect();
-			if (!r) return;
+			if (!r || r.width <= 0) return;
 			const startX = e.clientX;
 			const s0 = nav.start;
 			const e0 = nav.end;
+			let frame = 0;
+			let pendingNav: { start: number; end: number } | null = null;
+			const commitFrame = () => {
+				frame = 0;
+				if (pendingNav) setNav(pendingNav);
+			};
 			const move = (ev: PointerEvent) => {
 				const dx = (ev.clientX - startX) / r.width;
 				let start = s0;
@@ -754,9 +1077,15 @@ export function V4Timeline({
 					start = Math.max(0, Math.min(1 - w, s0 + dx));
 					end = start + w;
 				}
-				setNav({ start, end });
+				pendingNav = { start, end };
+				if (frame === 0) frame = requestAnimationFrame(commitFrame);
 			};
 			const up = () => {
+				if (frame !== 0) {
+					cancelAnimationFrame(frame);
+					frame = 0;
+				}
+				if (pendingNav) setNav(pendingNav);
 				window.removeEventListener("pointermove", move);
 				window.removeEventListener("pointerup", up);
 			};
@@ -841,29 +1170,6 @@ export function V4Timeline({
 		transform: `translateX(${(-nav.start * 100).toFixed(3)}%)`,
 	} as const;
 
-	const laneOf = (kind: LanePill["kind"]) =>
-		kind === "annotation"
-			? styles.laneAnnotation
-			: kind === "speed"
-				? styles.laneSpeed
-				: kind === "trim"
-					? styles.laneTrim
-					: kind === "cameraFullscreen"
-						? styles.laneCameraFullscreen
-						: styles.laneZoom;
-	const pillIcon = (kind: LanePill["kind"]) =>
-		kind === "annotation" ? (
-			<MessageSquare size={11} />
-		) : kind === "speed" ? (
-			<Clock size={11} />
-		) : kind === "trim" ? (
-			<Scissors size={11} />
-		) : kind === "cameraFullscreen" ? (
-			<Maximize2 size={11} />
-		) : (
-			<ZoomIn size={11} />
-		);
-
 	// Drag a clip left/right to reorder it relative to its neighbours. Pointer-
 	// driven (like the lane pills), not HTML5 DnD — that's reserved for dropping
 	// a *new* asset in from the media panel. A short move threshold keeps a
@@ -934,24 +1240,48 @@ export function V4Timeline({
 				return insertFull > from ? insertFull - 1 : insertFull;
 			};
 
+			let frame = 0;
+			let pendingDrag: {
+				id: string;
+				from: number;
+				target: number;
+				pointerDeltaX: number;
+				shiftPx: number;
+			} | null = null;
+			const commitFrame = () => {
+				frame = 0;
+				if (pendingDrag) setClipDrag(pendingDrag);
+			};
 			const move = (ev: PointerEvent) => {
 				if (!dragging && Math.abs(ev.clientX - startX) < 4) return;
 				dragging = true;
 				didClipDragRef.current = true;
 				const target = computeTarget(ev.clientX);
-				setClipDrag({
+				pendingDrag = {
 					id: clip.id,
 					from,
 					target,
 					pointerDeltaX: ev.clientX - startX,
 					shiftPx: shiftAmount,
-				});
+				};
+				if (frame === 0) frame = requestAnimationFrame(commitFrame);
 			};
 			const up = async (ev: PointerEvent) => {
+				if (frame !== 0) {
+					cancelAnimationFrame(frame);
+					frame = 0;
+				}
 				window.removeEventListener("pointermove", move);
 				window.removeEventListener("pointerup", up);
 				if (dragging) {
 					const target = computeTarget(ev.clientX);
+					setClipDrag({
+						id: clip.id,
+						from,
+						target,
+						pointerDeltaX: ev.clientX - startX,
+						shiftPx: shiftAmount,
+					});
 					// Keep the slid-open preview on screen through the async save so
 					// there's no one-frame snap-back to the original order before the
 					// store's new order lands.
@@ -963,6 +1293,40 @@ export function V4Timeline({
 			window.addEventListener("pointerup", up);
 		},
 		[clips, tl, splitMode],
+	);
+	const handleClipClick = useCallback(
+		(event: ReactMouseEvent, clip: AxcutClip) => {
+			event.stopPropagation();
+			if (splitMode) {
+				const pointerTimeSec = timelineTimeAtClientX(event.clientX);
+				if (pointerTimeSec === null) return;
+				const cutTimeSec = Math.min(
+					clip.timelineEndSec - SPLIT_EDGE_GUARD_SEC,
+					Math.max(clip.timelineStartSec + SPLIT_EDGE_GUARD_SEC, pointerTimeSec),
+				);
+				void tl.splitClip(clip.id, cutTimeSec);
+				return;
+			}
+			if (didClipDragRef.current) {
+				didClipDragRef.current = false;
+				return;
+			}
+			tl.selectClip(clip.id);
+		},
+		[splitMode, timelineTimeAtClientX, tl],
+	);
+	const handleClipDoubleClick = useCallback(
+		(event: ReactMouseEvent, clip: AxcutClip) => {
+			event.stopPropagation();
+			if (!splitMode) onEditClip(clip);
+		},
+		[splitMode, onEditClip],
+	);
+	const handleRemoveClip = useCallback(
+		(clipId: string) => {
+			void tl.removeClip(clipId);
+		},
+		[tl],
 	);
 
 	// Auto-enhance option 1 — the deterministic cursor-telemetry auto-zoom
@@ -1074,57 +1438,24 @@ export function V4Timeline({
 	}) => {
 		const { pill: p } = seg;
 		const durSec = seg.segEnd - seg.segStart;
-		// The box is exactly as long as the effect is; only what fits INSIDE it
-		// varies with the zoom.
-		const { compact, roomForLabel } = pillAffordance(durSec, pxPerSec);
 		return (
-			<div
+			<TimelinePillSegment
 				key={seg.key}
-				role={seg.interactive ? "button" : undefined}
-				tabIndex={seg.interactive ? 0 : undefined}
-				className={`${styles.lanePill} ${laneOf(p.kind)}${
-					compact ? ` ${styles.lanePillCompact}` : ""
-				}${seg.interactive && isPillSelected(p.id) ? ` ${styles.lanePillSel}` : ""}`}
-				style={{
-					left: `${pctOf(seg.segStart)}%`,
-					width: `${pctOf(durSec)}%`,
-					transform: seg.shiftPx ? `translateX(${seg.shiftPx}px)` : undefined,
-					transition: !clipDrag
-						? undefined
-						: seg.immediate
-							? "none"
-							: "transform 150ms cubic-bezier(0.2, 0, 0, 1)",
-					...(seg.suppressLeftSeam
-						? { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeftWidth: 0 }
-						: {}),
-					...(seg.suppressRightSeam
-						? { borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRightWidth: 0 }
-						: {}),
-				}}
-				onPointerDown={seg.interactive ? (e) => startPillDrag(e, p, "move") : undefined}
-				title={p.label}
-			>
-				{seg.interactive ? (
-					<span
-						className={styles.lanePillHandle}
-						style={{ left: compact ? -PILL_HANDLE_OUT_PX : 0 }}
-						onPointerDown={(e) => startPillDrag(e, p, "l")}
-					/>
-				) : null}
-				{seg.showContent && roomForLabel ? (
-					<span className={styles.lanePillContent}>
-						{pillIcon(p.kind)}
-						<span className={styles.lanePillLabel}>{p.label}</span>
-					</span>
-				) : null}
-				{seg.interactive ? (
-					<span
-						className={styles.lanePillHandle}
-						style={{ right: compact ? -PILL_HANDLE_OUT_PX : 0 }}
-						onPointerDown={(e) => startPillDrag(e, p, "r")}
-					/>
-				) : null}
-			</div>
+				pill={p}
+				segStartPct={pctOf(seg.segStart)}
+				segWidthPct={pctOf(durSec)}
+				durationSec={durSec}
+				pxPerSec={pxPerSec}
+				shiftPx={seg.shiftPx}
+				immediate={seg.immediate}
+				showContent={seg.showContent}
+				interactive={seg.interactive}
+				selected={seg.interactive && isPillSelected(p.id)}
+				clipDragActive={clipDrag !== null}
+				suppressLeftSeam={seg.suppressLeftSeam}
+				suppressRightSeam={seg.suppressRightSeam}
+				onStartDrag={startPillDrag}
+			/>
 		);
 	};
 
@@ -1135,6 +1466,12 @@ export function V4Timeline({
 			}
 			return p;
 		});
+		const visiblePills = effectivePills.filter(
+			(pill) =>
+				(pill.end >= waveformWindow.startSec && pill.start <= waveformWindow.endSec) ||
+				activePillDrag?.id === pill.id ||
+				isPillSelected(pill.id),
+		);
 		return (
 			<>
 				{effectivePills.length === 0 ? (
@@ -1148,7 +1485,7 @@ export function V4Timeline({
 						{emptyLabel}
 					</span>
 				) : null}
-				{effectivePills.flatMap((p) => {
+				{visiblePills.flatMap((p) => {
 					// Eager split preview: the instant a clip is grabbed, a pill that
 					// straddles the dragged clip's junction shows the same per-clip
 					// split it would resolve to on drop (via moveClip's reprojection),
@@ -1158,7 +1495,6 @@ export function V4Timeline({
 					if (clipDrag) {
 						const frags = ventilateSpanAcrossClips(p.start, p.end, clips);
 						if (frags.length >= 2) {
-							const clipById = new Map(clips.map((c) => [c.id, c]));
 							const shifts = frags.map((f) => {
 								const c = clipById.get(f.clipId);
 								return c
@@ -1374,7 +1710,7 @@ export function V4Timeline({
 					onPointerDown={startScrub}
 					onPointerEnter={(event) => updateSplitGuide(event.clientX)}
 					onPointerMove={(event) => updateSplitGuide(event.clientX)}
-					onPointerLeave={() => setSplitGuideTimeSec(null)}
+					onPointerLeave={clearSplitGuide}
 				>
 					<div ref={canvasRef} className={styles.tlCanvas} style={canvasStyle}>
 						{snapPct !== null ? (
@@ -1400,8 +1736,13 @@ export function V4Timeline({
 						>
 							{clips.map((c, i) => {
 								const dur = c.timelineEndSec - c.timelineStartSec;
-								const asset = tl.assets.find((a) => a.id === c.assetId);
-								const clipVideoUrl = videoSources.find((v) => v.id === c.assetId)?.src;
+								const asset = assetById.get(c.assetId);
+								const clipVideoUrl = videoUrlByAssetId.get(c.assetId);
+								const renderedWidthPx = Math.max(0, dur * pxPerSec - CLIP_GUTTER_PX);
+								const shouldRenderWaveform =
+									renderedWidthPx >= MIN_WAVEFORM_WIDTH_PX &&
+									c.timelineEndSec >= waveformWindow.startSec &&
+									c.timelineStartSec <= waveformWindow.endSec;
 								const selected = tl.clipSelection === c.id;
 								const dragging = clipDrag?.id === c.id;
 								// Siblings between the dragged clip's origin and its live
@@ -1420,87 +1761,29 @@ export function V4Timeline({
 										clipTransform = `translateX(${shiftPx}px)`;
 								}
 								return (
-									<div
+									<TimelineClipCard
 										key={c.id}
-										data-clip-id={c.id}
-										className={`${styles.tlClip}${selected ? ` ${styles.tlClipSel}` : ""}${
-											dragging ? ` ${styles.tlClipDragging}` : ""
-										}`}
-										style={{
-											left: `${pctOf(c.timelineStartSec)}%`,
-											// Minus the gutter that separates two cards (it used to be the
-											// flex row's `gap`). A clip shorter than the gutter lands on
-											// .tlClip's 1px min-width instead of collapsing — same rule as
-											// the lane pills above.
-											width: `calc(${pctOf(dur)}% - ${CLIP_GUTTER_PX}px)`,
-											transform: clipTransform,
-										}}
-										onPointerDown={(e) => startClipDrag(e, c)}
-										onClick={(e) => {
-											e.stopPropagation();
-											if (splitMode) {
-												const pointerTimeSec = timelineTimeAtClientX(e.clientX);
-												if (pointerTimeSec === null) return;
-												const cutTimeSec = Math.min(
-													c.timelineEndSec - SPLIT_EDGE_GUARD_SEC,
-													Math.max(c.timelineStartSec + SPLIT_EDGE_GUARD_SEC, pointerTimeSec),
-												);
-												void tl.splitClip(c.id, cutTimeSec);
-												return;
-											}
-											// A completed reorder-drag also fires a click; don't let it
-											// double as a selection.
-											if (didClipDragRef.current) {
-												didClipDragRef.current = false;
-												return;
-											}
-											tl.selectClip(c.id);
-										}}
-										onDoubleClick={(e) => {
-											e.stopPropagation();
-											if (splitMode) return;
-											onEditClip(c);
-										}}
-										title={splitMode ? undefined : t("toolbar.dragToReorderHint")}
-									>
-										<ClipWaveform
-											videoUrl={clipVideoUrl}
-											assetDurationSec={asset?.durationSec}
-											sourceStartSec={c.sourceStartSec}
-											sourceEndSec={c.sourceEndSec ?? c.sourceStartSec + dur}
-										/>
-										<div className={styles.tlClipLabel}>
-											<span
-												className={styles.tlClipIcon}
-												data-no-clip-drag
-												title={t("toolbar.editInOutPoints")}
-												onClick={(e) => {
-													e.stopPropagation();
-													onEditClip(c);
-												}}
-											>
-												<Pencil size={9} />
-											</span>
-											<span className={styles.tlClipName}>
-												{tl.assets.find((a) => a.id === c.assetId)?.label ?? c.assetId}
-											</span>
-										</div>
-										{selected ? (
-											<button
-												type="button"
-												data-no-clip-drag
-												className={styles.tlClipDelete}
-												title={t("toolbar.deleteClip")}
-												aria-label={t("toolbar.deleteClip")}
-												onClick={(e) => {
-													e.stopPropagation();
-													void tl.removeClip(c.id);
-												}}
-											>
-												<Trash2 size={13} />
-											</button>
-										) : null}
-									</div>
+										clip={c}
+										leftPct={pctOf(c.timelineStartSec)}
+										widthPct={pctOf(dur)}
+										label={asset?.label ?? c.assetId}
+										videoUrl={clipVideoUrl}
+										assetDurationSec={asset?.durationSec}
+										renderedWidthPx={renderedWidthPx}
+										renderWaveform={shouldRenderWaveform}
+										selected={selected}
+										dragging={dragging}
+										transform={clipTransform}
+										splitMode={splitMode}
+										dragTitle={t("toolbar.dragToReorderHint")}
+										editTitle={t("toolbar.editInOutPoints")}
+										deleteTitle={t("toolbar.deleteClip")}
+										onStartDrag={startClipDrag}
+										onClick={handleClipClick}
+										onDoubleClick={handleClipDoubleClick}
+										onEdit={onEditClip}
+										onRemove={handleRemoveClip}
+									/>
 								);
 							})}
 							{dragOver ? (

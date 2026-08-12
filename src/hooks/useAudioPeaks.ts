@@ -91,6 +91,8 @@ async function computePeaksForUrl(
 	durationSec?: number,
 ): Promise<Float32Array> {
 	const isRemoteUrl = /^(https?:|blob:|data:)/i.test(videoUrl);
+	const hasKnownDuration =
+		typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0;
 
 	// Native first. Both browser pipelines below decode the whole track in
 	// Chromium — 12s on a 32-minute recording, whichever one runs — where ffmpeg
@@ -98,7 +100,7 @@ async function computePeaksForUrl(
 	// time it is free. Anything that stops this from working (no ffmpeg staged,
 	// an unapproved path, a clip with no audio) falls through rather than
 	// dropping the waveform.
-	if (!isRemoteUrl && durationSec && window.electronAPI?.getAudioPeaks) {
+	if (!isRemoteUrl && hasKnownDuration && window.electronAPI?.getAudioPeaks) {
 		try {
 			const native = await window.electronAPI.getAudioPeaks(videoUrl, durationSec);
 			if (native.success && native.peaks && native.peaks.length > 0) return native.peaks;
@@ -112,7 +114,8 @@ async function computePeaksForUrl(
 		const decodedBytes = (durationSec ?? 0) * DECODED_BYTES_PER_SEC;
 		if (
 			info.success &&
-			((typeof info.size === "number" && info.size > MAX_IN_MEMORY_SOURCE_BYTES) ||
+			(!hasKnownDuration ||
+				(typeof info.size === "number" && info.size > MAX_IN_MEMORY_SOURCE_BYTES) ||
 				decodedBytes > MAX_IN_MEMORY_SOURCE_BYTES)
 		) {
 			const filename = (videoUrl.split(/[\\/]/).pop() || "video").replace(/^file:/, "");
@@ -124,6 +127,15 @@ async function computePeaksForUrl(
 				releaseLocalSourceFile(file.name);
 			}
 		}
+	}
+
+	// Duration arrives asynchronously with asset metadata. Until it does, never
+	// guess that a compressed source is safe to decode whole: a small recording
+	// file can expand to gigabytes of PCM. Local Electron sources took the
+	// streaming route above; remote/browser-only sources simply retry when the
+	// duration dependency changes instead of risking an unbounded allocation.
+	if (!hasKnownDuration) {
+		throw new DOMException("Audio duration is not available yet", "AbortError");
 	}
 
 	const { data: arrayBuffer } = await loadFileAsArrayBuffer(videoUrl);
@@ -144,24 +156,55 @@ async function computePeaksForUrl(
  * `inFlight` is the other half: N clips of one asset mounting together must
  * share a single decode instead of racing N of them.
  */
+const MAX_CACHED_PEAK_FILES = 64;
 const peaksCache = new Map<string, Float32Array>();
 const peaksInFlight = new Map<string, Promise<Float32Array>>();
 
+function getCachedPeaks(videoUrl: string): Float32Array | undefined {
+	const cached = peaksCache.get(videoUrl);
+	if (!cached) return undefined;
+	// Refresh insertion order so the bounded cache behaves as an LRU.
+	peaksCache.delete(videoUrl);
+	peaksCache.set(videoUrl, cached);
+	return cached;
+}
+
+function setCachedPeaks(videoUrl: string, peaks: Float32Array): void {
+	peaksCache.delete(videoUrl);
+	peaksCache.set(videoUrl, peaks);
+	while (peaksCache.size > MAX_CACHED_PEAK_FILES) {
+		const oldest = peaksCache.keys().next().value;
+		if (oldest === undefined) break;
+		peaksCache.delete(oldest);
+	}
+}
+
+function peaksRequestKey(videoUrl: string, durationSec?: number): string {
+	const durationKey =
+		typeof durationSec === "number" && Number.isFinite(durationSec) && durationSec > 0
+			? Math.round(durationSec * 1000)
+			: "unknown";
+	return `${videoUrl}\u0000${durationKey}`;
+}
+
 function loadPeaks(videoUrl: string, durationSec?: number): Promise<Float32Array> {
-	const existing = peaksInFlight.get(videoUrl);
+	const cached = getCachedPeaks(videoUrl);
+	if (cached) return Promise.resolve(cached);
+	const requestKey = peaksRequestKey(videoUrl, durationSec);
+	const existing = peaksInFlight.get(requestKey);
 	if (existing) return existing;
 	// Deliberately NOT wired to any component's AbortSignal: the work is shared,
 	// so one subscriber unmounting must not cancel it for the others. An unmount
 	// drops the result instead — and the cache means the next mount is free.
 	const promise = computePeaksForUrl(videoUrl, undefined, durationSec)
 		.then((p) => {
-			peaksCache.set(videoUrl, p);
+			setCachedPeaks(videoUrl, p);
 			return p;
 		})
 		.finally(() => {
-			peaksInFlight.delete(videoUrl);
+			peaksInFlight.delete(requestKey);
 		});
-	peaksInFlight.set(videoUrl, promise);
+	peaksInFlight.set(requestKey, promise);
 	return promise;
 }
 
@@ -173,7 +216,7 @@ function loadPeaks(videoUrl: string, durationSec?: number): Promise<Float32Array
  */
 export function useAudioPeaks(videoUrl?: string, durationSec?: number): Float32Array | null {
 	const [peaks, setPeaks] = useState<Float32Array | null>(() =>
-		videoUrl ? (peaksCache.get(videoUrl) ?? null) : null,
+		videoUrl ? (getCachedPeaks(videoUrl) ?? null) : null,
 	);
 
 	useEffect(() => {
@@ -182,7 +225,7 @@ export function useAudioPeaks(videoUrl?: string, durationSec?: number): Float32A
 			return;
 		}
 
-		const cached = peaksCache.get(videoUrl);
+		const cached = getCachedPeaks(videoUrl);
 		if (cached) {
 			setPeaks(cached);
 			return;
@@ -206,7 +249,7 @@ export function useAudioPeaks(videoUrl?: string, durationSec?: number): Float32A
 		return () => {
 			cancelled = true;
 		};
-	}, [videoUrl]);
+	}, [videoUrl, durationSec]);
 
 	return peaks;
 }

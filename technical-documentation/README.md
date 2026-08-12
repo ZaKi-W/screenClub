@@ -36,6 +36,7 @@ who reads and writes the project document.
 | Doc | Topic |
 |---|---|
 | [rendering-performance.md](engineering/rendering-performance.md) | The measurement record for preview fluidity and export speed |
+| [editor-performance-audit.md](engineering/editor-performance-audit.md) | Current live-editor performance risks, retained feature costs, and measurement gaps |
 | [build-and-packaging.md](engineering/build-and-packaging.md) | Build commands, native artifacts, per-platform packaging |
 | [ci-workflows.md](engineering/ci-workflows.md) | The GitHub Actions tiers and how artifacts flow between them |
 | [release-and-secrets.md](engineering/release-and-secrets.md) | Cutting and promoting a release; the secrets it needs |

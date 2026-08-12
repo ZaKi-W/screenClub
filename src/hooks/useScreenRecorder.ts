@@ -20,6 +20,7 @@ import {
 import type { CursorCaptureMode, RecordedVideoAssetInput } from "@/lib/recordingSession";
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { loadUserPreferences, saveUserPreferences } from "@/lib/userPreferences";
+import { type CameraPreviewPublisher, publishCameraPreview } from "./cameraPreviewPublisher";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
 
 const TARGET_FRAME_RATE = 60;
@@ -201,6 +202,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [webcamDeviceName, setWebcamDeviceName] = useState<string | undefined>(undefined);
 	const [systemAudioEnabled, setSystemAudioEnabled] = useState(false);
 	const [webcamEnabled, setWebcamEnabledState] = useState(false);
+	const [webcamAcquireVersion, setWebcamAcquireVersion] = useState(0);
 	const [cursorCaptureMode, setCursorCaptureMode] = useState<CursorCaptureMode>("editable-overlay");
 	const [captureArea, setCaptureArea] = useState<CaptureAreaSelection | null>(null);
 	const [softwareEncoderFallbackNoticeVisible, setSoftwareEncoderFallbackNoticeVisible] =
@@ -243,6 +245,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const screenStream = useRef<MediaStream | null>(null);
 	const microphoneStream = useRef<MediaStream | null>(null);
 	const webcamStream = useRef<MediaStream | null>(null);
+	const cameraPreviewPublisher = useRef<CameraPreviewPublisher | null>(null);
+	const cameraOverlayVisible = useRef(false);
 	const mixingContext = useRef<AudioContext | null>(null);
 	const recordingId = useRef<number>(0);
 	const accumulatedDurationMs = useRef(0);
@@ -263,6 +267,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				(nativeLinuxRecording.current && !nativeLinuxRecording.current.finalizing) ||
 				(screenRecorder.current && screenRecorder.current.recorder.state !== "inactive"),
 		);
+
+	useEffect(() => {
+		return window.electronAPI?.onCameraOverlayHidden?.(() => {
+			cameraOverlayVisible.current = false;
+			cameraPreviewPublisher.current?.stop();
+			cameraPreviewPublisher.current = null;
+		});
+	}, []);
 
 	const getRecordingDurationMs = useCallback(() => {
 		const segmentDuration =
@@ -323,6 +335,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	}, []);
 
 	const stopWebcamPreviewStream = useCallback(() => {
+		cameraPreviewPublisher.current?.stop();
+		cameraPreviewPublisher.current = null;
 		if (!webcamStream.current) {
 			return;
 		}
@@ -361,6 +375,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	);
 
 	useEffect(() => {
+		// Reacquire after Windows releases the camera back from its native helper.
+		void webcamAcquireVersion;
 		if (!webcamEnabled) return;
 
 		let cancelled = false;
@@ -375,9 +391,13 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					video: webcamDeviceId
 						? {
 								deviceId: { exact: webcamDeviceId },
+								width: { ideal: 1920 },
+								height: { ideal: 1080 },
 								frameRate: { ideal: WEBCAM_TARGET_FRAME_RATE, max: WEBCAM_TARGET_FRAME_RATE },
 							}
 						: {
+								width: { ideal: 1920 },
+								height: { ideal: 1080 },
 								frameRate: { ideal: WEBCAM_TARGET_FRAME_RATE, max: WEBCAM_TARGET_FRAME_RATE },
 							},
 				});
@@ -402,6 +422,25 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				});
 				webcamStream.current = stream;
 				webcamReady.current = true;
+
+				const platform = window.electronAPI.getPlatform();
+				const captureBackend = platform === "darwin" ? "native-mac" : "browser";
+				const overlayResult = await window.electronAPI.prepareCameraOverlay({
+					captureBackend,
+					deviceId: webcamDeviceId,
+					deviceName: webcamDeviceName,
+				});
+				if (cancelled || thisAcquireId !== webcamAcquireId.current) {
+					window.electronAPI?.hideCameraOverlay?.();
+					return;
+				}
+				if (overlayResult.shown) {
+					cameraOverlayVisible.current = true;
+					if (platform !== "darwin") {
+						cameraPreviewPublisher.current?.stop();
+						cameraPreviewPublisher.current = publishCameraPreview(stream);
+					}
+				}
 			} catch (cameraError) {
 				if (!cancelled) {
 					console.warn("Failed to get webcam access:", cameraError);
@@ -424,6 +463,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 		return () => {
 			cancelled = true;
+			cameraPreviewPublisher.current?.stop();
+			cameraPreviewPublisher.current = null;
+			cameraOverlayVisible.current = false;
+			window.electronAPI?.hideCameraOverlay?.();
 			webcamReady.current = false;
 			if (acquiredStream) {
 				acquiredStream.getTracks().forEach((track) => {
@@ -433,7 +476,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				webcamStream.current = null;
 			}
 		};
-	}, [webcamEnabled, webcamDeviceId, t]);
+	}, [webcamEnabled, webcamDeviceId, webcamDeviceName, webcamAcquireVersion, t]);
 
 	const finalizeRecording = useCallback(
 		(
@@ -585,6 +628,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			const result = await window.electronAPI.stopNativeWindowsRecording(discard);
 			if (discard || result.discarded) {
 				clearNativeRecordingState();
+				if (!restarting.current) {
+					setWebcamAcquireVersion((version) => version + 1);
+				}
 				return true;
 			}
 			if (!result.success) {
@@ -598,6 +644,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				// The recording is already lost either way -- what the user needs
 				// is to be able to start a new one.
 				clearNativeRecordingState();
+				setWebcamAcquireVersion((version) => version + 1);
 				return true;
 			}
 
@@ -616,6 +663,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				error instanceof Error ? error.message : "Failed to save native Windows recording",
 			);
 			clearNativeRecordingState();
+			setWebcamAcquireVersion((version) => version + 1);
 			return true;
 		} finally {
 			if (discardRecordingId.current === activeNativeRecording.recordingId) {
@@ -1061,6 +1109,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			const sourceType = selectedSource.id.startsWith("window:") ? "window" : "display";
 			const windowHandle = parseWindowHandleFromSourceId(selectedSource.id);
 			if (webcamEnabled) {
+				const shouldKeepCameraPreviewVisible = cameraOverlayVisible.current;
 				await waitForWebcamReady();
 				if (!isCountdownRunActive(countdownRunToken)) {
 					return true;
@@ -1072,6 +1121,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				// screen video and audio instead of racing a separately-started browser
 				// MediaRecorder against the helper's own process-spawn/WGC-init latency.
 				stopWebcamPreviewStream();
+				if (shouldKeepCameraPreviewVisible) {
+					const overlayResult = await window.electronAPI.prepareCameraOverlay({
+						captureBackend: "native-windows",
+						deviceId: webcamDeviceId,
+						deviceName: webcamDeviceName,
+					});
+					cameraOverlayVisible.current = overlayResult.shown;
+				}
 			}
 			const request: NativeWindowsRecordingRequest = {
 				recordingId: activeRecordingId,
@@ -1136,6 +1193,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			setElapsedSeconds(0);
 			return true;
 		} catch (error) {
+			window.electronAPI?.hideCameraOverlay?.();
+			setWebcamAcquireVersion((version) => version + 1);
 			console.error("Native Windows capture failed:", error);
 			throw error;
 		}
@@ -1197,6 +1256,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					});
 				}
 				if (!isCountdownRunActive(countdownRunToken)) {
+					window.electronAPI?.hideCameraOverlay?.();
 					return true;
 				}
 				if (webcamStream.current) {
@@ -1214,6 +1274,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						`${RECORDING_FILE_PREFIX}${activeRecordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`,
 					);
 				} else {
+					window.electronAPI?.hideCameraOverlay?.();
 					webcamAcquireId.current++;
 					setWebcamEnabledState(false);
 				}
@@ -1300,6 +1361,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			setElapsedSeconds(0);
 			return true;
 		} catch (error) {
+			window.electronAPI?.hideCameraOverlay?.();
 			console.error("Native macOS capture failed:", error);
 			throw error;
 		}
@@ -1759,6 +1821,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					});
 				}
 				if (!webcamStream.current) {
+					window.electronAPI?.hideCameraOverlay?.();
 					webcamAcquireId.current++;
 					setWebcamEnabledState(false);
 				}
@@ -1889,6 +1952,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				);
 			}
 		} catch (error) {
+			window.electronAPI?.hideCameraOverlay?.();
 			console.error("Failed to start recording:", error);
 			const errorMsg = error instanceof Error ? error.message : "Failed to start recording";
 			if (errorMsg.includes("Permission denied") || errorMsg.includes("NotAllowedError")) {

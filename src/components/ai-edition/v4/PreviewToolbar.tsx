@@ -1,7 +1,11 @@
-import { Check, ChevronDown, Crop, PanelsTopLeft } from "lucide-react";
+import { Battery, Check, ChevronDown, Crop, Gauge, PanelsTopLeft, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useScopedT } from "@/contexts/I18nContext";
+import {
+	type PreviewPerformanceMode,
+	usePreviewPerformanceStore,
+} from "@/lib/ai-edition/store/previewPerformance";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import {
 	ASPECT_RATIO_PRESETS,
@@ -38,6 +42,9 @@ export function PreviewToolbar({ canCrop, onCrop }: { canCrop: boolean; onCrop: 
 	const t = useScopedT("editor");
 	const { settings, hasDocument, set: setSettings } = useEditorSettings();
 	const [open, setOpen] = useState(false);
+	const [performanceOpen, setPerformanceOpen] = useState(false);
+	const previewMode = usePreviewPerformanceStore((state) => state.mode);
+	const setPreviewMode = usePreviewPerformanceStore((state) => state.setMode);
 	const selected = settings.aspectRatio;
 	const selectedLabel =
 		selected === "native"
@@ -50,10 +57,84 @@ export function PreviewToolbar({ canCrop, onCrop }: { canCrop: boolean; onCrop: 
 		void setSettings({ aspectRatio: ratio });
 		setOpen(false);
 	};
+	const performanceOptions: Array<{
+		mode: PreviewPerformanceMode;
+		label: string;
+		description: string;
+		icon: typeof Sparkles;
+	}> = [
+		{
+			mode: "quality",
+			label: "Quality",
+			description: "Native full-fidelity preview",
+			icon: Sparkles,
+		},
+		{
+			mode: "performance",
+			label: "Performance",
+			description: "Smooth direct preview · 30 fps UI",
+			icon: Gauge,
+		},
+		{
+			mode: "power-saving",
+			label: "Power Saving",
+			description: "Smooth preview · reduced UI updates",
+			icon: Battery,
+		},
+	];
+	const activePerformance =
+		performanceOptions.find((option) => option.mode === previewMode) ?? performanceOptions[1];
+	const ActivePerformanceIcon = activePerformance.icon;
 
 	return (
 		<div className={styles.stageToolbar} role="toolbar" aria-label={t("shell.previewStage")}>
 			<div className={styles.stageToolbarActions}>
+				<Popover open={performanceOpen} onOpenChange={setPerformanceOpen}>
+					<PopoverTrigger asChild>
+						<button
+							type="button"
+							className={styles.stageToolbarButton}
+							title="Preview performance"
+							aria-label="Preview performance"
+						>
+							<ActivePerformanceIcon size={15} aria-hidden />
+							<span>{activePerformance.label}</span>
+							<ChevronDown size={12} aria-hidden />
+						</button>
+					</PopoverTrigger>
+					<PopoverContent
+						align="center"
+						sideOffset={7}
+						animated={false}
+						className="w-auto border-0 bg-transparent p-0 shadow-none"
+					>
+						<div className={styles.previewPerformanceMenu} role="menu">
+							{performanceOptions.map((option) => {
+								const Icon = option.icon;
+								return (
+									<button
+										type="button"
+										key={option.mode}
+										className={styles.previewPerformanceOption}
+										aria-checked={previewMode === option.mode}
+										role="menuitemradio"
+										onClick={() => {
+											setPreviewMode(option.mode);
+											setPerformanceOpen(false);
+										}}
+									>
+										<Icon size={16} aria-hidden />
+										<span>
+											<strong>{option.label}</strong>
+											<small>{option.description}</small>
+										</span>
+										{previewMode === option.mode ? <Check size={15} aria-hidden /> : null}
+									</button>
+								);
+							})}
+						</div>
+					</PopoverContent>
+				</Popover>
 				<Popover open={open} onOpenChange={setOpen}>
 					<PopoverTrigger asChild>
 						<button

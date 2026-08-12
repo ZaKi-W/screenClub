@@ -130,14 +130,22 @@ export function NativeCompositorOverlay() {
 		if (viewId === null || !document) {
 			return;
 		}
-		try {
-			const activeWebcamPath = sources && "webcamPath" in sources ? sources.webcamPath : undefined;
-			const webcamSourceSize = activeWebcamPath ? getWebcamNativeSize(activeWebcamPath) : null;
-			const scene = buildSceneDescription(document, webcamSourceSize);
-			setNativeScene(JSON.stringify(scene));
-		} catch (error) {
-			console.warn("[compositor-view] build/push scene failed:", error);
-		}
+		// A resize/drag can replace the document more than once in one browser
+		// frame (annotation resize used to send position and size separately).
+		// Rebuilding/projecting/stringifying the complete scene for every pointer
+		// event is wasted work; only the newest document can become visible.
+		const frame = requestAnimationFrame(() => {
+			try {
+				const activeWebcamPath =
+					sources && "webcamPath" in sources ? sources.webcamPath : undefined;
+				const webcamSourceSize = activeWebcamPath ? getWebcamNativeSize(activeWebcamPath) : null;
+				const scene = buildSceneDescription(document, webcamSourceSize);
+				setNativeScene(JSON.stringify(scene));
+			} catch (error) {
+				console.warn("[compositor-view] build/push scene failed:", error);
+			}
+		});
+		return () => cancelAnimationFrame(frame);
 		// _webcamSizeRevision itself isn't read in the body — it's a dependency purely to
 		// re-trigger this effect when the probed-size cache mutates; the actual value is
 		// re-read fresh via getWebcamNativeSize() above on every run (biome flags this as

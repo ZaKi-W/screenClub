@@ -5,8 +5,12 @@
 // `document.annotations[]` array, so this uses a single filtered+sorted
 // list and a single selection id instead.
 
+import { useSyncExternalStore } from "react";
 import type { AxcutAnnotationRegion } from "@/lib/ai-edition/schema";
+import type { PlaybackClockRef } from "@/lib/ai-edition/timeline/playback-clock";
 import { AnnotationOverlay } from "./AnnotationOverlay";
+
+const subscribeToNothing = () => () => undefined;
 
 interface AnnotationLayerProps {
 	annotations: AxcutAnnotationRegion[];
@@ -16,8 +20,18 @@ interface AnnotationLayerProps {
 	containerHeight: number;
 	onSelectAnnotation: (id: string) => void;
 	onPositionChange: (id: string, position: { x: number; y: number }) => void;
-	onSizeChange: (id: string, size: { width: number; height: number }) => void;
+	onRectChange: (
+		id: string,
+		patch: {
+			position: { x: number; y: number };
+			size: { width: number; height: number };
+		},
+	) => void;
 	onCommit: () => void;
+	/** Paint pixels in the lightweight renderer. Native quality mode paints them itself. */
+	renderContent?: boolean;
+	/** Renderer visual clock; annotation React work only wakes when visibility actually changes. */
+	clockRef?: PlaybackClockRef;
 }
 
 export function AnnotationLayer({
@@ -28,10 +42,30 @@ export function AnnotationLayer({
 	containerHeight,
 	onSelectAnnotation,
 	onPositionChange,
-	onSizeChange,
+	onRectChange,
 	onCommit,
+	renderContent = false,
+	clockRef,
 }: AnnotationLayerProps) {
-	const currentTimeMs = Math.round(currentTimeSec * 1000);
+	const getVisibilitySnapshot = () => {
+		const timeMs = Math.round((clockRef?.current.virtualTimeSec ?? currentTimeSec) * 1000);
+		return annotations
+			.filter(
+				(annotation) =>
+					annotation.id === selectedAnnotationId ||
+					(timeMs >= annotation.startMs && timeMs < annotation.endMs),
+			)
+			.map((annotation) => annotation.id)
+			.join("|");
+	};
+	// Snapshot equality suppresses all intermediate 60 Hz React renders. The
+	// component wakes only when crossing an annotation boundary.
+	useSyncExternalStore(
+		clockRef?.subscribe ?? subscribeToNothing,
+		getVisibilitySnapshot,
+		getVisibilitySnapshot,
+	);
+	const currentTimeMs = Math.round((clockRef?.current.virtualTimeSec ?? currentTimeSec) * 1000);
 
 	const visible = annotations
 		.filter((annotation) => {
@@ -68,8 +102,9 @@ export function AnnotationLayer({
 					containerWidth={containerWidth}
 					containerHeight={containerHeight}
 					onPositionChange={onPositionChange}
-					onSizeChange={onSizeChange}
+					onRectChange={onRectChange}
 					onCommit={onCommit}
+					renderContent={renderContent}
 					onClick={handleClick}
 					zIndex={annotation.zIndex}
 					isSelectedBoost={annotation.id === selectedAnnotationId}

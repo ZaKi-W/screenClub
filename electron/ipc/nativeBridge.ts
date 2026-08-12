@@ -53,7 +53,7 @@ export interface NativeBridgeContext {
 	 */
 	getNativeWindowHandle?: (sender: import("electron").WebContents) => Buffer | null;
 	getAiEditionDocuments: () => DocumentService;
-	getAiEditionLlmConfig: () => import("../ai-edition/llm-config-store").LlmConfigStore;
+	getAiEditionLlmConfig: () => Promise<import("../ai-edition/llm-config-store").LlmConfigStore>;
 	runAiEditionChat: (
 		projectId: string,
 		sessionId: string,
@@ -69,14 +69,15 @@ export interface NativeBridgeContext {
 		projectId: string,
 		sessionId: string,
 		messageId: string,
-	) =>
+	) => Promise<
 		| {
 				success: true;
 				prompt: string;
 				document: unknown;
 				messages: import("../../src/native/contracts").AiEditionChatMessage[];
 		  }
-		| { success: false; error: string };
+		| { success: false; error: string }
+	>;
 	compactNow: (
 		projectId: string,
 		sessionId: string,
@@ -84,24 +85,24 @@ export interface NativeBridgeContext {
 	getContextUsage: (
 		projectId: string,
 		sessionId: string,
-	) => import("../../src/native/contracts").AiEditionChatBudget | null;
+	) => Promise<import("../../src/native/contracts").AiEditionChatBudget | null>;
 	listAiEditionChatSessions: (
 		projectId: string,
-	) => import("../../src/native/contracts").AiEditionChatSessionSummary[];
+	) => Promise<import("../../src/native/contracts").AiEditionChatSessionSummary[]>;
 	createAiEditionChatSession: (
 		projectId: string,
 		title?: string,
-	) => import("../../src/native/contracts").AiEditionChatSessionSummary;
+	) => Promise<import("../../src/native/contracts").AiEditionChatSessionSummary>;
 	selectAiEditionChatSession: (
 		projectId: string,
 		sessionId: string,
-	) => import("../../src/native/contracts").AiEditionChatSession | null;
+	) => Promise<import("../../src/native/contracts").AiEditionChatSession | null>;
 	renameAiEditionChatSession: (
 		projectId: string,
 		sessionId: string,
 		title: string,
-	) => import("../../src/native/contracts").AiEditionChatSessionSummary | null;
-	deleteAiEditionChatSession: (projectId: string, sessionId: string) => boolean;
+	) => Promise<import("../../src/native/contracts").AiEditionChatSessionSummary | null>;
+	deleteAiEditionChatSession: (projectId: string, sessionId: string) => Promise<boolean>;
 }
 
 function normalizePlatform(platform: NodeJS.Platform): NativePlatform {
@@ -548,12 +549,12 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.listSessions":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatListSessions(request.payload.projectId),
+								await aiEditionService.chatListSessions(request.payload.projectId),
 							);
 						case "chat.createSession":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatCreateSession(
+								await aiEditionService.chatCreateSession(
 									request.payload.projectId,
 									request.payload.title,
 								),
@@ -561,7 +562,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.selectSession":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatSelectSession(
+								await aiEditionService.chatSelectSession(
 									request.payload.projectId,
 									request.payload.sessionId,
 								),
@@ -569,7 +570,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.renameSession":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatRenameSession(
+								await aiEditionService.chatRenameSession(
 									request.payload.projectId,
 									request.payload.sessionId,
 									request.payload.title,
@@ -578,7 +579,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.deleteSession":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatDeleteSession(
+								await aiEditionService.chatDeleteSession(
 									request.payload.projectId,
 									request.payload.sessionId,
 								),
@@ -586,7 +587,10 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.budget":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatBudget(request.payload.projectId, request.payload.sessionId),
+								await aiEditionService.chatBudget(
+									request.payload.projectId,
+									request.payload.sessionId,
+								),
 							);
 						case "chat.compact":
 							return createSuccessResponse(
@@ -599,7 +603,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.rewind":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatRewindToMessage(
+								await aiEditionService.chatRewindToMessage(
 									request.payload.projectId,
 									request.payload.sessionId,
 									request.payload.messageId,
@@ -608,7 +612,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 						case "chat.contextUsage":
 							return createSuccessResponse(
 								requestId,
-								aiEditionService.chatContextUsage(
+								await aiEditionService.chatContextUsage(
 									request.payload.projectId,
 									request.payload.sessionId,
 								),

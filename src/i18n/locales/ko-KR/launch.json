@@ -53,7 +53,8 @@
 		"noneFound": "카메라를 찾을 수 없음",
 		"unavailable": "카메라를 사용할 수 없음",
 		"camera": "카메라",
-		"cameraDevice": "카메라 장치"
+		"cameraDevice": "카메라 장치",
+		"hidePreview": "카메라 미리보기 숨기기"
 	},
 	"cursor": {
 		"useEditableCursor": "편집 가능한 커서 사용",

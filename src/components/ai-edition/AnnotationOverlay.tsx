@@ -9,7 +9,7 @@
 // affichées en double (une copie collée au curseur, un fantôme resté en place jusqu'au
 // relâchement). Le détail reste dans `git log`.
 
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
 import type { AxcutAnnotationRegion } from "@/lib/ai-edition/schema";
 import { cn } from "@/lib/utils";
@@ -20,12 +20,133 @@ interface AnnotationOverlayProps {
 	containerWidth: number;
 	containerHeight: number;
 	onPositionChange: (id: string, position: { x: number; y: number }) => void;
-	onSizeChange: (id: string, size: { width: number; height: number }) => void;
+	onRectChange: (
+		id: string,
+		patch: {
+			position: { x: number; y: number };
+			size: { width: number; height: number };
+		},
+	) => void;
 	/** Écriture disque, appelée une fois en fin de geste — le drag/resize ne fait que du live. */
 	onCommit?: () => void;
 	onClick: (id: string) => void;
 	zIndex: number;
 	isSelectedBoost: boolean;
+	renderContent: boolean;
+}
+
+const ARROW_ROTATION: Record<string, number> = {
+	right: 0,
+	"down-right": 45,
+	down: 90,
+	"down-left": 135,
+	left: 180,
+	"up-left": 225,
+	up: 270,
+	"up-right": 315,
+};
+
+function AnnotationPixels({
+	annotation,
+	containerHeight,
+}: {
+	annotation: AxcutAnnotationRegion;
+	containerHeight: number;
+}) {
+	const base: CSSProperties = {
+		position: "absolute",
+		inset: 0,
+		width: "100%",
+		height: "100%",
+		pointerEvents: "none",
+	};
+	if (annotation.type === "text") {
+		return (
+			<div
+				style={{
+					...base,
+					display: "flex",
+					alignItems: "center",
+					justifyContent:
+						annotation.style.textAlign === "left"
+							? "flex-start"
+							: annotation.style.textAlign === "right"
+								? "flex-end"
+								: "center",
+					padding: "0.18em 0.32em",
+					boxSizing: "border-box",
+					color: annotation.style.color,
+					background: annotation.style.backgroundColor,
+					fontFamily: annotation.style.fontFamily,
+					fontSize: Math.max(8, (annotation.style.fontSize / 1080) * containerHeight),
+					fontWeight: annotation.style.fontWeight,
+					fontStyle: annotation.style.fontStyle,
+					textDecoration: annotation.style.textDecoration,
+					textAlign: annotation.style.textAlign,
+					whiteSpace: "pre-wrap",
+					overflow: "hidden",
+				}}
+			>
+				{annotation.content}
+			</div>
+		);
+	}
+	if (annotation.type === "image") {
+		return annotation.content ? (
+			<img alt="" aria-hidden src={annotation.content} style={{ ...base, objectFit: "contain" }} />
+		) : null;
+	}
+	if (annotation.type === "figure") {
+		const figure = annotation.figureData;
+		const color = figure?.color ?? "#34B27B";
+		const strokeWidth = Math.max(1, figure?.strokeWidth ?? 4);
+		return (
+			<svg
+				viewBox="0 0 100 100"
+				preserveAspectRatio="none"
+				aria-hidden
+				style={{
+					...base,
+					transform: `rotate(${ARROW_ROTATION[figure?.arrowDirection ?? "right"] ?? 0}deg)`,
+				}}
+			>
+				<line
+					x1="10"
+					y1="50"
+					x2="82"
+					y2="50"
+					stroke={color}
+					strokeWidth={strokeWidth}
+					strokeLinecap="round"
+				/>
+				<polyline
+					points="66,30 86,50 66,70"
+					fill="none"
+					stroke={color}
+					strokeWidth={strokeWidth}
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			</svg>
+		);
+	}
+	const blur = annotation.blurData;
+	const strength = Math.max(2, blur?.intensity ?? blur?.blockSize ?? 12);
+	const filter =
+		blur?.type === "mosaic"
+			? `blur(${Math.max(2, strength / 3)}px) contrast(1.18)`
+			: `blur(${strength}px)`;
+	return (
+		<div
+			style={{
+				...base,
+				borderRadius: blur?.shape === "oval" ? "50%" : "8px",
+				backdropFilter: filter,
+				WebkitBackdropFilter: filter,
+				background: "rgba(127, 127, 127, 0.05)",
+			}}
+		/>
+	);
 }
 
 export function AnnotationOverlay({
@@ -34,11 +155,12 @@ export function AnnotationOverlay({
 	containerWidth,
 	containerHeight,
 	onPositionChange,
-	onSizeChange,
+	onRectChange,
 	onCommit,
 	onClick,
 	zIndex,
 	isSelectedBoost,
+	renderContent,
 }: AnnotationOverlayProps) {
 	const committedX = (annotation.position.x / 100) * containerWidth;
 	const committedY = (annotation.position.y / 100) * containerHeight;
@@ -46,6 +168,34 @@ export function AnnotationOverlay({
 	const committedHeight = (annotation.size.height / 100) * containerHeight;
 	const blurShape = annotation.type === "blur" ? (annotation.blurData?.shape ?? "rectangle") : null;
 	const isDraggingRef = useRef(false);
+	type PendingLivePatch =
+		| { kind: "position"; position: { x: number; y: number } }
+		| {
+				kind: "rect";
+				position: { x: number; y: number };
+				size: { width: number; height: number };
+		  };
+	const pendingLivePatchRef = useRef<PendingLivePatch | null>(null);
+	const livePatchRafRef = useRef(0);
+	const flushLivePatch = () => {
+		if (livePatchRafRef.current !== 0) {
+			cancelAnimationFrame(livePatchRafRef.current);
+			livePatchRafRef.current = 0;
+		}
+		const pending = pendingLivePatchRef.current;
+		pendingLivePatchRef.current = null;
+		if (!pending) return;
+		if (pending.kind === "position") onPositionChange(annotation.id, pending.position);
+		else onRectChange(annotation.id, { position: pending.position, size: pending.size });
+	};
+	const queueLivePatch = (patch: PendingLivePatch) => {
+		pendingLivePatchRef.current = patch;
+		if (livePatchRafRef.current !== 0) return;
+		livePatchRafRef.current = requestAnimationFrame(() => {
+			livePatchRafRef.current = 0;
+			flushLivePatch();
+		});
+	};
 	const [liveRect, setLiveRect] = useState({
 		x: committedX,
 		y: committedY,
@@ -62,6 +212,13 @@ export function AnnotationOverlay({
 		});
 	}, [committedHeight, committedWidth, committedX, committedY]);
 
+	useEffect(
+		() => () => {
+			if (livePatchRafRef.current !== 0) cancelAnimationFrame(livePatchRafRef.current);
+		},
+		[],
+	);
+
 	const { x, y, width, height } = liveRect;
 
 	return (
@@ -76,16 +233,23 @@ export function AnnotationOverlay({
 				// Pousse la position PENDANT le geste : c'est le natif qui peint, il doit donc suivre
 				// le curseur. `onPositionChange` ne met à jour qu'en mémoire ; l'écriture disque se
 				// fait une seule fois, au relâchement (`onCommit`).
-				onPositionChange(annotation.id, {
-					x: (d.x / containerWidth) * 100,
-					y: (d.y / containerHeight) * 100,
+				queueLivePatch({
+					kind: "position",
+					position: {
+						x: (d.x / containerWidth) * 100,
+						y: (d.y / containerHeight) * 100,
+					},
 				});
 			}}
 			onDragStop={(_e, d) => {
 				setLiveRect((prev) => ({ ...prev, x: d.x, y: d.y }));
 				const xPercent = (d.x / containerWidth) * 100;
 				const yPercent = (d.y / containerHeight) * 100;
-				onPositionChange(annotation.id, { x: xPercent, y: yPercent });
+				pendingLivePatchRef.current = {
+					kind: "position",
+					position: { x: xPercent, y: yPercent },
+				};
+				flushLivePatch();
 				onCommit?.();
 				setTimeout(() => {
 					isDraggingRef.current = false;
@@ -99,13 +263,16 @@ export function AnnotationOverlay({
 					height: ref.offsetHeight,
 				});
 				// Même raison que le drag : le natif doit suivre la poignée en direct.
-				onPositionChange(annotation.id, {
-					x: (position.x / containerWidth) * 100,
-					y: (position.y / containerHeight) * 100,
-				});
-				onSizeChange(annotation.id, {
-					width: (ref.offsetWidth / containerWidth) * 100,
-					height: (ref.offsetHeight / containerHeight) * 100,
+				queueLivePatch({
+					kind: "rect",
+					position: {
+						x: (position.x / containerWidth) * 100,
+						y: (position.y / containerHeight) * 100,
+					},
+					size: {
+						width: (ref.offsetWidth / containerWidth) * 100,
+						height: (ref.offsetHeight / containerHeight) * 100,
+					},
 				});
 			}}
 			onResizeStop={(_e, _direction, ref, _delta, position) => {
@@ -119,8 +286,12 @@ export function AnnotationOverlay({
 				const yPercent = (position.y / containerHeight) * 100;
 				const widthPercent = (ref.offsetWidth / containerWidth) * 100;
 				const heightPercent = (ref.offsetHeight / containerHeight) * 100;
-				onPositionChange(annotation.id, { x: xPercent, y: yPercent });
-				onSizeChange(annotation.id, { width: widthPercent, height: heightPercent });
+				pendingLivePatchRef.current = {
+					kind: "rect",
+					position: { x: xPercent, y: yPercent },
+					size: { width: widthPercent, height: heightPercent },
+				};
+				flushLivePatch();
 				onCommit?.();
 			}}
 			onClick={() => {
@@ -199,6 +370,9 @@ export function AnnotationOverlay({
 					isSelected && annotation.type !== "blur" && "shadow-lg",
 				)}
 			>
+				{renderContent ? (
+					<AnnotationPixels annotation={annotation} containerHeight={containerHeight} />
+				) : null}
 				{/* Le cadre d'un flou sélectionné, à la forme du masque. Les autres types portent le
 				    leur sur le `Rnd` lui-même ; un flou n'en a pas, pour ne pas encadrer la zone qu'il
 				    est censé cacher — sans ce liseré il n'aurait AUCUN retour de sélection. */}

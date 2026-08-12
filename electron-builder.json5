@@ -34,6 +34,16 @@
   "files": [
     "dist",
     "dist-electron",
+    // Vite copies public/ into dist/. Packaged renderers resolve these trees from
+    // resourcesPath (see ASSET_BASE_URL_ARG), where extraResources below puts the
+    // real files for both Chromium and the native compositor. Exclude the asar
+    // copies so wallpapers/cursors travel only once.
+    "!dist/wallpapers/**",
+    "!dist/cursors/**",
+    // README-only showcase assets are also copied from public/ but are never read
+    // by the application runtime.
+    "!dist/demo.gif",
+    "!dist/preview*.png",
     "!*.png",
     "!preview*.png",
     "!*.md",

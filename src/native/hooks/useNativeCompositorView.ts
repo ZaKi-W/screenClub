@@ -30,7 +30,7 @@ import {
 	setCompositorRect,
 } from "../compositorViewClient";
 import type { CompositorParamValue, CompositorViewRect } from "../contracts";
-import { computeDeviceRect, rectsEqual } from "../nativeViewRect";
+import { computeDeviceRect } from "../nativeViewRect";
 
 export interface UseNativeCompositorViewOptions {
 	/** When false, the hook does nothing on mount and destroys nothing on
@@ -81,6 +81,8 @@ function safelyCall(label: string, call: () => Promise<unknown>) {
  * every-other-rAF throttle meant 30fps on the common 60Hz case, reducing a 450 ms zoom to
  * about 14 visible frames. A time budget keeps 120/144Hz displays from over-polling. */
 const PULL_INTERVAL_MS = 1000 / 60;
+const IDLE_PULL_INTERVAL_MS = 1000 / 15;
+const IDLE_MISSES_BEFORE_BACKOFF = 4;
 
 export function useNativeCompositorView(
 	canvasRef: RefObject<HTMLCanvasElement>,
@@ -118,6 +120,7 @@ export function useNativeCompositorView(
 		let rectRafHandle = 0;
 		let pullRafHandle = 0;
 		let lastPullAt = Number.NEGATIVE_INFINITY;
+		let consecutiveIdlePulls = 0;
 		let lastRect: CompositorViewRect | null = null;
 		let disposed = false;
 		// Fresh view (source or enablement changed) → the previous view's fatal error
@@ -146,10 +149,10 @@ export function useNativeCompositorView(
 			// scaled to device pixels for the native offscreen target.
 			const domRect = canvas.getBoundingClientRect();
 			const next = computeDeviceRect(domRect, window.devicePixelRatio);
-			// `x` / `y` are vestigial in the new contract (ignored native-side),
-			// but `rectsEqual` still compares them — harmless: scrolling will just
-			// re-push the rect, and the native side ignores x/y.
-			if (lastRect && rectsEqual(lastRect, next)) {
+			// The offscreen target only consumes width/height. Screen position used to
+			// matter for the retired native child-window path; comparing x/y here made
+			// every parent scroll issue a pointless resize IPC.
+			if (lastRect && lastRect.width === next.width && lastRect.height === next.height) {
 				return;
 			}
 			lastRect = next;
@@ -192,7 +195,11 @@ export function useNativeCompositorView(
 			if (disposed || inFlight) {
 				return;
 			}
-			if (timestamp - lastPullAt < PULL_INTERVAL_MS - 1) {
+			const pullInterval =
+				consecutiveIdlePulls >= IDLE_MISSES_BEFORE_BACKOFF
+					? IDLE_PULL_INTERVAL_MS
+					: PULL_INTERVAL_MS;
+			if (timestamp - lastPullAt < pullInterval - 1) {
 				return;
 			}
 			lastPullAt = timestamp;
@@ -207,16 +214,19 @@ export function useNativeCompositorView(
 			inFlight = true;
 			readCompositorFrame(id, lastGen)
 				.then((frame) => {
-					inFlight = false;
 					// `null` = nothing newer than `lastGen` (idle path — no pixels
 					// crossed IPC) OR no frame yet. Either way, leave the canvas as-is.
 					if (disposed || !frame) {
+						inFlight = false;
+						if (!disposed) consecutiveIdlePulls += 1;
 						return;
 					}
+					consecutiveIdlePulls = 0;
 					const { gen, width, height, data } = frame;
 					// Defensive: the packet's byte count must match its own declared
 					// dimensions. A mismatch would corrupt the image silently — bail.
 					if (data.byteLength !== width * height * 4 || width === 0 || height === 0) {
+						inFlight = false;
 						return;
 					}
 					// Size the drawing buffer to the packet (destructive, but we repaint
@@ -241,6 +251,9 @@ export function useNativeCompositorView(
 					// `createImageBitmap` decodes off the main thread (keeps UI at 60/120fps)
 					// and snapshots `image`, so the view can be released after; `putImageData`
 					// is the synchronous fallback if bitmap creation is unavailable.
+					// Keep `inFlight` true through bitmap conversion and paint, not merely
+					// through the IPC read. Otherwise a slow GPU upload can queue several
+					// 8 MB+ frame snapshots at once while older conversions are still pending.
 					createImageBitmap(image)
 						.then((bitmap) => {
 							if (!disposed && ctx && gen > lastPaintedGen) {
@@ -254,6 +267,9 @@ export function useNativeCompositorView(
 								ctx.putImageData(image, 0, 0);
 								lastPaintedGen = gen;
 							}
+						})
+						.finally(() => {
+							inFlight = false;
 						});
 					// Advance only after a successful, validated frame — so a dropped/
 					// malformed packet is retried rather than silently skipped.
@@ -307,7 +323,6 @@ export function useNativeCompositorView(
 		window.addEventListener("resize", scheduleRectUpdate);
 		// capture phase so we observe parent scroll containers too,
 		// not just `window` — the preview pane may scroll independently.
-		window.addEventListener("scroll", scheduleRectUpdate, true);
 
 		// Start the pull loop only after the view id is published — otherwise
 		// every early tick would just hit `id == null` and no-op. Id is set
@@ -326,7 +341,6 @@ export function useNativeCompositorView(
 			}
 			observer.disconnect();
 			window.removeEventListener("resize", scheduleRectUpdate);
-			window.removeEventListener("scroll", scheduleRectUpdate, true);
 			const id = viewIdRef.current;
 			if (id != null) {
 				safelyCall("destroyView", () => destroyCompositorView(id));
