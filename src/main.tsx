@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import { I18nProvider } from "./contexts/I18nContext";
-import { clearStaleSourceCache } from "./lib/exporter/localSourceFile";
 import "./hooks/rendererConsoleForwarder";
 import "./index.css";
 
@@ -13,13 +12,16 @@ const windowType = new URLSearchParams(window.location.search).get("windowType")
 // Nothing is referenced at startup, so everything stale is safe to remove.
 if (!windowType) {
 	window.setTimeout(() => {
-		clearStaleSourceCache().catch(() => undefined);
+		void import("./lib/exporter/localSourceFile").then(({ clearStaleSourceCache }) =>
+			clearStaleSourceCache().catch(() => undefined),
+		);
 	}, 5_000);
 }
 const showNotes = new URLSearchParams(window.location.search).get("showNotes") === "true";
 if (
 	showNotes ||
 	windowType === "hud-overlay" ||
+	windowType === "camera-overlay" ||
 	windowType === "source-selector" ||
 	windowType === "countdown-overlay"
 ) {
@@ -28,10 +30,22 @@ if (
 	document.getElementById("root")?.style.setProperty("background", "transparent");
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-	<React.StrictMode>
-		<I18nProvider>
-			<App />
-		</I18nProvider>
-	</React.StrictMode>,
-);
+async function bootstrapRenderer() {
+	// Browser-only preview support brings the full in-memory project shim and schema
+	// migrations. Electron's preload is present before this script executes, so desktop
+	// windows can keep that graph out of their startup bundle entirely.
+	if (!window.electronAPI) {
+		const { installBrowserShims } = await import("./native/browserShim");
+		installBrowserShims();
+	}
+
+	ReactDOM.createRoot(document.getElementById("root")!).render(
+		<React.StrictMode>
+			<I18nProvider>
+				<App />
+			</I18nProvider>
+		</React.StrictMode>,
+	);
+}
+
+void bootstrapRenderer();

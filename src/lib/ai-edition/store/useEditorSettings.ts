@@ -36,6 +36,8 @@ export interface UseEditorSettingsResult {
 export function useEditorSettings(): UseEditorSettingsResult {
 	const document = useProjectStore((s) => s.document);
 	const setDocument = useProjectStore((s) => s.setDocument);
+	const setDocumentLive = useProjectStore((s) => s.setDocumentLive);
+	const commitLiveDocumentHistory = useProjectStore((s) => s.commitLiveDocumentHistory);
 	const saveDocument = useProjectStore((s) => s.saveDocument);
 
 	const hasDocument = document !== null;
@@ -57,16 +59,17 @@ export function useEditorSettings(): UseEditorSettingsResult {
 		(patch: EditorSettingsPatch) => {
 			const doc = useProjectStore.getState().document;
 			if (!doc) return;
-			setDocument(patchEditorSettings(doc, patch));
+			setDocumentLive(patchEditorSettings(doc, patch));
 		},
-		[setDocument],
+		[setDocumentLive],
 	);
 
 	const commit = useCallback(async () => {
 		const doc = useProjectStore.getState().document;
 		if (!doc) return;
+		commitLiveDocumentHistory();
 		await saveDocument(doc);
-	}, [saveDocument]);
+	}, [commitLiveDocumentHistory, saveDocument]);
 
 	return { settings, hasDocument, set, setLive, commit };
 }

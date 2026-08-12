@@ -53,7 +53,8 @@
 		"noneFound": "Aucune caméra trouvée",
 		"unavailable": "Caméra non disponible",
 		"camera": "Caméra",
-		"cameraDevice": "Périphérique caméra"
+		"cameraDevice": "Périphérique caméra",
+		"hidePreview": "Masquer l’aperçu de la caméra"
 	},
 	"cursor": {
 		"useEditableCursor": "Utiliser le curseur éditable",

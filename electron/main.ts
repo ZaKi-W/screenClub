@@ -13,7 +13,6 @@ import {
 } from "electron";
 import { ShortcutBinding } from "../src/lib/shortcuts";
 import { parseCliArgs } from "./cli/args";
-import { runCli } from "./cli/cliMain";
 import { isDiagnosticModeEnabled, mainLogBuffer } from "./diagnostics/main-log-buffer";
 import {
 	loadAndRegisterGlobalShortcut,
@@ -23,13 +22,15 @@ import {
 import { mainT, setMainLocale } from "./i18n";
 import { getSelectedDesktopSource, registerIpcHandlers } from "./ipc/handlers";
 import { installMainProcessErrorGuards } from "./main-process-errors";
-import { registerSttIpc } from "./stt";
+import { registerLazySttIpc } from "./stt/lazyIpc";
 import {
+	closeCameraOverlayWindow,
 	createCountdownOverlayWindow,
 	createEditorWindow,
 	createHudOverlayWindow,
 	createNotesWindow,
 	createSourceSelectorWindow,
+	getCameraOverlayWindow,
 } from "./windows";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -136,7 +137,14 @@ function showMainWindow() {
 const hasSingleInstanceLock = cliCommand ? false : app.requestSingleInstanceLock();
 
 if (cliCommand) {
-	runCli(cliCommand);
+	// The GUI never needs CLI exporters, project packers or their STT bridge.
+	// Keep that graph out of the main-process cold-start chunk.
+	void import("./cli/cliMain")
+		.then(({ runCli }) => runCli(cliCommand))
+		.catch((error) => {
+			console.error("Failed to load CLI runtime:", error);
+			app.exit(1);
+		});
 } else if (hasSingleInstanceLock) {
 	app.on("second-instance", () => {
 		showMainWindow();
@@ -662,11 +670,13 @@ appReady?.then(async () => {
 		() => sourceSelectorWindow,
 		() => notesWindow,
 		() => countdownOverlayWindow,
+		() => getCameraOverlayWindow(),
 		(recording: boolean, sourceName: string) => {
 			selectedSourceName = sourceName;
 			if (!tray) createTray();
 			updateTrayMenu(recording);
 			if (!recording) {
+				closeCameraOverlayWindow();
 				showMainWindow();
 			}
 		},
@@ -674,7 +684,7 @@ appReady?.then(async () => {
 	);
 
 	// Native STT (whisper.cpp + forced alignment) — single instance per app.
-	registerSttIpc(ipcMain);
+	registerLazySttIpc(ipcMain);
 
 	await loadAndRegisterGlobalShortcut(showMainWindow);
 

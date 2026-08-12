@@ -14,7 +14,7 @@
 // naturally disappears when the playhead moves onto a clip whose asset has
 // no camera, and reappears when it moves onto one that does.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toFileUrl } from "@/components/video-editor/projectPersistence";
 import type { WebcamLayoutPreset, WebcamMaskShape } from "@/components/video-editor/types";
 import type { AxcutClip } from "@/lib/ai-edition/schema";
@@ -43,12 +43,14 @@ interface WebcamOverlayProps {
 	webcamMaskShape: WebcamMaskShape;
 	layoutPreset: WebcamLayoutPreset;
 	// The screen preview's live clock (see playback-clock.ts). When present,
-	// sync is driven from this ref on our own rAF tick instead of the
+	// sync is driven from this ref on the shared visual tick instead of the
 	// currentTimeSec/isPlaying PROPS above — those props still gate whether
 	// the camera element renders at all (see cameraTrack below), but the
-	// numeric sync target comes straight from the screen's own rAF, this
+	// numeric sync target comes straight from the screen's presentation clock, this
 	// frame, with no React round trip in between.
 	clockRef?: PlaybackClockRef;
+	/** False when the native Quality compositor already decodes and paints the camera. */
+	playbackEnabled?: boolean;
 }
 
 export function WebcamOverlay(props: WebcamOverlayProps) {
@@ -70,6 +72,10 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 		() => resolveActiveCameraTrack(assets ?? [], props.clips, props.currentTimeSec),
 		[assets, props.clips, props.currentTimeSec],
 	);
+	const assetById = useMemo(
+		() => new Map((assets ?? []).map((asset) => [asset.id, asset])),
+		[assets],
+	);
 
 	const cameraTime = useMemo(() => {
 		if (!cameraTrack?.visible || !position) return null;
@@ -77,37 +83,26 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 		return Math.max(0, position.sourceTimeSec - offsetSec);
 	}, [cameraTrack, position]);
 
-	// Refs so the rAF tick below always reads the latest clips/assets without
-	// re-creating the loop on every document mutation.
-	const clipsRef = useRef(props.clips);
-	clipsRef.current = props.clips;
-	const assetsRef = useRef(assets);
-	assetsRef.current = assets;
-
-	// Drive the camera <video> directly off the shared playback clock: read
-	// it every rAF tick, resolve which clip/camera is active THIS frame, and
+	// Drive the camera <video> directly off the shared playback clock: react
+	// only when the master screen video actually delivers a frame, and
 	// correct time/rate/play-state in one place. This replaces two separate
 	// prop-driven effects (time correction + play/pause mirroring), both of
 	// which depended on a React state round trip from the screen preview.
 	useEffect(() => {
-		if (!videoEl || !props.clockRef) return;
+		if (!videoEl || !props.clockRef || props.playbackEnabled === false) return;
 		const clockRef = props.clockRef;
-		let raf = 0;
-		const tick = () => {
-			raf = window.requestAnimationFrame(tick);
+		const syncToMasterFrame = () => {
 			const clock = clockRef.current;
-			const clipsNow = clipsRef.current;
-			const positionNow = locateVirtualPosition(clipsNow, clock.virtualTimeSec);
-			const trackNow = resolveActiveCameraTrack(
-				assetsRef.current ?? [],
-				clipsNow,
-				clock.virtualTimeSec,
-			);
-			const target = resolveCameraSyncTarget(
-				clock,
-				trackNow,
-				positionNow ? positionNow.sourceTimeSec : null,
-			);
+			// The master already resolved the active raw clip/asset while mapping the
+			// screen source. Repeating locateVirtualPosition here used to scan clips
+			// twice per visual frame (resolveActiveCameraTrack scans them again).
+			const trackNow = clock.activeAssetId
+				? (assetById.get(clock.activeAssetId)?.cameraTrack ?? null)
+				: cameraTrack;
+			// During a cross-asset boundary React may need one outer-UI tick to mount
+			// the new camera file. Never seek the old <video> with the new track's time.
+			if (trackNow?.sourcePath !== cameraTrack?.sourcePath) return;
+			const target = resolveCameraSyncTarget(clock, trackNow, clock.sourceTimeSec);
 			if (!target) return;
 
 			if (videoEl.playbackRate !== target.playbackRate) {
@@ -128,15 +123,22 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 				videoEl.pause();
 			}
 		};
-		raf = window.requestAnimationFrame(tick);
-		return () => window.cancelAnimationFrame(raf);
-	}, [videoEl, props.clockRef]);
+		syncToMasterFrame();
+		return clockRef.subscribe(syncToMasterFrame);
+	}, [assetById, cameraTrack, videoEl, props.clockRef, props.playbackEnabled]);
+
+	// Quality keeps this element mounted for metadata/dimensions, but its pixels
+	// come from the native compositor. Do not spend a second hardware decoder on
+	// an invisible DOM camera stream.
+	useEffect(() => {
+		if (videoEl && props.playbackEnabled === false && !videoEl.paused) videoEl.pause();
+	}, [videoEl, props.playbackEnabled]);
 
 	// Fallback for when no clockRef is wired up (defensive — all current call
 	// sites pass one): keep the old prop-driven correction so the overlay
 	// still works, just with the previously-reported latency.
 	useEffect(() => {
-		if (!videoEl || props.clockRef) return;
+		if (!videoEl || props.clockRef || props.playbackEnabled === false) return;
 		if (cameraTime === null) return;
 		if (Math.abs(videoEl.currentTime - cameraTime) > CAMERA_SYNC_TOLERANCE_PAUSED_SEC) {
 			try {
@@ -145,16 +147,16 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 				// ponytail: silent — video not ready yet
 			}
 		}
-	}, [videoEl, cameraTime, props.clockRef]);
+	}, [videoEl, cameraTime, props.clockRef, props.playbackEnabled]);
 
 	useEffect(() => {
-		if (!videoEl || props.clockRef) return;
+		if (!videoEl || props.clockRef || props.playbackEnabled === false) return;
 		if (props.isPlaying) {
 			void videoEl.play().catch(() => setHasError(true));
 		} else {
 			videoEl.pause();
 		}
-	}, [videoEl, props.isPlaying, props.clockRef]);
+	}, [videoEl, props.isPlaying, props.clockRef, props.playbackEnabled]);
 
 	if (!cameraTrack?.sourcePath || !cameraTrack.visible) {
 		return null;
@@ -198,6 +200,7 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 					setWebcamNativeSize(cameraTrack.sourcePath, { width: w, height: h });
 				}
 				if (
+					props.playbackEnabled !== false &&
 					cameraTime !== null &&
 					videoEl &&
 					Math.abs(videoEl.currentTime - cameraTime) > CAMERA_SYNC_TOLERANCE_PAUSED_SEC

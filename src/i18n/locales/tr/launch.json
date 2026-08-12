@@ -53,7 +53,8 @@
 		"noneFound": "Kamera bulunamadı",
 		"unavailable": "Kamera kullanılamıyor",
 		"camera": "Kamera",
-		"cameraDevice": "Kamera cihazı"
+		"cameraDevice": "Kamera cihazı",
+		"hidePreview": "Kamera önizlemesini gizle"
 	},
 	"cursor": {
 		"useEditableCursor": "Düzenlenebilir imleci kullan",

@@ -53,7 +53,8 @@
 		"noneFound": "未找到摄像头",
 		"unavailable": "摄像头不可用",
 		"camera": "摄像头",
-		"cameraDevice": "摄像头设备"
+		"cameraDevice": "摄像头设备",
+		"hidePreview": "隐藏摄像头预览"
 	},
 	"cursor": {
 		"useEditableCursor": "使用可编辑光标",

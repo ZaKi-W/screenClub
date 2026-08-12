@@ -16,16 +16,33 @@ export interface PlaybackClockSnapshot {
 	virtualTimeSec: number;
 	/** Position in the active screen source's own media time, in seconds. */
 	sourceTimeSec: number;
+	/** Active raw/document clip. Optional keeps older clock fixtures compatible. */
+	activeClipId?: string | null;
+	/** Asset owning the active screen source, resolved once by the master preview. */
+	activeAssetId?: string | null;
 	isPlaying: boolean;
 	/** Active `<video>.playbackRate` for the screen source (speed regions). */
 	playbackRate: number;
 }
 
-export type PlaybackClockRef = { current: PlaybackClockSnapshot };
+export interface PlaybackClockRef {
+	current: PlaybackClockSnapshot;
+	/** Notify dependent media/overlays on the independent visual-composition tick. */
+	publish: () => void;
+	subscribe: (listener: () => void) => () => void;
+}
 
 export function createPlaybackClockRef(): PlaybackClockRef {
+	const listeners = new Set<() => void>();
 	return {
 		current: { virtualTimeSec: 0, sourceTimeSec: 0, isPlaying: false, playbackRate: 1 },
+		publish() {
+			for (const listener of listeners) listener();
+		},
+		subscribe(listener) {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
 	};
 }
 

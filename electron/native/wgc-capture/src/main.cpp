@@ -220,6 +220,48 @@ bool hasVisibleBgraContent(const std::vector<BYTE>& frame) {
     return maxLuma > 24 || averageLuma > 4;
 }
 
+std::string base64Encode(const std::vector<BYTE>& data) {
+    static constexpr char alphabet[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string output;
+    output.reserve(((data.size() + 2) / 3) * 4);
+    for (size_t offset = 0; offset < data.size(); offset += 3) {
+        const uint32_t a = data[offset];
+        const uint32_t b = offset + 1 < data.size() ? data[offset + 1] : 0;
+        const uint32_t c = offset + 2 < data.size() ? data[offset + 2] : 0;
+        const uint32_t packed = (a << 16) | (b << 8) | c;
+        output.push_back(alphabet[(packed >> 18) & 0x3f]);
+        output.push_back(alphabet[(packed >> 12) & 0x3f]);
+        output.push_back(offset + 1 < data.size() ? alphabet[(packed >> 6) & 0x3f] : '=');
+        output.push_back(offset + 2 < data.size() ? alphabet[packed & 0x3f] : '=');
+    }
+    return output;
+}
+
+std::string makeWebcamPreviewEvent(const BgraFrameView& frame) {
+    if (!frame.data || frame.width <= 0 || frame.height <= 0) {
+        return {};
+    }
+
+    constexpr int maxPreviewWidth = 384;
+    const int previewWidth = std::min(maxPreviewWidth, frame.width);
+    const int previewHeight = std::max(1, (frame.height * previewWidth) / frame.width);
+    std::vector<BYTE> pixels(static_cast<size_t>(previewWidth) * previewHeight * 4);
+    for (int y = 0; y < previewHeight; y += 1) {
+        const int sourceY = (y * frame.height) / previewHeight;
+        for (int x = 0; x < previewWidth; x += 1) {
+            const int sourceX = (x * frame.width) / previewWidth;
+            const BYTE* source = frame.data + (static_cast<size_t>(sourceY) * frame.width + sourceX) * 4;
+            BYTE* destination = pixels.data() + (static_cast<size_t>(y) * previewWidth + x) * 4;
+            std::copy_n(source, 4, destination);
+        }
+    }
+
+    return "{\"event\":\"webcam-preview-frame\",\"schemaVersion\":2,\"width\":" +
+        std::to_string(previewWidth) + ",\"height\":" + std::to_string(previewHeight) +
+        ",\"bgraBase64\":\"" + base64Encode(pixels) + "\"}";
+}
+
 bool findBool(const std::string& json, const std::string& key, bool fallback) {
     auto pos = json.find("\"" + key + "\"");
     if (pos == std::string::npos) {
@@ -704,6 +746,7 @@ int main(int argc, char* argv[]) {
         // latest available camera frame when the camera hasn't produced a
         // newer one yet), so "sample N is at N/fps" is actually correct.
         int64_t nextWebcamWriteDueHns = 0;
+        auto nextWebcamPreviewDue = std::chrono::steady_clock::now();
         const int64_t nominalWebcamIntervalHns =
             static_cast<int64_t>(10'000'000ULL / std::max(1, webcamCapture.fps()));
 
@@ -712,6 +755,7 @@ int main(int argc, char* argv[]) {
             Microsoft::WRL::ComPtr<IMFSample> webcamSample;
             bool hasVideoSample = false;
             bool hasWebcamSample = false;
+            bool shouldEmitWebcamPreview = false;
 
             {
                 std::unique_lock lock(mutex);
@@ -740,6 +784,11 @@ int main(int argc, char* argv[]) {
                     latestWebcamWidth,
                     latestWebcamHeight,
                 };
+                const auto previewNow = std::chrono::steady_clock::now();
+                if (webcamFrame.data && previewNow >= nextWebcamPreviewDue) {
+                    shouldEmitWebcamPreview = true;
+                    nextWebcamPreviewDue = previewNow + std::chrono::milliseconds(100);
+                }
                 const int64_t syntheticTimestampHns =
                     static_cast<int64_t>((frameIndex * 10'000'000ULL) / config.fps);
                 const int64_t sourceTimestampHns =
@@ -841,6 +890,14 @@ int main(int argc, char* argv[]) {
                 encodeFailed = true;
                 control.requestStop();
                 break;
+            }
+            if (shouldEmitWebcamPreview && hasVisibleWebcamFrame && !latestWebcamFrame.empty()) {
+                const BgraFrameView webcamPreviewFrame{
+                    latestWebcamFrame.data(),
+                    latestWebcamWidth,
+                    latestWebcamHeight,
+                };
+                std::cout << makeWebcamPreviewEvent(webcamPreviewFrame) << std::endl;
             }
 
             frameIndex += 1;

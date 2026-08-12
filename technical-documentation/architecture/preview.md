@@ -1,13 +1,15 @@
 # Preview
 
-The preview is the editor's frame-at-the-playhead surface. It is composited by the same
-Rust + Direct3D 11 native crate that drives MP4 export — `crates/compositor/` reached via the
-`compositor_view.node` napi-rs addon — and pulled into the renderer as an RGBA8
-bitmap that paints onto an HTML `<canvas>`. The DOM around the canvas hosts the
-interactive-only layers (zoom gimbal, annotation selection, PiP webcam drag) that
-need real hitboxes. Everything visible in the preview comes out of the same
-compositor that writes the export; parity is the property of one renderer, not a
-discipline across two.
+The editor has three explicit preview policies. **Performance** is the default: the screen and
+webcam `<video>` elements are the visible pixel sources inside Chromium, so decoded frames do not
+leave the renderer process. **Power Saving** uses the same smooth visual path with a 15 fps
+outer-UI/application-state cadence and fewer shadows. **Quality** mounts the Rust native compositor used by MP4 export and
+pulls its RGBA8 output into an HTML `<canvas>` for maximum preview/export parity.
+
+The policy lives in
+[`previewPerformance.ts`](../../src/lib/ai-edition/store/previewPerformance.ts) and is selectable
+from the stage toolbar. Performance and Power Saving deliberately trade some native-only effects
+for a much cheaper playback path; export is unaffected and always uses the native compositor.
 
 This document describes the live composition path. The export pipe
 ([architecture/export-pipeline.md](export-pipeline.md)) shares the same compositor
@@ -16,13 +18,23 @@ and scene contract; the GPU-resident path it builds on is documented in
 (preview fluidity, bench methodology, the trade-offs that drove this design) live
 in [engineering/rendering-performance.md](../engineering/rendering-performance.md).
 
-## The compositor path
+## Playback and presentation paths
 
-One compositor exists in the source tree, and it is the live one. A Pixi/WebGL
-single-canvas screen compositor was tried alongside it and removed once it was
-established that nothing mounted it.
+### Renderer-resident preview (Performance and Power Saving)
 
-### Native D3D compositor overlay (live)
+[`VirtualPreview.tsx`](../../src/components/ai-edition/VirtualPreview.tsx) presents the screen
+video directly and runs one display-rate `requestAnimationFrame` visual clock. It reads the
+video's continuously advancing logical `currentTime`, so a VFR recording can hold its texture
+while zoom, cursor and camera motion remain smooth. One shared
+[`playback-clock.ts`](../../src/lib/ai-edition/timeline/playback-clock.ts) notification synchronizes
+zoom, Full Camera, annotations, webcam and cursor without independent loops. React/Zustand
+playhead publication is separately budgeted to 30 fps in Performance and 15 fps in Power Saving.
+
+The DOM path preserves crop, zoom, layout, webcam, cursor and editable annotation pixels. It does
+not promise exact native shader parity for motion blur, 3D projection, background blur or native
+mosaic. Quality remains available when those effects need to be inspected before export.
+
+### Native compositor overlay (Quality)
 
 Mounted as the first child of `.previewFrame` by
 [`NativeCompositorOverlay.tsx`](../../src/components/ai-edition/NativeCompositorOverlay.tsx).
@@ -36,18 +48,14 @@ wrapper, the `<video>` for screen decode, the `WebcamOverlay` `<video>`, the
 `AnnotationLayer`, the `ZoomFocusOverlay`, the webcam drag hitbox) are *interactive
 overlays*: their pixels are hidden in CSS, only their pointer-event geometry counts.
 
-The path is enabled by the *presence of the native addon* — there is no flag,
-no capability probe, no per-document switch. The compositing service loads
+The path is enabled only while the user selects Quality. The compositing service loads
 `compositor_view.node` at startup via
 [`compositorViewService.ts`](../../electron/native-bridge/services/compositorViewService.ts:271)
 (`ensureAddon`); when the binary is missing the service logs once
 (`[compositor-view] native addon not present; running as no-op`,
 [`compositorViewService.ts:288`](../../electron/native-bridge/services/compositorViewService.ts:288))
-and returns synthetic negative view ids whose `readFrame` always returns `null`, so
-the whole overlay stays inert. In that mode the renderer's own `<video>` element
-keeps playing (decode is the responsibility of the DOM, not the compositor), but
-nothing composites a frame — the canvas stays empty. The editor ships like this
-on platforms where the addon isn't built; the dev build brings the addon in.
+and returns synthetic negative view ids whose `readFrame` always returns `null`. Performance mode
+is still usable when the addon is absent because its visible frame never depends on this canvas.
 
 The renderer→addon IPC goes through `native-bridge:invoke` with a single
 `compositor` domain
@@ -61,17 +69,13 @@ addon's `LoadLibrary("avcodec-NN.dll")` resolves against the same pinned build t
 crate links against
 ([`compositorViewService.ts:206`](../../electron/native-bridge/services/compositorViewService.ts:206)).
 
-There is no fallback to a CPU/Canvas2D legacy compositor: before the native view
-ships a frame, only the wallpaper painted by CSS is visible, and the cursor / zoom
-DOM layers depend on the layout math (not the compositor) to know where to land.
-That is a product gap, not a fallback path. The native preview is the only
-compositor in service.
+There is no CPU/Canvas2D frame compositor. The fallback is the renderer-resident media/DOM path,
+not a second raw-pixel implementation.
 
 ## Scene description
 
-`document → SceneDescription → JSON` is the contract the app hands the native
-compositor so it can compute the composed frame itself; the renderer does no
-per-frame math.
+`document → SceneDescription → JSON` is the contract used by Quality preview and native export.
+Performance and Power Saving do not build or send this scene during playback.
 
 [`buildSceneDescription`](../../src/native/sceneDescription.ts:419)
 (`src/native/sceneDescription.ts`) is a pure data mapping from an `AxcutDocument` plus the
@@ -128,7 +132,7 @@ expressed as `[startSec, endSec)` intervals and matched against `t = source_time
 a region straddling a clip boundary emits one entry per covered clip via
 `projectRegionsToSource`.
 
-## Frame delivery
+## Quality-mode frame delivery
 
 The native compositor runs *off-screen* (no OS window, no HWND ever crosses
 IPC), and the renderer pulls composed frames out of it. The protocol is the load-bearing
@@ -171,10 +175,13 @@ The contract, with the invariant on the consumer side:
    a mismatch would corrupt the image silently. The consumer never assumes a
    size — every draw is preceded by a resize of the canvas's drawing buffer to
    the packet's declared `width`/`height`.
-5. **Pull loop cadence.** The renderer pulls on every other rAF tick (`PULL_LOOP_TICK_DIVISOR = 2`,
-   [`useNativeCompositorView.ts:70`](../../src/native/hooks/useNativeCompositorView.ts:70)),
-   so IPC + GPU readback + `putImageData` run at roughly 30 fps on 60/120 Hz
-   displays without changing perceived smoothness.
+5. **Pull loop cadence.** The renderer schedules a pull on rAF with a target interval of
+   `1000 / 60` ms (`PULL_INTERVAL_MS`,
+   [`useNativeCompositorView.ts`](../../src/native/hooks/useNativeCompositorView.ts)). A new active
+   frame can therefore pay GPU readback, IPC delivery, bitmap creation, and canvas paint at roughly
+   60 fps. The generation gate still makes the paused path cheap, but the active transport is a
+   known performance risk recorded in
+   [editor-performance-audit.md](../engineering/editor-performance-audit.md#perf-001--full-frame-preview-transport).
 
 The renderer-side wrapper mirrors this verbatim in the Electron main process
 ([`compositorViewService.ts:339`](../../electron/native-bridge/services/compositorViewService.ts:339)),

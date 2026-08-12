@@ -6,29 +6,34 @@ import {
 } from "@/components/video-editor/types";
 import { resolvePlaybackSegments } from "@/lib/ai-edition/document/timeline";
 import type { AxcutClip, AxcutTrimRange, AxcutZoomRegion } from "@/lib/ai-edition/schema";
+import { usePreviewPerformancePolicy } from "@/lib/ai-edition/store/previewPerformance";
 import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { PlaybackClockRef } from "@/lib/ai-edition/timeline/playback-clock";
 import { findActiveSpeedRegion, type SpeedRegion } from "@/lib/ai-edition/timeline/speed";
 import {
 	clampVirtualTime,
-	findNextKeptSegment,
-	findRawClipForSegment,
-	getRawVirtualStartTime,
-	locateKeptSegment,
-	locateSourcePosition,
+	createPlaybackIndex,
+	findNextKeptSegmentIndexed,
+	locateKeptSegmentIndexed,
+	locateRawSourcePosition,
 	locateVirtualPosition,
+	rawClipForSegment,
+	rawVirtualStartForSegment,
 	totalVirtualDuration,
 } from "@/lib/ai-edition/timeline/virtual-preview";
 import {
-	computeZoomPreviewTransform,
+	computePreparedZoomPreviewTransform,
 	IDENTITY_ZOOM_TRANSFORM,
+	prepareZoomPreviewRegions,
 } from "@/lib/ai-edition/timeline/zoom-preview";
+import { CursorDomOverlay } from "./CursorDomOverlay";
 import styles from "./VirtualPreview.module.css";
 
 export interface VideoSource {
 	id: string;
 	src: string;
 	label: string;
+	sourcePath?: string;
 }
 
 /** First clip (by timeline order) starting strictly after `afterTimelineStartSec` —
@@ -93,6 +98,7 @@ export function VirtualPreview({
 	clockRef,
 }: VirtualPreviewProps) {
 	const { settings } = useEditorSettings();
+	const previewPolicy = usePreviewPerformancePolicy();
 	// ponytail: an oversized, offset video inside .videoFrame's overflow:hidden
 	// box — the same "scale + negative-position the full frame, let the
 	// container clip the rest" technique the export renderer uses via a Pixi
@@ -133,23 +139,10 @@ export function VirtualPreview({
 	const virtualDurationSec = useMemo(() => totalVirtualDuration(clips), [clips]);
 	const activeSource = videoSources[sourceIndex] ?? null;
 
-	// ponytail: the cursor overlay wants source-media time (the recorded
-	// cursor samples live on the original mp4 timeline, not the edited
-	// virtual timeline). `setSourceTimeSec` is called from the 60 Hz rAF
-	// below so the cursor follows the playhead even when the user scrubs.
-	const [sourceTimeSec, setSourceTimeSec] = useState(0);
-
-	// Drive the virtual-time preview clock at 60 Hz (the <video> timeupdate
-	// event only fires ~4×/s, which is too slow to keep the webcam <video>
-	// and any future audio element in sync — a 4 Hz sync lets the webcam
-	// drift up to ~250 ms between corrections and produces a visible
-	// audio/video desync). The virtual-time read here mirrors what
-	// handleTimeUpdate does on every timeupdate; running it 60×/s keeps
-	// the drift under a single frame (~16 ms). Inlined here so the rAF
-	// can also handle clip-end advancement and the !position fall-back
-	// without a separate <video onTimeUpdate> event firing at ~4 Hz.
-	const sourceTimeSecRef = useRef(0);
-	sourceTimeSecRef.current = sourceTimeSec;
+	// Drive visual presentation from an independent 60 Hz display clock. Screen
+	// recordings are commonly VFR, so requestVideoFrameCallback can pause for tens or
+	// hundreds of milliseconds while a held media frame is still on screen. Zoom,
+	// cursor and camera motion must continue against the video's logical currentTime.
 	// ponytail: the rAF closure captured the props at mount time. The
 	// auto-created clip arrives a tick after the source swaps, so reads
 	// from the closure would forever see `clips: []` and the rAF would
@@ -173,18 +166,25 @@ export function VirtualPreview({
 		() => resolvePlaybackSegments(clips, trimRanges),
 		[clips, trimRanges],
 	);
-	const playbackClipsRef = useRef(playbackClips);
-	playbackClipsRef.current = playbackClips;
+	const playbackIndex = useMemo(
+		() => createPlaybackIndex(clips, playbackClips),
+		[clips, playbackClips],
+	);
+	const playbackIndexRef = useRef(playbackIndex);
+	playbackIndexRef.current = playbackIndex;
 	const videoSourcesRef = useRef(videoSources);
 	videoSourcesRef.current = videoSources;
 	const sourceIndexRef = useRef(sourceIndex);
 	sourceIndexRef.current = sourceIndex;
 	const virtualTimeSecRef = useRef(virtualTimeSec);
-	virtualTimeSecRef.current = virtualTimeSec;
+	useEffect(() => {
+		virtualTimeSecRef.current = virtualTimeSec;
+	}, [virtualTimeSec]);
 	const virtualDurationSecRef = useRef(virtualDurationSec);
 	virtualDurationSecRef.current = virtualDurationSec;
 	const speedRegionsRef = useRef(speedRegions);
 	speedRegionsRef.current = speedRegions;
+	const preparedZoomRegions = useMemo(() => prepareZoomPreviewRegions(zoomRegions), [zoomRegions]);
 	// Same reasoning as `clipsRef` above, for the one thing the rAF calls rather than reads:
 	// `seekToVirtualTime` is a `useCallback` whose deps include `clips`, so it takes a new
 	// identity on every clip mutation — a REORDER included. The rAF below is deliberately
@@ -200,15 +200,34 @@ export function VirtualPreview({
 	const seekToVirtualTimeRef = useRef<
 		((nextVirtualTimeSec: number, preservePlayback?: boolean, forceResume?: boolean) => void) | null
 	>(null);
+	const lastUiUpdateMsRef = useRef(0);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: re-create the rAF when the active source swaps.
 	useEffect(() => {
 		let raf = 0;
-		const tick = () => {
+		let disposed = false;
+		const scheduledVideo = videoRef.current;
+		const scheduleNext = () => {
+			if (disposed || raf !== 0) return;
 			raf = window.requestAnimationFrame(tick);
+		};
+		const tick = () => {
+			raf = 0;
+			if (disposed) return;
 			const v = videoRef.current;
-			if (!v || !Number.isFinite(v.currentTime)) {
-				return;
-			}
+			if (!v) return;
+			// Metadata can become ready a frame or two after the play event. Keep the
+			// visual loop alive while playing so a transient invalid currentTime cannot
+			// permanently stall presentation until the next pause/play cycle.
+			if (!v.paused) scheduleNext();
+			if (!Number.isFinite(v.currentTime)) return;
+			const activeSourceId = videoSourcesRef.current[sourceIndexRef.current]?.id;
+			const activeRawClipIndex = activeClipIdRef.current
+				? playbackIndexRef.current.raw.indexById.get(activeClipIdRef.current)
+				: undefined;
+			const activeRawClip =
+				activeRawClipIndex === undefined
+					? undefined
+					: playbackIndexRef.current.raw.clips[activeRawClipIndex];
 			// Publish this frame's live position/rate for other media elements
 			// (webcam) to read directly — see playback-clock.ts for why this
 			// bypasses React state entirely.
@@ -217,8 +236,9 @@ export function VirtualPreview({
 				clockRef.current.isPlaying = !v.paused;
 				clockRef.current.playbackRate = v.playbackRate;
 				clockRef.current.virtualTimeSec = virtualTimeSecRef.current;
+				clockRef.current.activeClipId = activeRawClip?.id ?? null;
+				clockRef.current.activeAssetId = activeRawClip?.assetId ?? activeSourceId ?? null;
 			}
-			const activeSourceId = videoSourcesRef.current[sourceIndexRef.current]?.id;
 			// Trims only trim ahead during actual playback — scrubbing/paused seeks are
 			// intentionally NOT clamped, so the user can navigate freely into a trim while
 			// editing; only Play/export treats it as a cut (mirrors the pre-existing intent
@@ -232,17 +252,15 @@ export function VirtualPreview({
 				// before a trim named its clip — let a twin clip over the same recording
 				// answer "yes, that stretch is kept" for a cut authored on this one, so the
 				// cut was simply not skipped during playback.
-				const inKeptSegment = locateKeptSegment(
-					playbackClipsRef.current,
-					clipsRef.current,
+				const inKeptSegment = locateKeptSegmentIndexed(
+					playbackIndexRef.current,
 					v.currentTime,
 					activeSourceId,
 					activeClipIdRef.current ?? undefined,
 				);
 				if (!inKeptSegment) {
-					const nextKeptSegment = findNextKeptSegment(
-						playbackClipsRef.current,
-						clipsRef.current,
+					const nextKeptSegment = findNextKeptSegmentIndexed(
+						playbackIndexRef.current,
 						virtualTimeSecRef.current,
 						activeSourceId,
 						v.currentTime,
@@ -253,11 +271,14 @@ export function VirtualPreview({
 						// convention `resolvePlaybackSegments` emits; this used to re-implement
 						// it verbatim, which is precisely the second reader that definition
 						// exists to prevent.
-						const rawClip = findRawClipForSegment(nextKeptSegment, clipsRef.current);
+						const rawClip = rawClipForSegment(playbackIndexRef.current, nextKeptSegment);
 						if (rawClip) {
 							activeClipIdRef.current = rawClip.id;
 						}
-						const rawTargetTime = getRawVirtualStartTime(nextKeptSegment, clipsRef.current);
+						const rawTargetTime = rawVirtualStartForSegment(
+							playbackIndexRef.current,
+							nextKeptSegment,
+						);
 						seekToVirtualTimeRef.current?.(rawTargetTime, true);
 						return;
 					}
@@ -265,12 +286,6 @@ export function VirtualPreview({
 					updateVirtualTime(virtualDurationSecRef.current);
 					return;
 				}
-			}
-			// ponytail: also push setSourceTimeSec every frame (was previously
-			// in a separate rAF effect). Cheap; <video>.readyState >= 2 guards
-			// against drawing a black frame into the cursor overlay.
-			if (v.readyState >= 2) {
-				setSourceTimeSec(v.currentTime);
 			}
 			// À L'ARRÊT, le `<video>` ne pilote PLUS la position de la timeline.
 			//
@@ -283,9 +298,8 @@ export function VirtualPreview({
 			// `seekToVirtualTimeRef(nextClip.timelineStartSec)` plus bas renvoyait la tête au
 			// DÉBUT du clip voisin — le tressaillement observé au passage d'un clip à l'autre.
 			//
-			// `clockRef` et `setSourceTimeSec` ci-dessus continuent d'être publiés : la webcam
-			// et le calque curseur ont besoin du temps source même à l'arrêt. Seule la
-			// position de la TIMELINE cesse d'être dictée par le média.
+			// Pause/seek/rate events publish the still position explicitly. Do not wake
+			// every visual subscriber on every idle rAF tick.
 			if (v.paused) {
 				return;
 			}
@@ -296,13 +310,22 @@ export function VirtualPreview({
 				// advances and the timecode shows real progress during
 				// playback. The proper timeline-aware mapping kicks in
 				// when the auto-created clip arrives.
-				updateVirtualTime(v.currentTime);
+				virtualTimeSecRef.current = v.currentTime;
+				if (clockRef) {
+					clockRef.current.virtualTimeSec = v.currentTime;
+					clockRef.publish();
+				}
+				const now = performance.now();
+				if (now - lastUiUpdateMsRef.current >= 1000 / previewPolicy.uiFps - 1) {
+					lastUiUpdateMsRef.current = now;
+					updateVirtualTime(v.currentTime);
+				}
 				return;
 			}
 			if (isProgrammaticSeekRef.current) {
 				isProgrammaticSeekRef.current = false;
-				const pos = locateSourcePosition(
-					clipsRef.current,
+				const pos = locateRawSourcePosition(
+					playbackIndexRef.current,
 					v.currentTime,
 					activeSourceId,
 					0.05,
@@ -310,12 +333,16 @@ export function VirtualPreview({
 				);
 				if (pos) {
 					activeClipIdRef.current = pos.clip.id;
+					if (clockRef) {
+						clockRef.current.activeClipId = pos.clip.id;
+						clockRef.current.activeAssetId = pos.clip.assetId;
+					}
 					updateVirtualTime(clampVirtualTime(clipsRef.current, pos.virtualTimeSec));
 				}
 				return;
 			}
-			const position = locateSourcePosition(
-				clipsRef.current,
+			const position = locateRawSourcePosition(
+				playbackIndexRef.current,
 				v.currentTime,
 				activeSourceId,
 				0.05,
@@ -355,13 +382,37 @@ export function VirtualPreview({
 				seekToVirtualTimeRef.current?.(nextClip.timelineStartSec, true);
 				return;
 			}
-			updateVirtualTime(clampVirtualTime(clipsRef.current, position.virtualTimeSec));
+			const nextVirtualTime = clampVirtualTime(clipsRef.current, position.virtualTimeSec);
+			virtualTimeSecRef.current = nextVirtualTime;
+			const activeSpeedRegion = findActiveSpeedRegion(
+				speedRegionsRef.current,
+				Math.round(nextVirtualTime * 1000),
+			);
+			const nextPlaybackRate = Math.min(activeSpeedRegion?.speed ?? 1, MAX_NATIVE_PLAYBACK_RATE);
+			if (v.playbackRate !== nextPlaybackRate) v.playbackRate = nextPlaybackRate;
+			if (clockRef) {
+				clockRef.current.virtualTimeSec = nextVirtualTime;
+				clockRef.current.playbackRate = v.playbackRate;
+				clockRef.current.activeClipId = position.clip.id;
+				clockRef.current.activeAssetId = position.clip.assetId;
+				clockRef.publish();
+			}
+			const now = performance.now();
+			if (now - lastUiUpdateMsRef.current >= 1000 / previewPolicy.uiFps - 1) {
+				lastUiUpdateMsRef.current = now;
+				updateVirtualTime(nextVirtualTime);
+			}
 		};
-		raf = window.requestAnimationFrame(tick);
-		return () => window.cancelAnimationFrame(raf);
+		scheduledVideo?.addEventListener("play", scheduleNext);
+		scheduleNext();
+		return () => {
+			disposed = true;
+			scheduledVideo?.removeEventListener("play", scheduleNext);
+			window.cancelAnimationFrame(raf);
+		};
 		// re-create the rAF when the active source swaps (by asset id, not src —
 		// two clips can point at distinct assets that resolve to the same URL).
-	}, [activeSource?.id]);
+	}, [activeSource?.id, previewPolicy.uiFps]);
 
 	// report the video element up; re-notify (and clear) whenever the active
 	// source changes so the parent doesn't keep a stale node after the keyed
@@ -375,6 +426,7 @@ export function VirtualPreview({
 
 	const updateVirtualTime = useCallback(
 		(nextTimeSec: number) => {
+			virtualTimeSecRef.current = nextTimeSec;
 			setVirtualTimeSec(nextTimeSec);
 			onTimeChange?.(nextTimeSec);
 			// ponytail: mirrors main's per-frame `video.playbackRate = ...`
@@ -397,33 +449,33 @@ export function VirtualPreview({
 		[onTimeChange],
 	);
 
-	// Apply the zoom-region transform directly to the DOM (bypassing React
-	// render) so it stays in lockstep with the 60 Hz virtual-time updates
-	// above without adding a style-prop re-render on every frame.
+	// Apply zoom directly from the visual clock. Store/UI time can be 30/15 Hz,
+	// but the final video surface must never inherit that lower cadence.
 	useEffect(() => {
 		const frame = videoFrameRef.current;
 		if (!frame) return;
-		// ponytail: scale the zoom-in/out transition windows by the current
-		// playback rate so the transition stays wall-clock constant inside
-		// speed regions. The cursor still flies through (ruler + playhead
-		// read source-time), only the easing duration is decoupled.
-		const activeSpeedRegion = findActiveSpeedRegion(
-			speedRegionsRef.current,
-			Math.round(virtualTimeSec * 1000),
-		);
-		const playbackRate = activeSpeedRegion?.speed ?? 1;
-		const transform =
-			zoomRegions.length === 0
-				? IDENTITY_ZOOM_TRANSFORM
-				: computeZoomPreviewTransform(
-						zoomRegions,
-						virtualTimeSec * 1000,
-						undefined,
-						playbackRate,
-						settings.screenAnimationStyle,
-					);
-		frame.style.transform = `translate(${transform.translateXPercent}%, ${transform.translateYPercent}%) scale(${transform.scale})`;
-	}, [settings.screenAnimationStyle, zoomRegions, virtualTimeSec]);
+		const paint = () => {
+			const visualTimeSec = clockRef?.current.virtualTimeSec ?? virtualTimeSecRef.current;
+			const activeSpeedRegion = findActiveSpeedRegion(
+				speedRegionsRef.current,
+				Math.round(visualTimeSec * 1000),
+			);
+			const playbackRate = activeSpeedRegion?.speed ?? 1;
+			const transform =
+				preparedZoomRegions.length === 0
+					? IDENTITY_ZOOM_TRANSFORM
+					: computePreparedZoomPreviewTransform(
+							preparedZoomRegions,
+							visualTimeSec * 1000,
+							undefined,
+							playbackRate,
+							settings.screenAnimationStyle,
+						);
+			frame.style.transform = `translate(${transform.translateXPercent}%, ${transform.translateYPercent}%) scale(${transform.scale})`;
+		};
+		paint();
+		return clockRef?.subscribe(paint);
+	}, [clockRef, preparedZoomRegions, settings.screenAnimationStyle]);
 
 	const seekToVirtualTime = useCallback(
 		(nextVirtualTimeSec: number, preservePlayback = false, forceResume = false) => {
@@ -498,6 +550,28 @@ export function VirtualPreview({
 		}
 	}, []);
 
+	const publishPlaybackState = useCallback(
+		(video: HTMLVideoElement) => {
+			if (!clockRef) return;
+			clockRef.current.sourceTimeSec = video.currentTime;
+			clockRef.current.virtualTimeSec = virtualTimeSecRef.current;
+			clockRef.current.isPlaying = !video.paused;
+			clockRef.current.playbackRate = video.playbackRate;
+			const activeClipIndex = activeClipIdRef.current
+				? playbackIndexRef.current.raw.indexById.get(activeClipIdRef.current)
+				: undefined;
+			const activeClip =
+				activeClipIndex === undefined
+					? undefined
+					: playbackIndexRef.current.raw.clips[activeClipIndex];
+			clockRef.current.activeClipId = activeClip?.id ?? null;
+			clockRef.current.activeAssetId =
+				activeClip?.assetId ?? videoSourcesRef.current[sourceIndexRef.current]?.id ?? null;
+			clockRef.publish();
+		},
+		[clockRef],
+	);
+
 	// BUG corrigé : cet effet listait `seekToVirtualTime`/`seekToSourceTime` en dépendances
 	// — mais `seekToVirtualTime` change d'identité (nouveau `useCallback`) à chaque fois que
 	// `sourceIndex` change, y compris quand CE MÊME effet vient de le faire changer (switch
@@ -546,8 +620,13 @@ export function VirtualPreview({
 							}}
 							preload="metadata"
 							playsInline
+							onPlay={(event) => publishPlaybackState(event.currentTarget)}
+							onPause={(event) => publishPlaybackState(event.currentTarget)}
+							onRateChange={(event) => publishPlaybackState(event.currentTarget)}
+							onSeeked={(event) => publishPlaybackState(event.currentTarget)}
 							onLoadedMetadata={(e) => {
 								setLoadState("ready");
+								publishPlaybackState(e.currentTarget);
 								// ponytail: forward the raw duration (possibly NaN for
 								// MediaRecorder WebMs) to the parent. handleLoadedMetadata
 								// falls back to a 60s seed when it isn't finite so the
@@ -625,13 +704,18 @@ export function VirtualPreview({
 									seekToVirtualTime(nextClip.timelineStartSec, true, true);
 								}
 							}}
-							// ponytail: handleTimeUpdate is now driven by the rAF loop
-							// above (60 Hz) instead of the <video> onTimeUpdate event
-							// (~4 Hz) — the 4 Hz sync was too slow to keep the webcam
-							// <video> and any audio in sync. The rAF tick also
-							// handles clip-end advancement, so dropping the event
-							// handler here is safe.
+							// The visual presentation loop above replaces onTimeUpdate and also
+							// handles clip-end advancement.
 						/>
+						{!previewPolicy.useNativeCompositor && clockRef ? (
+							<CursorDomOverlay
+								videoPath={activeSource.sourcePath ?? null}
+								clockRef={clockRef}
+								visible={settings.cursorShow}
+								themeId={settings.cursorTheme}
+								size={settings.cursor.size}
+							/>
+						) : null}
 						{/* Plus d'overlay « Loading preview… » : il reflétait l'état du <video>
 						    CACHÉ (source horloge/audio), pas la preview RÉELLE — le canvas natif,
 						    qui montre déjà une image valide pendant que le <video> re-seek. Il
@@ -641,9 +725,6 @@ export function VirtualPreview({
 							<div className={styles.overlay}>Video preview could not be loaded.</div>
 						)}
 					</div>
-					{/* The native D3D canvas already draws the recorded-cursor sprite as part
-					    of the composited frame (same cursor sidecar file, single source of
-					    truth) — this CPU-rendered duplicate (CursorPreviewLayer) is removed. */}
 				</>
 			) : (
 				<div className={styles.placeholder}>Attach a video to start previewing.</div>

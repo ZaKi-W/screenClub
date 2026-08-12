@@ -14,7 +14,7 @@ import type {
 	CliSourcesResult,
 } from "../../src/lib/cliContracts";
 import { getSelectedDesktopSource, registerIpcHandlers } from "../ipc/handlers";
-import { registerSttIpc } from "../stt";
+import { registerLazySttIpc } from "../stt/lazyIpc";
 import { ASSET_BASE_URL_ARG } from "../windows";
 import { CLI_USAGE, type CliCommand } from "./args";
 import { runInfoCommand, runPackCommand } from "./projectCommands";
@@ -144,6 +144,7 @@ function registerAppHandlersForCli(cliWindowRef: () => BrowserWindow | null) {
 		notAvailable, // createCountdownOverlayWindow
 		notAvailable, // createNotesWindow
 		cliWindowRef,
+		() => null,
 		() => null,
 		() => null,
 		() => null,
@@ -356,7 +357,7 @@ export function runCli(command: CliCommand): void {
 
 			// Speech-to-text backs the captions command; registered by the GUI boot
 			// path (main.ts) rather than registerIpcHandlers.
-			registerSttIpc(ipcMain);
+			registerLazySttIpc(ipcMain);
 
 			// Registered by the GUI boot path (main.ts) rather than registerIpcHandlers;
 			// the renderer's i18n init invokes it unconditionally.

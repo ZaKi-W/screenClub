@@ -1,20 +1,42 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import "./styles/fonts.css";
 import "./styles/design-tokens.css";
-import { installBrowserShims } from "./native/browserShim";
 
-installBrowserShims();
-
-import { AreaSelector } from "./components/launch/AreaSelector.tsx";
-import { CountdownOverlay } from "./components/launch/CountdownOverlay.tsx";
-import { LaunchWindow } from "./components/launch/LaunchWindow";
-import { NotesWindow } from "./components/launch/NotesWindow.tsx";
-import { SourceSelector } from "./components/launch/SourceSelector";
 import { Toaster } from "./components/ui/sonner";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useScopedT } from "./contexts/I18nContext";
 import { ShortcutsProvider } from "./contexts/ShortcutsContext";
-import { loadAllCustomFonts } from "./lib/customFonts";
+
+const AreaSelector = lazy(() =>
+	import("./components/launch/AreaSelector.tsx").then((module) => ({
+		default: module.AreaSelector,
+	})),
+);
+const CountdownOverlay = lazy(() =>
+	import("./components/launch/CountdownOverlay.tsx").then((module) => ({
+		default: module.CountdownOverlay,
+	})),
+);
+const CameraOverlay = lazy(() =>
+	import("./components/launch/CameraOverlay.tsx").then((module) => ({
+		default: module.CameraOverlay,
+	})),
+);
+const LaunchWindow = lazy(() =>
+	import("./components/launch/LaunchWindow").then((module) => ({
+		default: module.LaunchWindow,
+	})),
+);
+const NotesWindow = lazy(() =>
+	import("./components/launch/NotesWindow.tsx").then((module) => ({
+		default: module.NotesWindow,
+	})),
+);
+const SourceSelector = lazy(() =>
+	import("./components/launch/SourceSelector").then((module) => ({
+		default: module.SourceSelector,
+	})),
+);
 
 const VideoEditorEntry = lazy(() =>
 	import("./components/ai-edition/AiEditionShell").then((module) => ({
@@ -47,6 +69,7 @@ export default function App() {
 
 		if (
 			type === "hud-overlay" ||
+			type === "camera-overlay" ||
 			type === "source-selector" ||
 			type === "countdown-overlay" ||
 			type === "area-selector"
@@ -58,7 +81,7 @@ export default function App() {
 
 		// HUD is a fixed-size BrowserWindow; pin the document shell and hide overflow
 		// so the renderer can't introduce scrollbars (see issue #305).
-		if (type === "hud-overlay") {
+		if (type === "hud-overlay" || type === "camera-overlay") {
 			document.documentElement.style.height = "100%";
 			document.documentElement.style.overflow = "hidden";
 			document.body.style.height = "100%";
@@ -72,11 +95,16 @@ export default function App() {
 	}, [windowType]);
 
 	useEffect(() => {
-		// Load custom fonts on app initialization
-		loadAllCustomFonts().catch((error) => {
-			console.error("Failed to load custom fonts:", error);
-		});
-	}, []);
+		// Custom fonts are only consumed by editor/export rendering. Importing the
+		// manager in every renderer also made HUD/source-picker startup perform
+		// localStorage reads and potentially issue Google Fonts requests.
+		if (windowType !== "editor" && windowType !== "cli-export") return;
+		void import("./lib/customFonts").then(({ loadAllCustomFonts }) =>
+			loadAllCustomFonts().catch((error) => {
+				console.error("Failed to load custom fonts:", error);
+			}),
+		);
+	}, [windowType]);
 
 	const content = (() => {
 		switch (windowType) {
@@ -86,6 +114,8 @@ export default function App() {
 				return <SourceSelector />;
 			case "countdown-overlay":
 				return <CountdownOverlay />;
+			case "camera-overlay":
+				return <CameraOverlay />;
 			case "area-selector":
 				return <AreaSelector />;
 			case "cli-export":
@@ -162,7 +192,7 @@ export default function App() {
 
 	return (
 		<TooltipProvider>
-			{showNotes ? <NotesWindow /> : content}
+			<Suspense fallback={null}>{showNotes ? <NotesWindow /> : content}</Suspense>
 			<Toaster theme="dark" />
 		</TooltipProvider>
 	);

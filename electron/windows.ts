@@ -1,6 +1,19 @@
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions, screen } from "electron";
+import {
+	app,
+	BrowserWindow,
+	ipcMain,
+	Menu,
+	type MenuItemConstructorOptions,
+	type Rectangle,
+	screen,
+} from "electron";
+import type {
+	CameraOverlayPrepareRequest,
+	RendererCameraPreviewFrame,
+} from "../src/lib/cameraOverlay";
 import type { CaptureAreaSelection } from "../src/lib/captureArea";
 import type {
 	HudNativeInputMenuRequest,
@@ -96,6 +109,7 @@ const ASSET_BASE_DIR = process.defaultApp
 export const ASSET_BASE_URL_ARG = `--asset-base-url=${pathToFileURL(`${ASSET_BASE_DIR}${path.sep}`).toString()}`;
 
 let hudOverlayWindow: BrowserWindow | null = null;
+let cameraOverlayWindow: BrowserWindow | null = null;
 let areaSelectorWindow: BrowserWindow | null = null;
 let resolveAreaSelection: ((selection: CaptureAreaSelection | null) => void) | null = null;
 
@@ -104,6 +118,173 @@ let resolveAreaSelection: ((selection: CaptureAreaSelection | null) => void) | n
 // an absolute `origin + delta` — no rounding to accumulate, and a dropped message
 // self-corrects on the next one instead of leaving the window permanently offset.
 let hudDragOrigin: { x: number; y: number } | null = null;
+
+const CAMERA_OVERLAY_WIDTH = 292;
+const CAMERA_OVERLAY_HEIGHT = 228;
+const CAMERA_OVERLAY_MARGIN = 24;
+const cameraOverlayPositionPath = path.join(
+	app.getPath("userData"),
+	"camera-overlay-position.json",
+);
+
+function clampBoundsToWorkArea(bounds: Rectangle): Rectangle {
+	const display = screen.getDisplayMatching(bounds);
+	const { workArea } = display;
+	return {
+		x: Math.min(Math.max(workArea.x, bounds.x), workArea.x + workArea.width - bounds.width),
+		y: Math.min(Math.max(workArea.y, bounds.y), workArea.y + workArea.height - bounds.height),
+		width: bounds.width,
+		height: bounds.height,
+	};
+}
+
+async function loadCameraOverlayBounds(): Promise<Rectangle> {
+	const { workArea } = screen.getPrimaryDisplay();
+	const fallback = {
+		x: workArea.x + workArea.width - CAMERA_OVERLAY_WIDTH - CAMERA_OVERLAY_MARGIN,
+		y: workArea.y + workArea.height - CAMERA_OVERLAY_HEIGHT - CAMERA_OVERLAY_MARGIN,
+		width: CAMERA_OVERLAY_WIDTH,
+		height: CAMERA_OVERLAY_HEIGHT,
+	};
+	try {
+		const raw = JSON.parse(await readFile(cameraOverlayPositionPath, "utf8")) as Partial<Rectangle>;
+		if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y)) return fallback;
+		return clampBoundsToWorkArea({
+			...fallback,
+			x: Math.round(raw.x ?? fallback.x),
+			y: Math.round(raw.y ?? fallback.y),
+		});
+	} catch {
+		return fallback;
+	}
+}
+
+function persistCameraOverlayPosition(win: BrowserWindow) {
+	const { x, y } = win.getBounds();
+	void writeFile(cameraOverlayPositionPath, JSON.stringify({ x, y }), "utf8").catch((error) =>
+		console.warn("Failed to remember camera preview position:", error),
+	);
+}
+
+export function getCameraOverlayWindow(): BrowserWindow | null {
+	return cameraOverlayWindow && !cameraOverlayWindow.isDestroyed() ? cameraOverlayWindow : null;
+}
+
+export function closeCameraOverlayWindow() {
+	const win = getCameraOverlayWindow();
+	if (win) win.close();
+	cameraOverlayWindow = null;
+}
+
+export async function createCameraOverlayWindow(
+	request: CameraOverlayPrepareRequest,
+): Promise<BrowserWindow | null> {
+	// Wayland does not let clients position their own windows or exclude them from a
+	// portal capture. Showing the preview there would silently burn it into the screen track.
+	if (process.platform === "linux") {
+		return null;
+	}
+	if (
+		process.platform === "darwin" &&
+		request.captureBackend === "browser" &&
+		CONTENT_PROTECTION_BREAKS_DISPLAY &&
+		!CONTENT_PROTECTION_FORCED
+	) {
+		return null;
+	}
+
+	closeCameraOverlayWindow();
+	const bounds = await loadCameraOverlayBounds();
+	const win = new BrowserWindow({
+		...bounds,
+		frame: false,
+		resizable: false,
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		transparent: true,
+		backgroundColor: "#00000000",
+		roundedCorners: false,
+		hasShadow: false,
+		show: false,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.mjs"),
+			additionalArguments: [ASSET_BASE_URL_ARG],
+			nodeIntegration: false,
+			contextIsolation: true,
+			backgroundThrottling: false,
+		},
+	});
+
+	applyContentProtection(win, "Camera preview");
+	if (process.platform === "darwin") {
+		win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+	}
+	win.setAlwaysOnTop(true, "floating");
+	win.once("ready-to-show", () => {
+		applyContentProtection(win, "Camera preview");
+		if (!HEADLESS) win.showInactive();
+	});
+	win.on("moved", () => {
+		if (win.isDestroyed()) return;
+		const clamped = clampBoundsToWorkArea(win.getBounds());
+		if (clamped.x !== win.getBounds().x || clamped.y !== win.getBounds().y) {
+			win.setBounds(clamped, false);
+		}
+		persistCameraOverlayPosition(win);
+	});
+	win.on("closed", () => {
+		if (cameraOverlayWindow === win) cameraOverlayWindow = null;
+		for (const candidate of BrowserWindow.getAllWindows()) {
+			if (candidate.webContents.getURL().includes("windowType=hud-overlay")) {
+				candidate.webContents.send("camera-overlay-hidden");
+			}
+		}
+	});
+	cameraOverlayWindow = win;
+
+	const query = {
+		windowType: "camera-overlay",
+		previewSource:
+			request.captureBackend === "native-windows"
+				? "native"
+				: request.captureBackend === "native-mac"
+					? "direct"
+					: "browser",
+		...(request.deviceId ? { deviceId: request.deviceId } : {}),
+	};
+	if (VITE_DEV_SERVER_URL) {
+		await win.loadURL(`${VITE_DEV_SERVER_URL}?${new URLSearchParams(query).toString()}`);
+	} else {
+		await win.loadFile(path.join(RENDERER_DIST, "index.html"), { query });
+	}
+	return win;
+}
+
+ipcMain.handle("camera-overlay-prepare", async (_event, request: CameraOverlayPrepareRequest) => {
+	if (
+		!request ||
+		!(["native-mac", "native-windows", "browser"] as const).includes(request.captureBackend)
+	) {
+		return { shown: false, reason: "invalid-request" };
+	}
+	const win = await createCameraOverlayWindow(request);
+	return win ? { shown: true } : { shown: false, reason: "unsupported-platform" };
+});
+
+ipcMain.on("camera-overlay-hide", () => closeCameraOverlayWindow());
+
+ipcMain.on("camera-overlay-renderer-frame", (event, frame: RendererCameraPreviewFrame) => {
+	if (
+		!event.sender.getURL().includes("windowType=hud-overlay") ||
+		frame?.mimeType !== "image/webp" ||
+		!(frame.data instanceof ArrayBuffer) ||
+		frame.data.byteLength === 0 ||
+		frame.data.byteLength > 2_000_000
+	) {
+		return;
+	}
+	getCameraOverlayWindow()?.webContents.send("camera-overlay-renderer-frame", frame);
+});
 
 ipcMain.on("hud-overlay-hide", () => {
 	if (hudOverlayWindow && !hudOverlayWindow.isDestroyed()) {
@@ -355,7 +536,6 @@ ipcMain.handle("hud-open-area-selector", (): Promise<CaptureAreaSelection | null
 			additionalArguments: [ASSET_BASE_URL_ARG],
 			nodeIntegration: false,
 			contextIsolation: true,
-			backgroundThrottling: false,
 		},
 	});
 	areaSelectorWindow = win;
@@ -538,6 +718,8 @@ export function createHudOverlayWindow(): BrowserWindow {
 			additionalArguments: [ASSET_BASE_URL_ARG],
 			nodeIntegration: false,
 			contextIsolation: true,
+			// Recording, device monitoring and the elapsed-time display must keep
+			// running when another window temporarily covers the HUD.
 			backgroundThrottling: false,
 		},
 	});
@@ -767,7 +949,6 @@ export function createCountdownOverlayWindow(): BrowserWindow {
 			additionalArguments: [ASSET_BASE_URL_ARG],
 			nodeIntegration: false,
 			contextIsolation: true,
-			backgroundThrottling: false,
 		},
 	});
 
@@ -808,7 +989,6 @@ export function createNotesWindow(): BrowserWindow {
 			additionalArguments: [ASSET_BASE_URL_ARG],
 			nodeIntegration: false,
 			contextIsolation: true,
-			backgroundThrottling: false,
 		},
 	});
 

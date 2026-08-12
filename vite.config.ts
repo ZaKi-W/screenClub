@@ -83,13 +83,22 @@ export default defineConfig({
 		rollupOptions: {
 			output: {
 				manualChunks(id) {
-					if (id.includes("react-dom") || id.includes("/react/")) return "react-vendor";
+					// Match the React runtime packages exactly. The old `/react/` substring
+					// also matched `@tiptap/react`, which pulled Tiptap + ProseMirror into the
+					// startup vendor chunk of every renderer window even though Notes is lazy.
 					if (
-						id.includes("mediabunny") ||
-						id.includes("mp4box") ||
-						id.includes("fix-webm-duration")
-					)
-						return "video-processing";
+						id.includes("/node_modules/react/") ||
+						id.includes("/node_modules/react-dom/") ||
+						id.includes("/node_modules/scheduler/")
+					) {
+						return "react-vendor";
+					}
+					// These libraries serve independent flows. Keeping them in one manual
+					// chunk made the recorder HUD download the full editor/export stack just
+					// because it uses the tiny WebM duration patcher after a recording.
+					if (id.includes("mediabunny")) return "mediabunny";
+					if (id.includes("mp4box")) return "mp4box";
+					if (id.includes("fix-webm-duration")) return "webm-duration";
 				},
 			},
 		},

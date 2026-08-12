@@ -736,7 +736,7 @@
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 }
-.previewFrame > .screenStage video {
+.previewFrame[data-preview-renderer="native"] > .screenStage video {
 	position: relative;
 	z-index: 1;
 	/* Pixels come from the native canvas now; this <video> stays mounted (and
@@ -771,11 +771,11 @@
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
-	/* Native canvas already draws the composited webcam PiP; this <video> stays
-	   mounted (playing) only to drive the camera's own decode/sync clock. The
-	   slot div itself stays visible/clickable for the drag-to-reposition hitbox. */
-	visibility: hidden;
 	display: block;
+	background: transparent;
+}
+.previewFrame[data-preview-renderer="native"] .webcamSlot .webcamVideo {
+	visibility: hidden;
 }
 /* ─── transport bar (lives inside .timelineHead, next to the tool icons) ─ */
 .transport {
