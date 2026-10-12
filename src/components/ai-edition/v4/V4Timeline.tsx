@@ -30,10 +30,10 @@ import { useAudioPeaks } from "@/hooks/useAudioPeaks";
 import { createId } from "@/lib/ai-edition/document/ids";
 import { setUiProbeScrubbing } from "@/lib/ai-edition/perf/uiFrameProbe";
 import type { AxcutClip } from "@/lib/ai-edition/schema";
+import { getEditorSettings, patchEditorSettings } from "@/lib/ai-edition/store/editorSettings";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
 import { useTimelineTranscriptGate } from "@/lib/ai-edition/store/transcriptionStore";
 import { useChatPromptBus } from "@/lib/ai-edition/store/useChatPromptBus";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
 import { ventilateSpanAcrossClips } from "@/lib/ai-edition/timeline/region-ventilation";
 import { coalesceRegionsForRuler } from "@/lib/ai-edition/timeline/timelineMap";
@@ -126,10 +126,10 @@ const CLICK_ZOOM_DURATION_SEC = 1;
  *  clips that follow — which is what a flex `gap` did, once per junction. */
 const CLIP_GUTTER_PX = 6;
 /**
- * Keep waveform work warm just outside the viewport so a short pan does not
- * make bars pop in, while still avoiding audio extraction and hundreds of DOM
- * nodes for clips that are far off-screen. The clip cards themselves are never
- * virtualised: their full timeline geometry and pointer targets remain intact.
+ * Keep clip cards and waveform work warm just outside the viewport so a short
+ * pan does not make them pop in. Far-away cards are omitted completely: their
+ * absolute timeline geometry is deterministic, so they do not need placeholder
+ * DOM to preserve layout.
  */
 const WAVEFORM_OVERSCAN_VIEWPORTS = 0.5;
 /** Below four 3px bars the waveform communicates no useful shape. */
@@ -217,9 +217,9 @@ interface PlayheadOverlayProps {
  * editor before the playhead's DOM node moved, and any frame where that took
  * longer than ~16 ms showed up as visible playhead stutter.
  *
- * Subscribing here instead keeps the per-frame re-render confined to these three
- * nodes. `memo` then stops the surrounding timeline's own re-renders (zoom/pan,
- * clip edits) from re-rendering it for no reason.
+ * The subscription writes the leaf's `left` style directly, so playback ticks
+ * do not enter React's render/commit path at all. React still owns scrub
+ * overrides and structural changes such as timeline zoom/pan.
  */
 const PlayheadOverlay = memo(function PlayheadOverlay({
 	totalSec,
@@ -228,12 +228,43 @@ const PlayheadOverlay = memo(function PlayheadOverlay({
 	onPointerDown,
 	playheadRef,
 }: PlayheadOverlayProps) {
-	const storeTimeSec = useProjectStore((s) => s.currentTimeSec);
-	const pct = ((overrideTimeSec ?? storeTimeSec) / totalSec) * 100;
+	const elementRef = useRef<HTMLDivElement | null>(null);
+	const overrideTimeRef = useRef(overrideTimeSec);
+	const totalSecRef = useRef(totalSec);
+	overrideTimeRef.current = overrideTimeSec;
+	totalSecRef.current = totalSec;
+	const updatePosition = useCallback((timeSec: number, denominator = totalSecRef.current) => {
+		const element = elementRef.current;
+		if (!element) return;
+		const pct = denominator > 0 ? (timeSec / denominator) * 100 : 0;
+		element.style.left = `${pct}%`;
+	}, []);
+	const bindPlayhead = useCallback(
+		(element: HTMLDivElement | null) => {
+			elementRef.current = element;
+			if (playheadRef) playheadRef.current = element;
+			if (element) {
+				updatePosition(overrideTimeRef.current ?? useProjectStore.getState().currentTimeSec);
+			}
+		},
+		[playheadRef, updatePosition],
+	);
+	useEffect(() => {
+		updatePosition(overrideTimeSec ?? useProjectStore.getState().currentTimeSec, totalSec);
+	}, [overrideTimeSec, totalSec, updatePosition]);
+	useEffect(
+		() =>
+			useProjectStore.subscribe((state, previousState) => {
+				if (state.currentTimeSec === previousState.currentTimeSec) return;
+				if (overrideTimeRef.current !== null) return;
+				updatePosition(state.currentTimeSec);
+			}),
+		[updatePosition],
+	);
 	return (
 		<div className={styles.tlPlayheadLayer} aria-hidden>
 			<div className={styles.tlCanvas} style={canvasStyle}>
-				<div ref={playheadRef} className={styles.tlPlayhead} style={{ left: `${pct}%` }}>
+				<div ref={bindPlayhead} data-timeline-playhead className={styles.tlPlayhead}>
 					<span
 						className={styles.tlPlayheadHead}
 						style={{ pointerEvents: "auto", cursor: "grab" }}
@@ -326,6 +357,50 @@ interface LanePill {
 	label: string;
 	/** Underlying row ids this pill represents — >1 for a coalesced trim group. */
 	sourceIds: string[];
+}
+
+/** First pill whose end can overlap `startSec` in a start-sorted collection. */
+function firstOverlappingPill(pills: LanePill[], startSec: number): number {
+	let low = 0;
+	let high = pills.length;
+	while (low < high) {
+		const mid = (low + high) >>> 1;
+		if (pills[mid].end < startSec) low = mid + 1;
+		else high = mid;
+	}
+	return low;
+}
+
+/**
+ * Return only the ruler pills near the visible window. The coalesced list is
+ * start-sorted, so panning/zooming reads the small visible slice instead of
+ * scanning every project region. Forced ids are resolved against `sourceIds`:
+ * selecting a non-leading fragment must retain the one pill that represents it.
+ */
+function visibleLanePills(
+	pills: LanePill[],
+	startSec: number,
+	endSec: number,
+	forcedIds: ReadonlySet<string>,
+	pillBySourceId: ReadonlyMap<string, LanePill>,
+): LanePill[] {
+	const visible: LanePill[] = [];
+	const included = new Set<string>();
+	for (let index = firstOverlappingPill(pills, startSec); index < pills.length; index++) {
+		const pill = pills[index];
+		if (pill.start > endSec) break;
+		visible.push(pill);
+		included.add(pill.id);
+	}
+	if (forcedIds.size === 0) return visible;
+	for (const sourceId of forcedIds) {
+		const pill = pillBySourceId.get(sourceId);
+		if (!pill) continue;
+		if (included.has(pill.id)) continue;
+		visible.push(pill);
+		included.add(pill.id);
+	}
+	return visible.sort((a, b) => a.start - b.start);
 }
 
 function laneClass(kind: LanePill["kind"]): string {
@@ -623,10 +698,22 @@ export function V4Timeline({
 		shiftPx: number;
 	} | null>(null);
 	const [splitMode, setSplitMode] = useState(false);
-	const [pointerGuideTimeSec, setPointerGuideTimeSec] = useState<number | null>(null);
+	// Pointer hover is a presentation-only affordance. Keeping its position in
+	// React state made every pointer frame re-run this entire timeline — ruler,
+	// clips, pills and waveform windows included. The guide is now an imperative
+	// leaf: pointer frames only touch its two DOM properties (`left` and
+	// `hidden`), while React still owns its structure and split-mode classes.
+	const pointerGuideLayerRef = useRef<HTMLDivElement | null>(null);
+	const pointerGuideElRef = useRef<HTMLDivElement | null>(null);
 	const pointerGuideRafRef = useRef(0);
 	const pendingPointerGuideXRef = useRef<number | null>(null);
-	const { settings, set: setSettings } = useEditorSettings();
+	const bindPointerGuideLayer = useCallback((element: HTMLDivElement | null) => {
+		pointerGuideLayerRef.current = element;
+		if (element) element.hidden = true;
+	}, []);
+	// This large component only needs one persisted boolean. Subscribing it to the
+	// transient settings overlay made every inspector slider frame rebuild the full timeline.
+	const autoFocusAll = useProjectStore((state) => getEditorSettings(state.document).autoFocusAll);
 	const [autoEnhanceOpen, setAutoEnhanceOpen] = useState(false);
 	const [autoBusy, setAutoBusy] = useState(false);
 	// The AI cut pass reads the transcript, and the transcript is produced in the
@@ -710,10 +797,15 @@ export function V4Timeline({
 				pendingPointerGuideXRef.current = null;
 				if (pendingX === null) return;
 				const timeSec = timelineTimeAtClientX(pendingX);
-				if (timeSec !== null) setPointerGuideTimeSec(timeSec);
+				const layer = pointerGuideLayerRef.current;
+				const guide = pointerGuideElRef.current;
+				if (timeSec === null || !layer || !guide) return;
+				const canvasWidth = canvasRef.current?.getBoundingClientRect().width ?? 0;
+				guide.style.transform = `translate3d(${(timeSec / total) * canvasWidth}px, 0, 0)`;
+				layer.hidden = false;
 			});
 		},
-		[timelineTimeAtClientX],
+		[timelineTimeAtClientX, total],
 	);
 	const clearPointerGuide = useCallback(() => {
 		if (pointerGuideRafRef.current !== 0) {
@@ -721,7 +813,7 @@ export function V4Timeline({
 			pointerGuideRafRef.current = 0;
 		}
 		pendingPointerGuideXRef.current = null;
-		setPointerGuideTimeSec(null);
+		if (pointerGuideLayerRef.current) pointerGuideLayerRef.current.hidden = true;
 	}, []);
 
 	// The visible fraction of the timeline, and what one second is worth on screen
@@ -737,23 +829,57 @@ export function V4Timeline({
 			endSec: Math.min(total, (nav.end + overscan) * total),
 		};
 	}, [nav.start, nav.end, navSpan, total]);
+	const visibleClips = useMemo(() => {
+		const forcedIds = new Set<string>();
+		if (tl.clipSelection) forcedIds.add(tl.clipSelection);
+		if (clipDrag) {
+			forcedIds.add(clipDrag.id);
+			// These siblings carry an optimistic transform during reorder. Keep the
+			// whole affected range alive even if the pointer crosses the viewport
+			// edge, otherwise the open gap would disappear while autoscrolling/panning.
+			const from = Math.min(clipDrag.from, clipDrag.target);
+			const to = Math.max(clipDrag.from, clipDrag.target);
+			for (let index = from; index <= to; index++) {
+				const clip = clips[index];
+				if (clip) forcedIds.add(clip.id);
+			}
+		}
+		return clips.flatMap((clip, index) =>
+			forcedIds.has(clip.id) ||
+			(clip.timelineEndSec >= waveformWindow.startSec &&
+				clip.timelineStartSec <= waveformWindow.endSec)
+				? [{ clip, index }]
+				: [],
+		);
+	}, [clips, waveformWindow.startSec, waveformWindow.endSec, tl.clipSelection, clipDrag]);
 	// ── region lanes ────────────────────────────────────────────────
 	// Zoom regions carry distinct per-instance content (depth/focus) that two
 	// touching-but-different regions must not silently merge into one.
 	// Pills follow the universal merge rule (timelineMap): regions of the same kind whose
 	// PROPERTIES are equal and whose spans touch render as ONE pill, however they came to be
 	// adjacent. Different properties never merge (and cannot overlap — they repel on edit).
-	const zoomPills: LanePill[] = coalesceRegionsForRuler(tl.zoomRegions).map((p) => ({
-		id: p.ids[0],
-		kind: "zoom",
-		start: p.start,
-		end: p.end,
-		// Matches RightPanelStack's effectiveZoomScale: a custom scale (from the
-		// slider) overrides the depth preset; otherwise show the depth's actual
-		// preset value, not a fabricated linear approximation of it.
-		label: `${(p.member.customScale ?? ZOOM_DEPTH_SCALES[p.member.depth]).toFixed(2)}×`,
-		sourceIds: p.ids,
-	}));
+	const zoomPills = useMemo(
+		(): LanePill[] =>
+			coalesceRegionsForRuler(tl.zoomRegions).map((p) => ({
+				id: p.ids[0],
+				kind: "zoom",
+				start: p.start,
+				end: p.end,
+				// Matches RightPanelStack's effectiveZoomScale: a custom scale (from the
+				// slider) overrides the depth preset; otherwise show the depth's actual
+				// preset value, not a fabricated linear approximation of it.
+				label: `${(p.member.customScale ?? ZOOM_DEPTH_SCALES[p.member.depth]).toFixed(2)}×`,
+				sourceIds: p.ids,
+			})),
+		[tl.zoomRegions],
+	);
+	const zoomPillBySourceId = useMemo(() => {
+		const index = new Map<string, LanePill>();
+		for (const pill of zoomPills) {
+			for (const sourceId of pill.sourceIds) index.set(sourceId, pill);
+		}
+		return index;
+	}, [zoomPills]);
 	// Ruler ticks are chosen from what is actually ON SCREEN, not from the clip
 	// length: the canvas is widened by 1/navSpan, so the same recording shows one
 	// label per 30s zoomed out and one per tenth of a second zoomed in. The step
@@ -1184,9 +1310,19 @@ export function V4Timeline({
 			// re-querying live rects mid-drag would pick up the dragged clip's own
 			// translated (pointer-following) position and corrupt the math, since
 			// its rect no longer reflects its untouched slot.
-			const originalRects = Array.from(
-				container.querySelectorAll<HTMLElement>("[data-clip-id]"),
-			).map((el) => el.getBoundingClientRect());
+			// Virtualised off-screen clips have no DOM rect. Reconstruct every slot
+			// from the timeline coordinate frame instead: cards are absolutely
+			// positioned from their start/end percentages, so this is the exact same
+			// geometry without forcing hundreds of hidden elements to stay mounted.
+			const canvasRect = canvasRef.current?.getBoundingClientRect();
+			if (!canvasRect || canvasRect.width <= 0) return;
+			const originalRects = clips.map((item) => {
+				const left = canvasRect.left + (item.timelineStartSec / total) * canvasRect.width;
+				const naturalWidth =
+					((item.timelineEndSec - item.timelineStartSec) / total) * canvasRect.width -
+					CLIP_GUTTER_PX;
+				return { left, right: left + Math.max(1, naturalWidth) };
+			});
 			const boundaries =
 				originalRects.length === 0
 					? [0]
@@ -1269,7 +1405,7 @@ export function V4Timeline({
 			window.addEventListener("pointermove", move);
 			window.addEventListener("pointerup", up);
 		},
-		[clips, tl, splitMode],
+		[clips, tl, splitMode, total],
 	);
 	const handleClipClick = useCallback(
 		(event: ReactMouseEvent, clip: AxcutClip) => {
@@ -1375,8 +1511,13 @@ export function V4Timeline({
 		useChatPromptBus.getState().submit(AI_ENHANCE_PROMPT);
 	}, []);
 
-	const isPillSelected = (id: string) =>
-		tl.selection?.id === id || tl.multiSelection.some((m) => m.id === id);
+	const selectedPillIds = useMemo(() => {
+		const ids = new Set<string>();
+		if (tl.selection) ids.add(tl.selection.id);
+		for (const selected of tl.multiSelection) ids.add(selected.id);
+		return ids;
+	}, [tl.selection, tl.multiSelection]);
+	const isPillSelected = (pill: LanePill) => pill.sourceIds.some((id) => selectedPillIds.has(id));
 	// Optimistic preview: during a clip-reorder drag, slide each region pill by
 	// the same amount as the clip it sits on — mirroring the clip transforms so
 	// zoom/speed/annotation/trim pills travel with their content in real time,
@@ -1427,7 +1568,7 @@ export function V4Timeline({
 				immediate={seg.immediate}
 				showContent={seg.showContent}
 				interactive={seg.interactive}
-				selected={seg.interactive && isPillSelected(p.id)}
+				selected={seg.interactive && isPillSelected(p)}
 				clipDragActive={clipDrag !== null}
 				suppressLeftSeam={seg.suppressLeftSeam}
 				suppressRightSeam={seg.suppressRightSeam}
@@ -1436,22 +1577,45 @@ export function V4Timeline({
 		);
 	};
 
-	const renderPills = (pills: LanePill[], emptyLabel: string) => {
-		const effectivePills = pills.map((p) => {
-			if (activePillDrag && activePillDrag.id === p.id) {
-				return { ...p, start: activePillDrag.start, end: activePillDrag.end };
+	const renderPills = (
+		pills: LanePill[],
+		pillBySourceId: ReadonlyMap<string, LanePill>,
+		emptyLabel: string,
+	) => {
+		const forcedIds = new Set(selectedPillIds);
+		if (activePillDrag) forcedIds.add(activePillDrag.id);
+		if (clipDrag) {
+			const from = Math.min(clipDrag.from, clipDrag.target);
+			const to = Math.max(clipDrag.from, clipDrag.target);
+			const affectedStart = clips[from]?.timelineStartSec;
+			const affectedEnd = clips[to]?.timelineEndSec;
+			if (affectedStart !== undefined && affectedEnd !== undefined) {
+				const affectedPills = visibleLanePills(
+					pills,
+					affectedStart,
+					affectedEnd,
+					new Set(),
+					pillBySourceId,
+				);
+				for (const pill of affectedPills) {
+					for (const id of pill.sourceIds) forcedIds.add(id);
+				}
 			}
-			return p;
-		});
-		const visiblePills = effectivePills.filter(
-			(pill) =>
-				(pill.end >= waveformWindow.startSec && pill.start <= waveformWindow.endSec) ||
-				activePillDrag?.id === pill.id ||
-				isPillSelected(pill.id),
+		}
+		const visiblePills = visibleLanePills(
+			pills,
+			waveformWindow.startSec,
+			waveformWindow.endSec,
+			forcedIds,
+			pillBySourceId,
+		).map((pill) =>
+			activePillDrag && pill.sourceIds.includes(activePillDrag.id)
+				? { ...pill, start: activePillDrag.start, end: activePillDrag.end }
+				: pill,
 		);
 		return (
 			<>
-				{effectivePills.length === 0 ? (
+				{pills.length === 0 ? (
 					// The lane is as wide as the ZOOMED canvas, so centring the hint on it
 					// would slide it off-screen as soon as the timeline is zoomed in. Span
 					// the visible window instead, and the hint stays centred in view.
@@ -1607,14 +1771,17 @@ export function V4Timeline({
 						<button
 							type="button"
 							className={styles.tlToolBtn}
-							aria-pressed={settings.autoFocusAll}
-							title={t(
-								settings.autoFocusAll ? "buttons.autoFocusAllOn" : "buttons.autoFocusAllOff",
-							)}
-							aria-label={t(
-								settings.autoFocusAll ? "buttons.autoFocusAllOn" : "buttons.autoFocusAllOff",
-							)}
-							onClick={() => void setSettings({ autoFocusAll: !settings.autoFocusAll })}
+							aria-pressed={autoFocusAll}
+							title={t(autoFocusAll ? "buttons.autoFocusAllOn" : "buttons.autoFocusAllOff")}
+							aria-label={t(autoFocusAll ? "buttons.autoFocusAllOn" : "buttons.autoFocusAllOff")}
+							onClick={() => {
+								const state = useProjectStore.getState();
+								const document = state.document;
+								if (!document) return;
+								const next = patchEditorSettings(document, { autoFocusAll: !autoFocusAll });
+								state.setDocument(next);
+								void state.saveDocument(next);
+							}}
 						>
 							<Crosshair size={15} />
 						</button>
@@ -1708,7 +1875,7 @@ export function V4Timeline({
 								if (id && onDropAsset) onDropAsset(id);
 							}}
 						>
-							{clips.map((c, i) => {
+							{visibleClips.map(({ clip: c, index: i }) => {
 								const dur = c.timelineEndSec - c.timelineStartSec;
 								const asset = assetById.get(c.assetId);
 								const clipVideoUrl = videoUrlByAssetId.get(c.assetId);
@@ -1782,7 +1949,7 @@ export function V4Timeline({
 									void tl.addZoom(CLICK_ZOOM_DURATION_SEC, startSec);
 								}}
 							>
-								{renderPills(zoomPills, t("hints.clickZoom"))}
+								{renderPills(zoomPills, zoomPillBySourceId, t("hints.clickZoom"))}
 							</div>
 						) : null}
 					</div>
@@ -1802,8 +1969,9 @@ export function V4Timeline({
 						playheadRef={playheadElRef}
 					/>
 				) : null}
-				{showLanes && pointerGuideTimeSec !== null ? (
+				{showLanes ? (
 					<div
+						ref={bindPointerGuideLayer}
 						className={`${styles.tlPlayheadLayer} ${
 							splitMode ? styles.tlSplitGuideLayer : styles.tlHoverGuideLayer
 						}`}
@@ -1811,10 +1979,11 @@ export function V4Timeline({
 					>
 						<div className={styles.tlCanvas} style={canvasStyle}>
 							<div
+								ref={pointerGuideElRef}
 								className={`${styles.tlPlayhead} ${
 									splitMode ? styles.tlSplitGuide : styles.tlHoverGuide
 								}`}
-								style={{ left: `${pctOf(pointerGuideTimeSec)}%` }}
+								style={{ left: 0, willChange: "transform" }}
 							>
 								<span
 									className={`${styles.tlPlayheadHead} ${

@@ -6,17 +6,18 @@
 // Safe to ship: one-way, no backpressure, no return value. Silently no-ops
 // if the preload bridge isn't available (e.g. unit tests in jsdom).
 
-const api = (
-	typeof window !== "undefined"
-		? (
-				window as {
-					electronAPI?: {
-						rendererConsole?: (channel: "log" | "warn" | "error", args: unknown[]) => void;
-					};
-				}
-			).electronAPI
-		: undefined
-)?.rendererConsole;
+const api = import.meta.env.DEV
+	? (typeof window !== "undefined"
+			? (
+					window as {
+						electronAPI?: {
+							rendererConsole?: (channel: "log" | "warn" | "error", args: unknown[]) => void;
+						};
+					}
+				).electronAPI
+			: undefined
+		)?.rendererConsole
+	: undefined;
 
 if (api) {
 	const wrap = (channel: "log" | "warn" | "error") => {

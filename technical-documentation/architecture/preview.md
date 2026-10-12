@@ -1,15 +1,16 @@
 # Preview
 
-The editor has three explicit preview policies. **Performance** is the default: the screen and
-webcam `<video>` elements are the visible pixel sources inside Chromium, so decoded frames do not
-leave the renderer process. **Power Saving** uses the same smooth visual path with a 15 fps
-outer-UI/application-state cadence and fewer shadows. **Quality** mounts the Rust native compositor used by MP4 export and
-pulls its RGBA8 output into an HTML `<canvas>` for maximum preview/export parity.
+The editor has three explicit preview policies. All interactive policies keep the screen and
+webcam `<video>` elements as the visible pixel sources inside Chromium, so decoded frames do not
+leave the renderer process. **Quality** keeps full preview decoration at 60 fps. **Performance**
+is the default and keeps 60 fps while shedding expensive preview-only decoration. **Power Saving**
+uses the same single-decode path at a 30 fps outer-UI/application-state cadence.
 
 The policy lives in
 [`previewPerformance.ts`](../../src/lib/ai-edition/store/previewPerformance.ts) and is selectable
-from the stage toolbar. Performance and Power Saving deliberately trade some native-only effects
-for a much cheaper playback path; export is unaffected and always uses the native compositor.
+from the stage toolbar. Export is unaffected and always uses the native compositor. The former
+native Quality preview remains as experimental implementation code, but no user policy mounts it
+while its final RGBA frame still requires CPU readback and Electron IPC.
 
 This document describes the live composition path. The export pipe
 ([architecture/export-pipeline.md](export-pipeline.md)) shares the same compositor
@@ -20,7 +21,7 @@ in [engineering/rendering-performance.md](../engineering/rendering-performance.m
 
 ## Playback and presentation paths
 
-### Renderer-resident preview (Performance and Power Saving)
+### Renderer-resident preview (all interactive policies)
 
 [`VirtualPreview.tsx`](../../src/components/ai-edition/VirtualPreview.tsx) presents the screen
 video directly and runs one display-rate `requestAnimationFrame` visual clock. It reads the
@@ -28,13 +29,30 @@ video's continuously advancing logical `currentTime`, so a VFR recording can hol
 while zoom, cursor and camera motion remain smooth. One shared
 [`playback-clock.ts`](../../src/lib/ai-edition/timeline/playback-clock.ts) notification synchronizes
 zoom, Full Camera, annotations, webcam and cursor without independent loops. React/Zustand
-playhead publication is separately budgeted to 30 fps in Performance and 15 fps in Power Saving.
+playhead publication remains 60 fps in Quality/Performance and is budgeted to 30 fps in Power
+Saving. The large preview component subscribes only to active clip identity, so same-clip transport
+updates stay on the ref-based visual clock rather than rebuilding the React tree.
+
+The active media element is also the only screen decoder. It uses eager browser buffering, but no
+hidden next-video pool, Canvas2D copy or WebGL texture upload. This is deliberate: the DOM video can
+stay on Chromium's hardware decode/compositor path, while wrapping it in a custom canvas would add
+work without yet replacing the DOM webcam, cursor, annotation and interaction layers. The transport
+paints its moving time/progress leaves from a non-React store subscription, and transcript cue
+highlighting commits only at word boundaries rather than on every playback tick.
+
+Full Camera and annotation visibility are prepared as boundary indexes when their regions change.
+Playback ticks query those indexes without scanning the full document; unchanged Full Camera
+geometry does not rewrite styles. Annotation drag/resize is previewed entirely by the local DOM
+rectangle and writes its final project value once on release. The optional `window.__uiProbe`
+diagnostic is connected to this Chromium video path, so its preview/scrub buckets measure the path
+users actually run rather than only the retained native experiment.
 
 The DOM path preserves crop, zoom, layout, webcam, cursor and editable annotation pixels. It does
 not promise exact native shader parity for motion blur, 3D projection, background blur or native
-mosaic. Quality remains available when those effects need to be inspected before export.
+mosaic. Quality means full renderer-resident preview decoration, not exact native shader parity;
+exported media still uses the high-fidelity compositor.
 
-### Native compositor overlay (Quality)
+### Native compositor overlay (retained experiment)
 
 Mounted as the first child of `.previewFrame` by
 [`NativeCompositorOverlay.tsx`](../../src/components/ai-edition/NativeCompositorOverlay.tsx).
@@ -48,7 +66,7 @@ wrapper, the `<video>` for screen decode, the `WebcamOverlay` `<video>`, the
 `AnnotationLayer`, the `ZoomFocusOverlay`, the webcam drag hitbox) are *interactive
 overlays*: their pixels are hidden in CSS, only their pointer-event geometry counts.
 
-The path is enabled only while the user selects Quality. The compositing service loads
+No interactive policy enables this path. The compositing service loads
 `compositor_view.node` at startup via
 [`compositorViewService.ts`](../../electron/native-bridge/services/compositorViewService.ts:271)
 (`ensureAddon`); when the binary is missing the service logs once
@@ -74,8 +92,8 @@ not a second raw-pixel implementation.
 
 ## Scene description
 
-`document → SceneDescription → JSON` is the contract used by Quality preview and native export.
-Performance and Power Saving do not build or send this scene during playback.
+`document → SceneDescription → JSON` is the contract used by the retained native preview experiment
+and native export. Interactive policies do not build or send this scene during playback.
 
 [`buildSceneDescription`](../../src/native/sceneDescription.ts:419)
 (`src/native/sceneDescription.ts`) is a pure data mapping from an `AxcutDocument` plus the
@@ -132,7 +150,7 @@ expressed as `[startSec, endSec)` intervals and matched against `t = source_time
 a region straddling a clip boundary emits one entry per covered clip via
 `projectRegionsToSource`.
 
-## Quality-mode frame delivery
+## Retained native frame delivery experiment
 
 The native compositor runs *off-screen* (no OS window, no HWND ever crosses
 IPC), and the renderer pulls composed frames out of it. The protocol is the load-bearing

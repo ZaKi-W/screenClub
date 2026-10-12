@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Profiler } from "react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 // The regression under test is geometric, so the environment has to have a size:
@@ -14,6 +15,7 @@ vi.mock("@/contexts/I18nContext", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
 
+import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
 import { V4Timeline } from "./V4Timeline";
 
@@ -73,6 +75,9 @@ function renderTimeline(
 		depth: 3 as const,
 		focus: { x: 0.5, y: 0.5 },
 	},
+	clipSelection: string | null = null,
+	onRender?: () => void,
+	timelineOverrides: Record<string, unknown> = {},
 ) {
 	const tl = {
 		clips,
@@ -84,18 +89,28 @@ function renderTimeline(
 		trimRanges: [],
 		selection: null,
 		multiSelection: [],
-		clipSelection: null,
+		clipSelection,
 		clearSelection: vi.fn(),
 		selectRegion: vi.fn(),
 		selectClip: vi.fn(),
+		moveClip: vi.fn(async () => {
+			/* the reorder drag only awaits it */
+		}),
+		removeClip: vi.fn(async () => {
+			/* delete is outside these geometry assertions */
+		}),
+		splitClip: vi.fn(async () => {
+			/* split is outside these geometry assertions */
+		}),
 		updateZoomSpan: vi.fn(async () => {
 			/* the drag only awaits it */
 		}),
 		addZoom: vi.fn(async (_durationSec: number, _startSec: number) => {
 			/* lane click only awaits it */
 		}),
+		...timelineOverrides,
 	};
-	render(
+	const component = (
 		<V4Timeline
 			// Only the members the lanes and the clip row read are mocked; the prop
 			// stays typed as the real API rather than widened to `any` (AGENTS.md).
@@ -106,10 +121,20 @@ function renderTimeline(
 			onPrevClip={vi.fn()}
 			onNextClip={vi.fn()}
 			onEditClip={vi.fn()}
-		/>,
+		/>
 	);
+	render(
+		onRender ? (
+			<Profiler id="timeline" onRender={() => onRender()}>
+				{component}
+			</Profiler>
+		) : (
+			component
+		),
+	);
+	const pills = screen.queryAllByTitle("1.80×");
 	return {
-		pill: screen.getByTitle("1.80×"),
+		pill: pills[0] as HTMLElement,
 		clipEls: Array.from(document.querySelectorAll<HTMLElement>("[data-clip-id]")),
 		tl,
 	};
@@ -238,6 +263,84 @@ describe("V4Timeline lane pills", () => {
 		dragHandle(right, 885.5);
 		expect(tl.updateZoomSpan).toHaveBeenLastCalledWith("zoom1", 10_000, 1_782_000);
 	});
+
+	it("mounts only pills near the visible time window after zooming in", () => {
+		const zoomRegions = Array.from({ length: 200 }, (_, index) => ({
+			id: `zoom-${index}`,
+			startMs: index * 9_000,
+			endMs: index * 9_000 + 1_000,
+			depth: 3 as const,
+			focus: { x: index / 200, y: 0.5 },
+		}));
+		renderTimeline(undefined, undefined, null, undefined, { zoomRegions });
+
+		expect(screen.getAllByTitle("1.80×")).toHaveLength(200);
+		zoomIn(40);
+
+		expect(screen.getAllByTitle("1.80×").length).toBeLessThan(10);
+		expect(screen.getAllByTitle("1.80×").some((pill) => pill.style.left === "50%")).toBe(false);
+	});
+
+	it("keeps a coalesced pill mounted when a non-leading member is selected off-screen", () => {
+		const zoomRegions = [
+			{
+				id: "zoom-leading",
+				startMs: 900_000,
+				endMs: 901_000,
+				depth: 3 as const,
+				focus: { x: 0.5, y: 0.5 },
+			},
+			{
+				id: "zoom-selected",
+				startMs: 901_000,
+				endMs: 902_000,
+				depth: 3 as const,
+				focus: { x: 0.5, y: 0.5 },
+			},
+		];
+		renderTimeline(undefined, undefined, null, undefined, {
+			zoomRegions,
+			selection: { kind: "zoom", id: "zoom-selected" },
+			multiSelection: [{ kind: "zoom", id: "zoom-selected" }],
+		});
+
+		zoomIn(40);
+
+		const pill = screen.getByTitle("1.80×");
+		expect(pill.style.left).toBe("50%");
+		expect(pill.className).toContain("lanePillSel");
+	});
+
+	it("keeps off-screen pills affected by a clip reorder mounted for the split preview", async () => {
+		const clips = Array.from({ length: 100 }, (_, index) => clip(index * 18, (index + 1) * 18));
+		const zoomRegions = [
+			{
+				id: "zoom-start",
+				startMs: 1_000,
+				endMs: 2_000,
+				depth: 3 as const,
+				focus: { x: 0.25, y: 0.5 },
+			},
+			{
+				id: "zoom-offscreen",
+				startMs: 900_000,
+				endMs: 901_000,
+				depth: 3 as const,
+				focus: { x: 0.75, y: 0.5 },
+			},
+		];
+		renderTimeline(clips, undefined, null, undefined, { zoomRegions });
+		zoomIn(40);
+		expect(screen.getAllByTitle("1.80×")).toHaveLength(1);
+
+		const firstClip = document.querySelector<HTMLElement>('[data-clip-id="c@0"]');
+		expect(firstClip).not.toBeNull();
+		fireEvent.pointerDown(firstClip as HTMLElement, { button: 0, clientX: 0 });
+		window.dispatchEvent(new MouseEvent("pointermove", { clientX: VIEWPORT_PX }));
+
+		await waitFor(() => expect(screen.getAllByTitle("1.80×")).toHaveLength(2));
+		window.dispatchEvent(new MouseEvent("pointerup", { clientX: VIEWPORT_PX }));
+	});
 });
 
 describe("V4Timeline pointer guide", () => {
@@ -251,7 +354,14 @@ describe("V4Timeline pointer guide", () => {
 
 		fireEvent.pointerMove(area as HTMLElement, { clientX: VIEWPORT_PX / 2 });
 
-		await waitFor(() => expect(document.querySelector("[class*=tlHoverGuide]")).not.toBeNull());
+		const layer = document.querySelector<HTMLElement>("[class*=tlHoverGuideLayer]");
+		expect(layer).not.toBeNull();
+		await waitFor(() => expect(layer).toHaveProperty("hidden", false));
+		expect(
+			document.querySelector<HTMLElement>(
+				"[class*=tlHoverGuide]:not([class*=tlHoverGuideLayer]):not([class*=tlHoverGuideHead])",
+			)?.style.transform,
+		).toBe(`translate3d(${VIEWPORT_PX / 2}px, 0, 0)`);
 		expect(document.querySelector("[class*=tlHoverGuideHead]")).not.toBeNull();
 	});
 
@@ -259,11 +369,31 @@ describe("V4Timeline pointer guide", () => {
 		renderTimeline();
 		const { tracks } = timelineNavigationElements();
 		fireEvent.pointerMove(tracks, { clientX: VIEWPORT_PX / 2 });
-		await waitFor(() => expect(document.querySelector("[class*=tlHoverGuide]")).not.toBeNull());
+		const layer = document.querySelector<HTMLElement>("[class*=tlHoverGuideLayer]");
+		expect(layer).not.toBeNull();
+		await waitFor(() => expect(layer).toHaveProperty("hidden", false));
 
 		fireEvent.pointerLeave(tracks);
 
-		expect(document.querySelector("[class*=tlHoverGuide]")).toBeNull();
+		expect(layer).toHaveProperty("hidden", true);
+	});
+});
+
+describe("V4Timeline playhead", () => {
+	it("moves from store ticks without a React commit", () => {
+		useProjectStore.setState({ currentTimeSec: 0 });
+		let commits = 0;
+		renderTimeline(undefined, undefined, null, () => {
+			commits += 1;
+		});
+		const playhead = document.querySelector<HTMLElement>("[data-timeline-playhead]");
+		expect(playhead).not.toBeNull();
+		const commitsAfterMount = commits;
+
+		act(() => useProjectStore.getState().setCurrentTime(TOTAL_SEC / 2));
+
+		expect(playhead?.style.left).toBe("50%");
+		expect(commits).toBe(commitsAfterMount);
 	});
 });
 
@@ -347,5 +477,45 @@ describe("V4Timeline clip row", () => {
 				3,
 			);
 		}
+	});
+
+	it("mounts only clips near the visible time window after zooming in", () => {
+		const clips = Array.from({ length: 100 }, (_, index) => clip(index * 18, (index + 1) * 18));
+		renderTimeline(clips);
+
+		// The initial overview needs every card. At the 50x zoom ceiling, only
+		// the first viewport plus overscan should keep real clip-card DOM alive.
+		expect(document.querySelectorAll("[data-clip-id]")).toHaveLength(100);
+		zoomIn(40);
+
+		const mountedIds = Array.from(document.querySelectorAll<HTMLElement>("[data-clip-id]"), (el) =>
+			el.getAttribute("data-clip-id"),
+		);
+		expect(mountedIds.length).toBeLessThan(10);
+		expect(mountedIds).toContain("c@0");
+		expect(mountedIds).not.toContain("c@900");
+	});
+
+	it("keeps an off-screen selected clip mounted for its controls", () => {
+		const clips = Array.from({ length: 100 }, (_, index) => clip(index * 18, (index + 1) * 18));
+		renderTimeline(clips, undefined, "c@900");
+
+		zoomIn(40);
+
+		expect(document.querySelector('[data-clip-id="c@900"]')).not.toBeNull();
+	});
+
+	it("keeps the dragged clip and displaced off-screen siblings mounted", async () => {
+		const clips = Array.from({ length: 100 }, (_, index) => clip(index * 18, (index + 1) * 18));
+		renderTimeline(clips);
+		zoomIn(40);
+		const firstClip = document.querySelector<HTMLElement>('[data-clip-id="c@0"]');
+		expect(firstClip).not.toBeNull();
+
+		fireEvent.pointerDown(firstClip as HTMLElement, { button: 0, clientX: 0 });
+		window.dispatchEvent(new MouseEvent("pointermove", { clientX: VIEWPORT_PX }));
+
+		await waitFor(() => expect(document.querySelector('[data-clip-id="c@900"]')).not.toBeNull());
+		window.dispatchEvent(new MouseEvent("pointerup", { clientX: VIEWPORT_PX }));
 	});
 });

@@ -1,4 +1,9 @@
 import type { CameraFullscreenRegion } from "@/components/video-editor/types";
+import {
+	type ActiveIntervalIndex,
+	findActiveIntervalSpan,
+	prepareActiveIntervalSpans,
+} from "@/lib/ai-edition/timeline/active-interval-index";
 import { TRANSITION_WINDOW_MS } from "./constants";
 import { easeOutScreenStudio } from "./mathUtils";
 
@@ -44,6 +49,37 @@ function computeCameraFullscreenRegionStrength(
 	return easeOutScreenStudio(progress);
 }
 
+export interface PreparedCameraFullscreenRegions {
+	regions: CameraFullscreenRegion[];
+	activeIntervals: ActiveIntervalIndex;
+}
+
+export function prepareCameraFullscreenRegions(
+	regions: CameraFullscreenRegion[],
+): PreparedCameraFullscreenRegions {
+	return {
+		regions,
+		activeIntervals: prepareActiveIntervalSpans(
+			regions.map((region) => ({ start: region.startMs, end: region.endMs })),
+		),
+	};
+}
+
+/** Allocation-free hot-path query against a structurally prepared region set. */
+export function computePreparedCameraFullscreenProgress(
+	prepared: PreparedCameraFullscreenRegions,
+	timeMs: number,
+): number {
+	const activeSpan = findActiveIntervalSpan(prepared.activeIntervals, timeMs);
+	if (!activeSpan) return 0;
+	let strongest = 0;
+	for (const regionIndex of activeSpan.itemIndexes) {
+		const strength = computeCameraFullscreenRegionStrength(prepared.regions[regionIndex], timeMs);
+		if (strength > strongest) strongest = strength;
+	}
+	return strongest;
+}
+
 /**
  * Returns the Full Camera progress (0..1) at a given time: 0 = webcam at its normal
  * layout, 1 = webcam fully covering the canvas. Ramps in/out at the edges of the
@@ -58,9 +94,7 @@ export function computeCameraFullscreenProgress(
 	let strongest = 0;
 	for (const region of regions) {
 		const strength = computeCameraFullscreenRegionStrength(region, timeMs);
-		if (strength > strongest) {
-			strongest = strength;
-		}
+		if (strength > strongest) strongest = strength;
 	}
 	return strongest;
 }

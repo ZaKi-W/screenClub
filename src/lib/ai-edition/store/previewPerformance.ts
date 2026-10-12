@@ -6,8 +6,13 @@ export interface PreviewPerformancePolicy {
 	mode: PreviewPerformanceMode;
 	/** Maximum cadence for outer React/Zustand playhead updates. Visual presentation is separate. */
 	uiFps: number;
-	/** The native compositor is retained only for exact preview/export parity. */
+	/**
+	 * The native compositor currently returns full RGBA frames over Electron IPC. Keep it out of
+	 * interactive preview modes so Chromium can present the hardware-decoded `<video>` directly.
+	 */
 	useNativeCompositor: boolean;
+	/** Expensive preview-only decoration; export quality is unaffected. */
+	visualQuality: "full" | "reduced";
 }
 
 const STORAGE_KEY = "openscreen.preview-performance-mode";
@@ -16,17 +21,23 @@ const POLICIES: Record<PreviewPerformanceMode, PreviewPerformancePolicy> = {
 	quality: {
 		mode: "quality",
 		uiFps: 60,
-		useNativeCompositor: true,
+		useNativeCompositor: false,
+		visualQuality: "full",
 	},
 	performance: {
 		mode: "performance",
-		uiFps: 30,
+		// Preserve interaction cadence. Performance mode sheds visual effects rather than making
+		// the playhead/camera motion visibly step, matching Screen Studio's preview semantics.
+		uiFps: 60,
 		useNativeCompositor: false,
+		visualQuality: "reduced",
 	},
 	"power-saving": {
 		mode: "power-saving",
-		uiFps: 15,
+		// This is the only mode allowed to trade presentation cadence for energy use.
+		uiFps: 30,
 		useNativeCompositor: false,
+		visualQuality: "reduced",
 	},
 };
 

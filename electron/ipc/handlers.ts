@@ -47,6 +47,7 @@ import { DocumentService } from "../ai-edition/document-service";
 import type { LlmConfigStore } from "../ai-edition/llm-config-store";
 import { mainLogBuffer } from "../diagnostics/main-log-buffer";
 import { mainT } from "../i18n";
+import { hasStableMacCodeSigningTeam } from "../macosCodeSignature";
 import { RECORDINGS_DIR } from "../main";
 import { type AudioPeaksResult, getAudioPeaks } from "../media/audioPeaks";
 import {
@@ -70,6 +71,7 @@ import {
 } from "../recording/nativeWindowsCaptureStop";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { reindexRecordingOnDisk } from "../recording/webm-seek-index";
+import { resolveScreenCaptureAccess, type ScreenCaptureAccessStatus } from "../screenCaptureAccess";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
@@ -1419,6 +1421,16 @@ function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams)
 	proc.once("error", cleanup);
 }
 
+class NativeMacCaptureError extends Error {
+	constructor(
+		message: string,
+		readonly code?: string,
+	) {
+		super(message);
+		this.name = "NativeMacCaptureError";
+	}
+}
+
 function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
 	return new Promise<void>((resolve, reject) => {
 		const timer = setTimeout(() => {
@@ -1434,7 +1446,12 @@ function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
 			}
 			if (event.event === "error") {
 				cleanup();
-				reject(new Error(String(event.message ?? event.code ?? "Native macOS capture failed")));
+				reject(
+					new NativeMacCaptureError(
+						String(event.message ?? event.code ?? "Native macOS capture failed"),
+						typeof event.code === "string" ? event.code : undefined,
+					),
+				);
 			}
 		};
 
@@ -1710,14 +1727,10 @@ export function registerIpcHandlers(
 		}
 
 		try {
-			const status = systemPreferences.getMediaAccessStatus("screen");
-			if (status === "granted") {
-				return { success: true, granted: true, status };
-			}
-
-			// Screen recording has no askForMediaAccess equivalent, so trigger the
-			// TCC prompt without opening ScreenClub's source selector above it.
-			if (status === "not-determined") {
+			const initialStatus = systemPreferences.getMediaAccessStatus(
+				"screen",
+			) as ScreenCaptureAccessStatus;
+			if (initialStatus !== "granted") {
 				const mainWin = getMainWindow();
 				if (mainWin && !mainWin.isDestroyed()) {
 					if (!mainWin.isVisible()) {
@@ -1726,15 +1739,25 @@ export function registerIpcHandlers(
 					mainWin.focus();
 				}
 				app.focus({ steal: true });
-				desktopCapturer
-					.getSources({ types: ["screen"], thumbnailSize: { width: 1, height: 1 } })
-					.catch(() => {
-						// Permission probing failure is reported by the explicit status check below.
-					});
-				return { success: true, granted: false, status: "not-determined" };
 			}
 
-			return { success: true, granted: false, status };
+			const resolution = await resolveScreenCaptureAccess({
+				initialStatus,
+				probeSources: async () => {
+					const sources = await desktopCapturer.getSources({
+						types: ["screen"],
+						thumbnailSize: { width: 1, height: 1 },
+					});
+					return sources.some((source) => source.id.startsWith("screen:"));
+				},
+				readStatus: () =>
+					systemPreferences.getMediaAccessStatus("screen") as ScreenCaptureAccessStatus,
+			});
+
+			if (resolution.probeError) {
+				console.warn("Screen capture capability probe failed:", resolution.probeError);
+			}
+			return { success: true, granted: resolution.granted, status: resolution.status };
 		} catch (error) {
 			console.error("Failed to request screen access:", error);
 			return { success: false, granted: false, status: "unknown", error: String(error) };
@@ -1846,14 +1869,17 @@ export function registerIpcHandlers(
 			const mainWin = getMainWindow();
 			const detail =
 				access.status === "missing-helper"
-					? "The cursor helper couldn't be found in this build, so the editable cursor can't be enabled. Rebuild the native helper (npm run build:native:mac) or switch the HUD cursor mode to system."
-					: "Allow ScreenClub under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
+					? mainT("dialogs", "permissions.accessibility.missingHelper")
+					: mainT("dialogs", "permissions.accessibility.detail");
 			const messageOptions = {
 				type: "warning",
-				buttons: ["Open Accessibility Settings", "Cancel"],
+				buttons: [
+					mainT("dialogs", "permissions.accessibility.openSettings"),
+					mainT("common", "actions.cancel"),
+				],
 				defaultId: 0,
 				cancelId: 1,
-				message: "Accessibility access is required for the editable cursor",
+				message: mainT("dialogs", "permissions.accessibility.title"),
 				detail,
 			} satisfies Electron.MessageBoxOptions;
 			const result =
@@ -1886,35 +1912,10 @@ export function registerIpcHandlers(
 			return { opened: false, reason: "portal-owns-selection" };
 		}
 
-		const access = await requestScreenAccess();
-		if (!access.granted) {
-			if (process.platform === "darwin" && access.status !== "not-determined") {
-				const mainWin = getMainWindow();
-				const messageOptions = {
-					type: "warning",
-					buttons: ["Open System Settings", "Cancel"],
-					defaultId: 0,
-					cancelId: 1,
-					message: "Screen Recording permission is required",
-					detail:
-						"Allow ScreenClub in macOS System Settings, then come back and choose a screen or window.",
-				} satisfies Electron.MessageBoxOptions;
-				const result =
-					mainWin && !mainWin.isDestroyed()
-						? await dialog.showMessageBox(mainWin, messageOptions)
-						: await dialog.showMessageBox(messageOptions);
-				if (result.response === 0) {
-					await shell.openExternal(
-						"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
-					);
-				}
-			}
-			return {
-				opened: false,
-				reason: "screen-access-required",
-				access,
-			};
-		}
+		// Do not gate this window on getMediaAccessStatus("screen"). macOS can report
+		// a stale denied value even while ScreenClub is enabled in System Settings.
+		// The selector performs the real desktopCapturer.getSources() operation and
+		// reports an actual capture failure instead of sending the user into a loop.
 
 		const sourceSelectorWin = getSourceSelectorWindow();
 		if (sourceSelectorWin) {
@@ -2019,6 +2020,9 @@ export function registerIpcHandlers(
 	ipcMain.handle("is-native-mac-capture-available", async () => {
 		if (process.platform !== "darwin") {
 			return { success: true, available: false, reason: "unsupported-platform" };
+		}
+		if (app.isPackaged && !hasStableMacCodeSigningTeam()) {
+			return { success: true, available: false, reason: "unstable-code-signature" };
 		}
 
 		const helperPath = await findNativeMacCaptureHelperPath();
@@ -2645,7 +2649,11 @@ export function registerIpcHandlers(
 			nativeMacPauseRanges = [];
 			nativeMacIsPaused = false;
 			await stopCursorRecording();
-			return { success: false, error: error instanceof Error ? error.message : String(error) };
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : String(error),
+				...(error instanceof NativeMacCaptureError && error.code ? { errorCode: error.code } : {}),
+			};
 		}
 	});
 

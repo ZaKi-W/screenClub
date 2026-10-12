@@ -17,9 +17,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toFileUrl } from "@/components/video-editor/projectPersistence";
 import type { WebcamLayoutPreset, WebcamMaskShape } from "@/components/video-editor/types";
-import type { AxcutClip } from "@/lib/ai-edition/schema";
+import type { AxcutCameraTrack, AxcutClip } from "@/lib/ai-edition/schema";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
+import { useEditorSettingsValue } from "@/lib/ai-edition/store/useEditorSettings";
 import { resolveActiveCameraTrack } from "@/lib/ai-edition/timeline/camera";
 import {
 	CAMERA_SYNC_TOLERANCE_PAUSED_SEC,
@@ -33,6 +33,10 @@ import styles from "./NewEditorShell.module.css";
 
 interface WebcamOverlayProps {
 	clips: AxcutClip[];
+	/** Already resolved by PreviewCanvas's indexed active-clip boundary selector. */
+	resolvedCameraTrack?: AxcutCameraTrack | null;
+	/** Source time belonging to resolvedCameraTrack's active clip. */
+	resolvedSourceTimeSec?: number | null;
 	currentTimeSec: number;
 	onTimeChange: (sec: number) => void;
 	isPlaying: boolean;
@@ -54,7 +58,7 @@ interface WebcamOverlayProps {
 }
 
 export function WebcamOverlay(props: WebcamOverlayProps) {
-	const { settings } = useEditorSettings();
+	const webcamMirrored = useEditorSettingsValue((settings) => settings.webcamMirrored);
 	const assets = useProjectStore((s) => s.document?.assets ?? null);
 
 	const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
@@ -63,14 +67,17 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 	// Fallback (pre-clockRef / first paint) position from props, used only for
 	// the initial correction on loadedmetadata before the rAF loop below has
 	// had a chance to run.
-	const position = useMemo(
-		() => locateVirtualPosition(props.clips, props.currentTimeSec),
-		[props.clips, props.currentTimeSec],
-	);
+	const position = useMemo(() => {
+		if (props.resolvedSourceTimeSec !== undefined) return null;
+		return locateVirtualPosition(props.clips, props.currentTimeSec);
+	}, [props.clips, props.currentTimeSec, props.resolvedSourceTimeSec]);
 
 	const cameraTrack = useMemo(
-		() => resolveActiveCameraTrack(assets ?? [], props.clips, props.currentTimeSec),
-		[assets, props.clips, props.currentTimeSec],
+		() =>
+			props.resolvedCameraTrack !== undefined
+				? props.resolvedCameraTrack
+				: resolveActiveCameraTrack(assets ?? [], props.clips, props.currentTimeSec),
+		[assets, props.clips, props.currentTimeSec, props.resolvedCameraTrack],
 	);
 	const assetById = useMemo(
 		() => new Map((assets ?? []).map((asset) => [asset.id, asset])),
@@ -78,10 +85,11 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 	);
 
 	const cameraTime = useMemo(() => {
-		if (!cameraTrack?.visible || !position) return null;
+		const sourceTimeSec = props.resolvedSourceTimeSec ?? position?.sourceTimeSec ?? null;
+		if (!cameraTrack?.visible || sourceTimeSec === null) return null;
 		const offsetSec = (cameraTrack.startMs + cameraTrack.offsetMs) / 1000;
-		return Math.max(0, position.sourceTimeSec - offsetSec);
-	}, [cameraTrack, position]);
+		return Math.max(0, sourceTimeSec - offsetSec);
+	}, [cameraTrack, position, props.resolvedSourceTimeSec]);
 
 	// Drive the camera <video> directly off the shared playback clock: react
 	// only when the master screen video actually delivers a frame, and
@@ -169,7 +177,7 @@ export function WebcamOverlay(props: WebcamOverlayProps) {
 	// content; the container stays a transparent, overflow:hidden wrapper.
 	const style: React.CSSProperties = {
 		display: showError ? "none" : "block",
-		transform: settings.webcamMirrored ? "scaleX(-1)" : undefined,
+		transform: webcamMirrored ? "scaleX(-1)" : undefined,
 		clipPath: getCssClipPath(props.webcamMaskShape) ?? undefined,
 		borderRadius: `${props.borderRadius}px`,
 	};

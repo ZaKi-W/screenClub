@@ -8,6 +8,7 @@
 
 import "@testing-library/jest-dom";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/contexts/I18nContext";
 import type { AxcutAsset, AxcutClip, AxcutTranscript } from "@/lib/ai-edition/schema";
@@ -174,5 +175,40 @@ describe("transcript pane with two clips over one media", () => {
 				(el) => el.dataset.wordId,
 			),
 		).toEqual(["clip_2:w2"]);
+	});
+
+	it("does not commit the pane while ticks stay inside the same cue word", () => {
+		useProjectStore.setState({ currentTimeSec: 6.1 });
+		let commits = 0;
+		const { container } = render(
+			<I18nProvider>
+				<Profiler id="transcript" onRender={() => commits++}>
+					<TranscriptPane
+						clips={CLIPS}
+						transcripts={[TRANSCRIPT]}
+						assets={[ASSET]}
+						trimRanges={[]}
+						busyAssetIds={[]}
+						onSeek={vi.fn()}
+						onAddTrimRange={vi.fn()}
+						onRemoveTrimRange={vi.fn()}
+						onTranscribe={vi.fn()}
+						canTranscribe
+						isTranscribing={false}
+					/>
+				</Profiler>
+			</I18nProvider>,
+		);
+		const commitsAfterMount = commits;
+		act(() => {
+			for (let i = 0; i < 40; i++) {
+				useProjectStore.setState({ currentTimeSec: 6.1 + i / 100 });
+			}
+		});
+		expect(container.querySelector('[data-cue="true"]')).toHaveAttribute(
+			"data-word-id",
+			"clip_1:w2",
+		);
+		expect(commits).toBe(commitsAfterMount);
 	});
 });

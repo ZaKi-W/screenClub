@@ -20,5 +20,8 @@ export function resolveActiveCameraTrack(
 
 /** True when at least one clip currently on the timeline has an asset with a camera attached. */
 export function hasAnyClipWithCamera(assets: AxcutAsset[], clips: AxcutClip[]): boolean {
-	return clips.some((clip) => assets.find((a) => a.id === clip.assetId)?.cameraTrack != null);
+	const assetIdsWithCamera = new Set(
+		assets.filter((asset) => asset.cameraTrack != null).map((asset) => asset.id),
+	);
+	return clips.some((clip) => assetIdsWithCamera.has(clip.assetId));
 }

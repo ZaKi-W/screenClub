@@ -16,7 +16,7 @@ import type {
 } from "@/components/video-editor/types";
 import { getZoomScale } from "@/components/video-editor/types";
 import type { AxcutZoomRegion } from "@/lib/ai-edition/schema";
-import type { ScreenAnimationStyle } from "@/lib/zoomMath/constants";
+import { SCREEN_ANIMATION_SPRINGS, type ScreenAnimationStyle } from "@/lib/zoomMath/constants";
 import { findDominantRegion } from "@/lib/zoomMath/zoomRegionUtils";
 import { computeZoomTransform } from "@/lib/zoomMath/zoomTransform";
 
@@ -49,24 +49,106 @@ function toLegacyZoomRegion(region: AxcutZoomRegion): LegacyZoomRegion {
 	};
 }
 
-export type PreparedZoomPreviewRegions = LegacyZoomRegion[];
+interface IndexedZoomRegion {
+	region: LegacyZoomRegion;
+	originalIndex: number;
+}
+
+export interface PreparedZoomPreviewRegions {
+	regions: LegacyZoomRegion[];
+	byStart: IndexedZoomRegion[];
+	startTimes: number[];
+	maxEndTree: number[];
+}
+
+function buildMaxEndTree(entries: IndexedZoomRegion[]): number[] {
+	const tree = new Array<number>(Math.max(1, entries.length * 4)).fill(-Infinity);
+	const build = (node: number, left: number, right: number): number => {
+		if (right - left === 1) {
+			tree[node] = entries[left].region.endMs;
+			return tree[node];
+		}
+		const middle = (left + right) >>> 1;
+		tree[node] = Math.max(build(node * 2, left, middle), build(node * 2 + 1, middle, right));
+		return tree[node];
+	};
+	if (entries.length > 0) build(1, 0, entries.length);
+	return tree;
+}
 
 /** Convert schema regions once when the document changes, not on every visual frame. */
 export function prepareZoomPreviewRegions(
 	zoomRegions: AxcutZoomRegion[],
 ): PreparedZoomPreviewRegions {
-	return zoomRegions.map(toLegacyZoomRegion);
+	const regions = zoomRegions.map(toLegacyZoomRegion);
+	const byStart = regions
+		.map((region, originalIndex) => ({ region, originalIndex }))
+		.sort(
+			(left, right) =>
+				left.region.startMs - right.region.startMs || left.originalIndex - right.originalIndex,
+		);
+	return {
+		regions,
+		byStart,
+		startTimes: byStart.map(({ region }) => region.startMs),
+		maxEndTree: buildMaxEndTree(byStart),
+	};
+}
+
+function upperBound(values: readonly number[], target: number): number {
+	let low = 0;
+	let high = values.length;
+	while (low < high) {
+		const middle = (low + high) >>> 1;
+		if (values[middle] < target) low = middle + 1;
+		else high = middle;
+	}
+	return low;
+}
+
+function findZoomCandidates(
+	prepared: PreparedZoomPreviewRegions,
+	timeMs: number,
+	playbackRate: number,
+	screenAnimationStyle: ScreenAnimationStyle,
+): LegacyZoomRegion[] {
+	const upperIndex = upperBound(prepared.startTimes, timeMs);
+	if (upperIndex === 0) return [];
+	const leadOutMs = SCREEN_ANIMATION_SPRINGS[screenAnimationStyle].durationMs * playbackRate;
+	const minimumEndMs = timeMs - leadOutMs;
+	const matches: IndexedZoomRegion[] = [];
+	const visit = (node: number, left: number, right: number) => {
+		if (left >= upperIndex || prepared.maxEndTree[node] <= minimumEndMs) return;
+		if (right - left === 1) {
+			matches.push(prepared.byStart[left]);
+			return;
+		}
+		const middle = (left + right) >>> 1;
+		visit(node * 2, left, middle);
+		visit(node * 2 + 1, middle, right);
+	};
+	visit(1, 0, prepared.byStart.length);
+	return matches
+		.sort((left, right) => left.originalIndex - right.originalIndex)
+		.map(({ region }) => region);
 }
 
 export function computePreparedZoomPreviewTransform(
-	legacyRegions: PreparedZoomPreviewRegions,
+	preparedRegions: PreparedZoomPreviewRegions,
 	virtualTimeMs: number,
 	cursorTelemetry?: CursorTelemetryPoint[],
 	playbackRate = 1,
 	screenAnimationStyle: ScreenAnimationStyle = "focused",
 ): ZoomPreviewTransform {
-	if (legacyRegions.length === 0) return IDENTITY_ZOOM_TRANSFORM;
-	const dominant = findDominantRegion(legacyRegions, virtualTimeMs, {
+	if (preparedRegions.regions.length === 0) return IDENTITY_ZOOM_TRANSFORM;
+	const candidates = findZoomCandidates(
+		preparedRegions,
+		virtualTimeMs,
+		playbackRate,
+		screenAnimationStyle,
+	);
+	if (candidates.length === 0) return IDENTITY_ZOOM_TRANSFORM;
+	const dominant = findDominantRegion(candidates, virtualTimeMs, {
 		cursorTelemetry,
 		playbackRate,
 		screenAnimationStyle,

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CameraFullscreenRegion } from "@/components/video-editor/types";
-import { computeCameraFullscreenProgress } from "./cameraFullscreenUtils";
+import {
+	computeCameraFullscreenProgress,
+	computePreparedCameraFullscreenProgress,
+	prepareCameraFullscreenRegions,
+} from "./cameraFullscreenUtils";
 import { TRANSITION_WINDOW_MS } from "./constants";
 
 function makeRegion(startMs: number, endMs: number): CameraFullscreenRegion {
@@ -8,6 +12,16 @@ function makeRegion(startMs: number, endMs: number): CameraFullscreenRegion {
 }
 
 describe("computeCameraFullscreenProgress", () => {
+	it("keeps prepared lookups equivalent across boundaries, gaps, and overlaps", () => {
+		const regions = [makeRegion(1000, 4000), makeRegion(3500, 6000), makeRegion(9000, 9500)];
+		const prepared = prepareCameraFullscreenRegions(regions);
+		for (const timeMs of [0, 999, 1000, 1200, 3499, 3500, 3999, 4000, 5999, 6000, 9250, 9500]) {
+			expect(computePreparedCameraFullscreenProgress(prepared, timeMs)).toBeCloseTo(
+				computeCameraFullscreenProgress(regions, timeMs),
+				10,
+			);
+		}
+	});
 	it("returns 0 for an empty regions array", () => {
 		expect(computeCameraFullscreenProgress([], 1000)).toBe(0);
 	});

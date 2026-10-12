@@ -92,7 +92,15 @@ export type NativeMacRecordingStartResult = {
 	path?: string;
 	helperPath?: string;
 	error?: string;
+	errorCode?: string;
 };
+
+export const SCREEN_PERMISSION_DENIED_CODE = "screen-permission-denied";
+
+export function isScreenRecordingPermissionError(error: unknown) {
+	if (!error || typeof error !== "object") return false;
+	return (error as { code?: unknown }).code === SCREEN_PERMISSION_DENIED_CODE;
+}
 
 export function parseMacWindowIdFromSourceId(sourceId?: string | null) {
 	if (!sourceId?.startsWith("window:")) {

@@ -75,6 +75,19 @@
 			"saving": "保存中…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "画面収録の権限が必要です",
+			"detail": "macOSのシステム設定でScreenClubの画面収録を許可し、戻って画面またはウインドウを選択してください。",
+			"openSettings": "システム設定を開く"
+		},
+		"accessibility": {
+			"title": "編集可能なカーソルにはアクセシビリティ権限が必要です",
+			"detail": "システム設定のプライバシーとセキュリティからアクセシビリティを開き、ScreenClubを許可してください。",
+			"missingHelper": "このビルドにカーソルヘルパーがありません。macOSネイティブヘルパーを再ビルドするか、システムカーソルに切り替えてください。",
+			"openSettings": "アクセシビリティ設定を開く"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "エクスポートしたGIFを保存",
 		"saveVideo": "エクスポートした動画を保存",

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseMacDisplayIdFromSourceId, parseMacWindowIdFromSourceId } from "./nativeMacRecording";
+import {
+	isScreenRecordingPermissionError,
+	parseMacDisplayIdFromSourceId,
+	parseMacWindowIdFromSourceId,
+	SCREEN_PERMISSION_DENIED_CODE,
+} from "./nativeMacRecording";
 
 describe("nativeMacRecording source parsing", () => {
 	it("parses Electron window source ids into ScreenCaptureKit window ids", () => {
@@ -22,5 +27,15 @@ describe("nativeMacRecording source parsing", () => {
 		expect(parseMacDisplayIdFromSourceId("window:123:0")).toBeNull();
 		expect(parseMacDisplayIdFromSourceId("screen:not-a-number:0")).toBeNull();
 		expect(parseMacDisplayIdFromSourceId(undefined)).toBeNull();
+	});
+});
+
+describe("nativeMacRecording permission errors", () => {
+	it("recognizes the structured ScreenCaptureKit permission code", () => {
+		expect(isScreenRecordingPermissionError({ code: SCREEN_PERMISSION_DENIED_CODE })).toBe(true);
+		expect(
+			isScreenRecordingPermissionError(new Error("Screen recording permission is required")),
+		).toBe(false);
+		expect(isScreenRecordingPermissionError(null)).toBe(false);
 	});
 });

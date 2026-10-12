@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
@@ -42,18 +43,21 @@ describe("TransportBar reads the playhead from the store", () => {
 	// — the store write alone must move the timecode.
 	it("updates the timecode on a store write, with no parent re-render", () => {
 		let parentRenders = 0;
+		let transportCommits = 0;
 		function Parent() {
 			parentRenders++;
 			return (
-				<TransportBar
-					playing={false}
-					overrideTimeSec={null}
-					clips={clips}
-					onTogglePlay={noop}
-					onPrevClip={noop}
-					onNextClip={noop}
-					onSeek={noop}
-				/>
+				<Profiler id="transport" onRender={() => transportCommits++}>
+					<TransportBar
+						playing={false}
+						overrideTimeSec={null}
+						clips={clips}
+						onTogglePlay={noop}
+						onPrevClip={noop}
+						onNextClip={noop}
+						onSeek={noop}
+					/>
+				</Profiler>
 			);
 		}
 
@@ -63,6 +67,7 @@ describe("TransportBar reads the playhead from the store", () => {
 			</I18nProvider>,
 		);
 		const rendersAfterMount = parentRenders;
+		const commitsAfterMount = transportCommits;
 		expect(screen.getByText("0:00.0")).toBeInTheDocument();
 
 		act(() => {
@@ -71,6 +76,7 @@ describe("TransportBar reads the playhead from the store", () => {
 
 		expect(screen.getByText("0:12.3")).toBeInTheDocument();
 		expect(parentRenders).toBe(rendersAfterMount);
+		expect(transportCommits).toBe(commitsAfterMount);
 	});
 
 	// A timeline scrub drag writes the store on a rAF, so for the frame in between the

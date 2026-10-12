@@ -75,6 +75,19 @@
 			"saving": "Guardando…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "Se necesita permiso para grabar la pantalla",
+			"detail": "Permite a ScreenClub grabar la pantalla en Ajustes del Sistema de macOS y vuelve para elegir una pantalla o ventana.",
+			"openSettings": "Abrir Ajustes del Sistema"
+		},
+		"accessibility": {
+			"title": "El cursor editable necesita acceso de accesibilidad",
+			"detail": "Permite ScreenClub en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad y vuelve a pulsar grabar.",
+			"missingHelper": "No se encontró el auxiliar del cursor. Vuelve a compilar el auxiliar nativo de macOS o usa el cursor del sistema.",
+			"openSettings": "Abrir ajustes de accesibilidad"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "Guardar GIF exportado",
 		"saveVideo": "Guardar video exportado",

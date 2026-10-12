@@ -1,0 +1,4 @@
+"NSAudioCaptureUsageDescription" = "ScreenClub 需要访问系统音频，以便在录屏时录制电脑声音。";
+"NSMicrophoneUsageDescription" = "ScreenClub 需要访问麦克风，以便在录屏时录制您的声音。";
+"NSCameraUsageDescription" = "ScreenClub 需要访问摄像头，以便在录屏时录制摄像头画面。";
+"NSScreenCaptureUsageDescription" = "ScreenClub 需要屏幕录制权限，以便识别并录制屏幕或窗口。";

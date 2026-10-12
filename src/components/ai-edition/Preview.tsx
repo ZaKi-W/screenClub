@@ -80,12 +80,23 @@ export function Preview({
 	playing,
 }: PreviewProps) {
 	const te = useScopedT("editor");
-	// Subscribed HERE rather than passed down from NewEditorShell: the playhead is
-	// rewritten at the mode's outer-UI cadence during playback, and reading it in the shell
-	// re-rendered the whole editor (timeline included) at that cadence — see
-	// NativePlaybackSync in NewEditorShell.tsx. Smooth zoom/camera/cursor motion uses
-	// the separate visual clock and bypasses this subscription; the timeline does not.
-	const currentTimeSec = useProjectStore((s) => s.currentTimeSec);
+	const previewRef = useRef<HTMLElement | null>(null);
+	// The playhead is a high-frequency transport signal, not React render state. The
+	// preview's media and visual overlays already share PlaybackClockRef, so subscribing
+	// this wrapper to currentTimeSec only rebuilt the complete PreviewCanvas tree at the
+	// outer-UI cadence. Keep the test/debug attribute current with a direct DOM write;
+	// structural clip changes are selected narrowly inside PreviewCanvas.
+	useEffect(() => {
+		const paintTimeAttribute = (timeSec: number) => {
+			previewRef.current?.setAttribute("data-current-time-sec", timeSec.toFixed(3));
+		};
+		paintTimeAttribute(useProjectStore.getState().currentTimeSec);
+		return useProjectStore.subscribe((state, previousState) => {
+			if (state.currentTimeSec !== previousState.currentTimeSec) {
+				paintTimeAttribute(state.currentTimeSec);
+			}
+		});
+	}, []);
 	// ponytail: the preview follows the TIMELINE, not the raw asset list. A
 	// document can hold an asset no clip references — an import whose file was
 	// later moved or deleted, or one left behind when its clip was removed — and
@@ -136,10 +147,11 @@ export function Preview({
 
 	return (
 		<section
+			ref={previewRef}
 			className={styles.previewWrap}
 			aria-label={te("preview.videoPreview")}
 			data-testid="preview"
-			data-current-time-sec={currentTimeSec.toFixed(3)}
+			data-current-time-sec={useProjectStore.getState().currentTimeSec.toFixed(3)}
 			data-is-playing={playing ? "true" : "false"}
 		>
 			{hasProject && hasAsset && previewSources.length > 0 && !allSourcesFailed ? (
@@ -165,7 +177,6 @@ export function Preview({
 					onSeek={onSeek}
 					onLoadedMetadata={onLoadedMetadata}
 					onVideoElement={onVideoElement}
-					currentTimeSec={currentTimeSec}
 					onVideoError={handleVideoError}
 				/>
 			) : (

@@ -80,7 +80,7 @@ enum HelperError: Error, CustomStringConvertible {
 	case unsupportedFeature(String)
 	case sourceNotFound(String)
 	case invalidSourceType(String)
-	case permissionDenied(String)
+	case permissionDenied(code: String, message: String)
 	case writerSetupFailed(String)
 
 	var description: String {
@@ -95,10 +95,19 @@ enum HelperError: Error, CustomStringConvertible {
 			return message
 		case .invalidSourceType(let sourceType):
 			return "Unsupported source type: \(sourceType)."
-		case .permissionDenied(let message):
+		case .permissionDenied(_, let message):
 			return message
 		case .writerSetupFailed(let message):
 			return message
+		}
+	}
+
+	var code: String {
+		switch self {
+		case .permissionDenied(let code, _):
+			return code
+		default:
+			return "helper-error"
 		}
 	}
 }
@@ -331,7 +340,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		if !CGPreflightScreenCaptureAccess() {
 			let granted = CGRequestScreenCaptureAccess()
 			if !granted {
-				throw HelperError.permissionDenied("Screen recording permission is required for ScreenCaptureKit capture.")
+				throw HelperError.permissionDenied(
+					code: "screen-permission-denied",
+					message: "Screen recording permission is required for ScreenCaptureKit capture."
+				)
 			}
 		}
 
@@ -346,10 +358,16 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 				}
 				let waitResult = semaphore.wait(timeout: .now() + 30)
 				if waitResult == .timedOut || AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
-					throw HelperError.permissionDenied("Microphone permission is required for native microphone capture.")
+					throw HelperError.permissionDenied(
+						code: "microphone-permission-denied",
+						message: "Microphone permission is required for native microphone capture."
+					)
 				}
 			default:
-				throw HelperError.permissionDenied("Microphone permission is required for native microphone capture.")
+				throw HelperError.permissionDenied(
+					code: "microphone-permission-denied",
+					message: "Microphone permission is required for native microphone capture."
+				)
 			}
 		}
 	}
@@ -738,7 +756,7 @@ struct OpenScreenScreenCaptureKitHelper {
 			try await recorder.start()
 			await stopTask.value
 		} catch let error as HelperError {
-			emitError(code: "helper-error", message: error.description)
+			emitError(code: error.code, message: error.description)
 			exit(1)
 		} catch {
 			emitError(code: "helper-error", message: "\(error)")

@@ -40,6 +40,7 @@ import {
 	useState,
 } from "react";
 import { toast } from "sonner";
+import { useShallow } from "zustand/react/shallow";
 import defaultCursorPreviewUrl from "@/assets/cursors/Cursor=Default.svg";
 import GradientEditor, { type GradientEditorState } from "@/components/ui/gradient-editor";
 import { useScopedT } from "@/contexts/I18nContext";
@@ -57,12 +58,16 @@ import {
 	type ScreenAnimationStyle,
 } from "@/lib/ai-edition/store/editorSettings";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
+import {
+	useEditorSettingsActions,
+	useEditorSettingsValue,
+} from "@/lib/ai-edition/store/useEditorSettings";
 import {
 	buildAggregatedSections,
 	type ClipSection,
 	type ClipWord,
-	findCueWordId,
+	createCueWordIndex,
+	findCueWordIdIndexed,
 	isSilenceWord,
 	type TrimRun,
 } from "@/lib/ai-edition/timeline/aggregated-transcript";
@@ -216,10 +221,12 @@ export function isSupportedBackgroundImage(type: string, fileName: string): bool
 // the upload custom flow.
 export function BackgroundPane({ embedded = false }: { embedded?: boolean } = {}) {
 	const ts = useScopedT("settings");
-	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
+	const wallpaper = useEditorSettingsValue((settings) => settings.wallpaper);
+	const hasDocument = useProjectStore((state) => state.document !== null);
+	const { set, setLive, commit } = useEditorSettingsActions();
 	const [tab, setTab] = useState<"image" | "color" | "gradient">("image");
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
-	const customUrls = useMemoCustomWallpapers(settings.wallpaper);
+	const customUrls = useMemoCustomWallpapers(wallpaper);
 
 	// The custom gradient editor emits continuously while the user drags a
 	// color point / angle knob / brightness slider, so mirror the SliderCell
@@ -247,7 +254,7 @@ export function BackgroundPane({ embedded = false }: { embedded?: boolean } = {}
 		[],
 	);
 
-	const isSelected = (value: string) => settings.wallpaper === value;
+	const isSelected = (value: string) => wallpaper === value;
 
 	const handleTabChange = (next: "image" | "color" | "gradient") => {
 		setTab(next);
@@ -354,7 +361,7 @@ export function BackgroundPane({ embedded = false }: { embedded?: boolean } = {}
 				</>
 			) : tab === "color" ? (
 				<BackgroundColorTab
-					value={settings.wallpaper}
+					value={wallpaper}
 					hasDocument={hasDocument}
 					isSelected={isSelected}
 					onPick={(color) => void set({ wallpaper: color })}
@@ -583,30 +590,45 @@ export function TranscriptPane({
 	// the cue word derived below actually moves, and `TranscriptClipBlock` is memoised
 	// on `cueWordId`, so a frame that doesn't cross a word boundary re-renders nothing
 	// but this component's own (cheap) lookup.
-	const currentTimeSec = useProjectStore((s) => s.currentTimeSec);
 	const sections = useMemo(
 		() => buildAggregatedSections(clips, transcripts, assets, trimRanges),
 		[clips, transcripts, assets, trimRanges],
 	);
-
-	// the cue position is the playback head's location in the current clip's source time.
-	// `currentTimeSec` is the RAW/document timeline (same referential as the ruler, see
-	// NewEditorShell) — looked up against the raw `clips`, matching that referential.
-	// `clipId` is what `findCueWordId` keys on — do NOT drop it as unused: source time is
-	// per asset, so without it the resolver falls back to the first section of the asset
-	// and the cue tracks clip 1 forever on a timeline that plays one media twice.
-	const cue = useMemo(() => {
-		if (clips.length === 0) return null;
-		const position = locateVirtualPosition(clips, currentTimeSec);
-		if (!position) return null;
-		return {
-			assetId: position.clip.assetId,
-			clipId: position.clip.id,
-			sourceTimeSec: position.sourceTimeSec,
+	const cueIndex = useMemo(() => createCueWordIndex(sections), [sections]);
+	const [cueWordId, setCueWordId] = useState<string | null>(() => {
+		const position = locateVirtualPosition(clips, useProjectStore.getState().currentTimeSec);
+		return findCueWordIdIndexed(
+			cueIndex,
+			position
+				? {
+						assetId: position.clip.assetId,
+						clipId: position.clip.id,
+						sourceTimeSec: position.sourceTimeSec,
+					}
+				: null,
+		);
+	});
+	useEffect(() => {
+		const resolveCue = (timeSec: number) => {
+			const position = locateVirtualPosition(clips, timeSec);
+			return findCueWordIdIndexed(
+				cueIndex,
+				position
+					? {
+							assetId: position.clip.assetId,
+							clipId: position.clip.id,
+							sourceTimeSec: position.sourceTimeSec,
+						}
+					: null,
+			);
 		};
-	}, [clips, currentTimeSec]);
-
-	const cueWordId = useMemo(() => findCueWordId(sections, cue), [sections, cue]);
+		setCueWordId(resolveCue(useProjectStore.getState().currentTimeSec));
+		return useProjectStore.subscribe((state, previousState) => {
+			if (state.currentTimeSec === previousState.currentTimeSec) return;
+			const next = resolveCue(state.currentTimeSec);
+			setCueWordId((current) => (current === next ? current : next));
+		});
+	}, [clips, cueIndex]);
 
 	const hasAnyTranscript = transcripts.length > 0;
 	// Only silence is a dead end: every other reason (a retryable failure, no
@@ -1438,14 +1460,24 @@ const CURSOR_ANIMATION_OPTIONS: Array<{
 /** Screen/cursor animation controls grouped the way Screen Studio presents them. */
 export function AnimationPane() {
 	const ts = useScopedT("settings");
-	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
+	const settings = useEditorSettingsValue(
+		useShallow((value) => ({
+			screenAnimationStyle: value.screenAnimationStyle,
+			motionBlurZoom: value.motionBlurZoom,
+			motionBlurPan: value.motionBlurPan,
+			cursorSmoothing: value.cursor.smoothing,
+			cursorMotionBlur: value.cursor.motionBlur,
+		})),
+	);
+	const hasDocument = useProjectStore((state) => state.document !== null);
+	const { set, setLive, commit } = useEditorSettingsActions();
 	const [advancedOpen, setAdvancedOpen] = useState(false);
-	const cursorStyle = cursorAnimationStyleForSmoothing(settings.cursor.smoothing);
+	const cursorStyle = cursorAnimationStyleForSmoothing(settings.cursorSmoothing);
 	const selectedScreen =
 		SCREEN_ANIMATION_OPTIONS.find((option) => option.value === settings.screenAnimationStyle) ??
 		SCREEN_ANIMATION_OPTIONS[0];
 	const globalMotionBlur =
-		((settings.motionBlurZoom + settings.motionBlurPan + settings.cursor.motionBlur) / 3) * 100;
+		((settings.motionBlurZoom + settings.motionBlurPan + settings.cursorMotionBlur) / 3) * 100;
 
 	const setMotionBlurLive = (zoom: number, pan: number, cursor: number) => {
 		// Keep the old aggregate value meaningful for older renderers. New renderers
@@ -1550,7 +1582,7 @@ export function AnimationPane() {
 					<div className={styles.animationAdvancedBody}>
 						<SliderCell
 							label={ts("animation.motionBlur.cursorMovement")}
-							value={settings.cursor.motionBlur * 100}
+							value={settings.cursorMotionBlur * 100}
 							min={0}
 							max={100}
 							suffix="%"
@@ -1568,7 +1600,7 @@ export function AnimationPane() {
 							suffix="%"
 							disabled={!hasDocument}
 							onChange={(value) =>
-								setMotionBlurLive(value / 100, settings.motionBlurPan, settings.cursor.motionBlur)
+								setMotionBlurLive(value / 100, settings.motionBlurPan, settings.cursorMotionBlur)
 							}
 							onCommit={() => void commit()}
 						/>
@@ -1580,7 +1612,7 @@ export function AnimationPane() {
 							suffix="%"
 							disabled={!hasDocument}
 							onChange={(value) =>
-								setMotionBlurLive(settings.motionBlurZoom, value / 100, settings.cursor.motionBlur)
+								setMotionBlurLive(settings.motionBlurZoom, value / 100, settings.cursorMotionBlur)
 							}
 							onCommit={() => void commit()}
 						/>
@@ -1593,7 +1625,16 @@ export function AnimationPane() {
 
 export function VideoEffectsPane({ embedded = false }: { embedded?: boolean } = {}) {
 	const ts = useScopedT("settings");
-	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
+	const settings = useEditorSettingsValue(
+		useShallow((value) => ({
+			showBlur: value.showBlur,
+			shadowIntensity: value.shadowIntensity,
+			borderRadius: value.borderRadius,
+			padding: value.padding,
+		})),
+	);
+	const hasDocument = useProjectStore((state) => state.document !== null);
+	const { set, setLive, commit } = useEditorSettingsActions();
 
 	// Push the current frame-styling settings into the native D3D compositor
 	// view whenever it becomes active (or the settings change while it's up).
@@ -1737,8 +1778,18 @@ const CAMERA_SHAPES: Array<{
 
 export function LayoutPane() {
 	const ts = useScopedT("settings");
-	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
+	const settings = useEditorSettingsValue(
+		useShallow((value) => ({
+			webcamLayoutPreset: value.webcamLayoutPreset,
+			webcamMirrored: value.webcamMirrored,
+			webcamReactiveZoom: value.webcamReactiveZoom,
+			webcamMaskShape: value.webcamMaskShape,
+			webcamSizePreset: value.webcamSizePreset,
+		})),
+	);
+	const { set, setLive, commit } = useEditorSettingsActions();
 	const document = useProjectStore((s) => s.document);
+	const hasDocument = document !== null;
 
 	// Synchro initiale : cf. NativeCompositorOverlay (`pushAllNativeParams`).
 	// the mask shape picker only makes sense for Picture-in-Picture.
@@ -1907,7 +1958,17 @@ function safeAssetUrl(relativePath: string): string {
 
 export function CursorPane() {
 	const ts = useScopedT("settings");
-	const { settings, set, setLive, commit, hasDocument } = useEditorSettings();
+	const settings = useEditorSettingsValue(
+		useShallow((value) => ({
+			cursorShow: value.cursorShow,
+			cursorTheme: value.cursorTheme,
+			cursorClipToBounds: value.cursor.clipToBounds,
+			cursorSize: value.cursor.size,
+			cursorClickBounce: value.cursor.clickBounce,
+		})),
+	);
+	const hasDocument = useProjectStore((state) => state.document !== null);
+	const { set, setLive, commit } = useEditorSettingsActions();
 
 	// Push cursor settings into the native compositor (initial + on view activation); the
 	// handlers below push diffs live. Sizes are sent as direct scales (1 = fixture default).
@@ -1957,7 +2018,7 @@ export function CursorPane() {
 			<div className={styles.paneRow}>
 				<span className="label">{ts("cursor.clipToBounds")}</span>
 				<Toggle
-					checked={settings.cursor.clipToBounds}
+					checked={settings.cursorClipToBounds}
 					disabled={!hasDocument}
 					onChange={(v) => void set({ cursor: { clipToBounds: v } })}
 				/>
@@ -1992,7 +2053,7 @@ export function CursorPane() {
 			<div className={styles.sliderGrid}>
 				<SliderCell
 					label={ts("cursor.size")}
-					value={settings.cursor.size * 10}
+					value={settings.cursorSize * 10}
 					min={5}
 					max={100}
 					step={0.1}
@@ -2014,7 +2075,7 @@ export function CursorPane() {
 				{supportsCursorClickEffects() ? (
 					<SliderCell
 						label={ts("cursor.clickBounce")}
-						value={settings.cursor.clickBounce * 10}
+						value={settings.cursorClickBounce * 10}
 						min={0}
 						max={50}
 						step={0.1}

@@ -34,7 +34,7 @@ import {
 } from "@/lib/ai-edition/annotations/textAnimation";
 import type { AxcutAnnotationRegion } from "@/lib/ai-edition/schema";
 import { rafCoalesce } from "@/lib/ai-edition/store/rafCoalesce";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
+import { useEditorSettingsValue } from "@/lib/ai-edition/store/useEditorSettings";
 import type { useTimeline } from "@/lib/ai-edition/store/useTimeline";
 import { coalescedTrimGroups } from "@/lib/ai-edition/timeline/trim-mapping";
 import { TRANSCRIPTION_FEATURE_ENABLED } from "@/lib/featureFlags";
@@ -361,8 +361,7 @@ function SelectionPane({ tl, onClose }: { tl: TimelineApi; onClose: () => void }
 	const te = useScopedT("editor");
 	// Read here rather than threading it through: the zoom pane is the only consumer, and the
 	// toggle that writes it lives in the timeline toolbar, not on this component's path.
-	const { settings } = useEditorSettings();
-	const autoFocusAll = settings.autoFocusAll;
+	const autoFocusAll = useEditorSettingsValue((settings) => settings.autoFocusAll);
 	// Mise à jour en direct regroupée à une par frame. `updateAnnotationLive` remplace le document
 	// dans le store, donc chaque appel fait reconstruire et re-sérialiser toute la scène avant de
 	// la pousser au natif : c'est le juste prix une fois par image, mais un `<input type="color">`

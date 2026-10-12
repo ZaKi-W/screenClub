@@ -4,12 +4,15 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/contexts/I18nContext";
 import type { AxcutClip } from "@/lib/ai-edition/schema";
+import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
 import { Preview } from "./Preview";
 import type { VideoSource } from "./VirtualPreview";
 
 vi.mock("@/native/client", () => ({
 	nativeBridgeClient: { aiEdition: {} },
 }));
+
+let previewCanvasRenderCount = 0;
 
 // Stand-in for the real canvas (native compositor, editor settings, a live
 // <video>): it only has to report WHICH sources it was handed and let a test
@@ -22,20 +25,23 @@ vi.mock("./PreviewCanvas", () => ({
 	}: {
 		videoSources: VideoSource[];
 		onVideoError?: (assetId: string) => void;
-	}) => (
-		<div data-testid="preview-canvas" data-sources={videoSources.map((s) => s.id).join(",")}>
-			{videoSources.map((source) => (
-				<button
-					key={source.id}
-					type="button"
-					data-testid={`fail-${source.id}`}
-					onClick={() => onVideoError?.(source.id)}
-				>
-					{source.src}
-				</button>
-			))}
-		</div>
-	),
+	}) => {
+		previewCanvasRenderCount += 1;
+		return (
+			<div data-testid="preview-canvas" data-sources={videoSources.map((s) => s.id).join(",")}>
+				{videoSources.map((source) => (
+					<button
+						key={source.id}
+						type="button"
+						data-testid={`fail-${source.id}`}
+						onClick={() => onVideoError?.(source.id)}
+					>
+						{source.src}
+					</button>
+				))}
+			</div>
+		);
+	},
 }));
 
 function clip(id: string, assetId: string, startSec: number, endSec: number): AxcutClip {
@@ -87,6 +93,25 @@ describe("Preview follows the timeline, not the asset list", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+		previewCanvasRenderCount = 0;
+		useProjectStore.setState({ currentTimeSec: 0 });
+	});
+
+	it("updates its transport attribute without re-rendering the preview canvas", () => {
+		renderPreview({
+			videoSources: [source("only")],
+			clips: [clip("clip_a", "only", 0, 10)],
+		});
+		const initialRenderCount = previewCanvasRenderCount;
+
+		act(() => {
+			for (let frame = 1; frame <= 60; frame += 1) {
+				useProjectStore.getState().setCurrentTime(frame / 60);
+			}
+		});
+
+		expect(screen.getByTestId("preview")).toHaveAttribute("data-current-time-sec", "1.000");
+		expect(previewCanvasRenderCount).toBe(initialRenderCount);
 	});
 
 	// THE regression: the user imported a file, then moved/deleted it (or removed

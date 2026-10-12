@@ -12,6 +12,7 @@ import {
 	cursorAnimationStyleForSmoothing,
 	DEFAULT_EDITOR_SETTINGS,
 	getEditorSettings,
+	mergeEditorSettingsPatches,
 	patchEditorSettings,
 } from "./editorSettings";
 
@@ -154,6 +155,17 @@ describe("patchEditorSettings", () => {
 		const snap = getEditorSettings(next);
 		expect(snap.cursor.size).toBe(4);
 		expect(snap.cursor.smoothing).toBe(0.9);
+	});
+
+	it("compacts transient patches while preserving cursor siblings", () => {
+		const patch = mergeEditorSettingsPatches(
+			{ shadowIntensity: 0.2, cursor: { size: 2, smoothing: 0.5 } },
+			{ shadowIntensity: 0.8, cursor: { size: 3 } },
+		);
+		expect(patch).toEqual({
+			shadowIntensity: 0.8,
+			cursor: { size: 3, smoothing: 0.5 },
+		});
 	});
 
 	it("round-trips the screen animation style", () => {

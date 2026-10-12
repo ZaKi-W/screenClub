@@ -6,7 +6,11 @@ import {
 	type PreviewPerformanceMode,
 	usePreviewPerformanceStore,
 } from "@/lib/ai-edition/store/previewPerformance";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
+import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
+import {
+	useEditorSettingsActions,
+	useEditorSettingsValue,
+} from "@/lib/ai-edition/store/useEditorSettings";
 import {
 	ASPECT_RATIO_PRESETS,
 	type AspectRatio,
@@ -40,12 +44,13 @@ function RatioGlyph({ ratio }: { ratio: AspectRatio }) {
 
 export function PreviewToolbar({ canCrop, onCrop }: { canCrop: boolean; onCrop: () => void }) {
 	const t = useScopedT("editor");
-	const { settings, hasDocument, set: setSettings } = useEditorSettings();
+	const selected = useEditorSettingsValue((settings) => settings.aspectRatio);
+	const hasDocument = useProjectStore((state) => state.document !== null);
+	const { set: setSettings } = useEditorSettingsActions();
 	const [open, setOpen] = useState(false);
 	const [performanceOpen, setPerformanceOpen] = useState(false);
 	const previewMode = usePreviewPerformanceStore((state) => state.mode);
 	const setPreviewMode = usePreviewPerformanceStore((state) => state.setMode);
-	const selected = settings.aspectRatio;
 	const selectedLabel =
 		selected === "native"
 			? t("aspectRatio.auto")
@@ -66,19 +71,19 @@ export function PreviewToolbar({ canCrop, onCrop }: { canCrop: boolean; onCrop: 
 		{
 			mode: "quality",
 			label: "Quality",
-			description: "Native full-fidelity preview",
+			description: "Smooth 60 fps · full preview decoration",
 			icon: Sparkles,
 		},
 		{
 			mode: "performance",
 			label: "Performance",
-			description: "Smooth direct preview · 30 fps UI",
+			description: "Smooth 60 fps · reduced preview decoration",
 			icon: Gauge,
 		},
 		{
 			mode: "power-saving",
 			label: "Power Saving",
-			description: "Smooth preview · reduced UI updates",
+			description: "30 fps · reduced preview decoration",
 			icon: Battery,
 		},
 	];

@@ -75,6 +75,19 @@
 			"saving": "正在儲存…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "需要螢幕錄製權限",
+			"detail": "請在 macOS「系統設定」中允許 ScreenClub 錄製螢幕，然後返回並選擇要錄製的螢幕或視窗。",
+			"openSettings": "開啟系統設定"
+		},
+		"accessibility": {
+			"title": "可編輯游標需要輔助使用權限",
+			"detail": "請在「系統設定」→「隱私權與安全性」→「輔助使用」中允許 ScreenClub，然後再次按下錄製。",
+			"missingHelper": "目前版本中找不到游標輔助程式。請重新建置 macOS 原生輔助程式，或改用系統游標。",
+			"openSettings": "開啟輔助使用設定"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "儲存匯出的 GIF",
 		"saveVideo": "儲存匯出的影片",

@@ -1,20 +1,17 @@
-// Hosts the native D3D preview canvas (the sole pixel source) plus the
-// interactive-only DOM overlays (zoom gimbal, annotations, webcam drag) that
-// still need real hitboxes. The shared source of truth is `useEditorSettings`,
-// so toggling a slider here updates both the live preview (via the pushed
-// scene) and the eventual native export.
+// Hosts the browser-decoded screen/webcam videos plus interactive DOM overlays
+// (zoom gimbal, annotations, webcam drag). Keeping media presentation in the
+// renderer avoids native full-frame RGBA readback + Electron IPC; export keeps
+// its independent high-fidelity compositor.
 //
 // Architecture (matches the legacy `compositeLayout.computeCompositeLayout`,
-// which this file still uses to POSITION the interactive overlays/hitboxes —
-// the actual pixels come from the native canvas, not from this layout):
-//   .previewFrame           → canvas (wallpaper bg; never receives padding
+// which this file uses to position both visible media and interactive hitboxes):
+//   .previewFrame           → frame (wallpaper bg; never receives padding
 //                             from the slider directly).
 //   .screenStage            → sizes/positions the zoom/annotation overlays by
-//                             the composite-layout math (PiP/dual/stack/no-cam);
-//                             its own <video> is CSS-hidden (decode/clock only).
+//                             the composite-layout math (PiP/dual/stack/no-cam)
+//                             and displays the screen <video> directly.
 //   .webcamSlot             → drag-to-reposition hitbox for the webcam PiP,
-//                             positioned by the same math; its <video> is
-//                             CSS-hidden too.
+//                             positioned by the same math with its own <video>.
 //
 // The composite layout is computed from `.previewFrame`'s actual rendered
 // size (via ResizeObserver), so the camera + screen both resize correctly
@@ -34,17 +31,24 @@ import { useScopedT } from "@/contexts/I18nContext";
 import { resolveAspectRatioValue } from "@/lib/ai-edition/document/outputFormat";
 import type {
 	AxcutAnnotationRegion,
+	AxcutCameraTrack,
 	AxcutClip,
 	AxcutTrimRange,
 	AxcutZoomRegion,
 } from "@/lib/ai-edition/schema";
+import type { EditorSettingsSnapshot } from "@/lib/ai-edition/store/editorSettings";
 import { usePreviewPerformancePolicy } from "@/lib/ai-edition/store/previewPerformance";
 import { useProjectStore } from "@/lib/ai-edition/store/projectStore";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
-import { resolveActiveCameraTrack } from "@/lib/ai-edition/timeline/camera";
+import {
+	useEditorSettingsActions,
+	useEditorSettingsValue,
+} from "@/lib/ai-edition/store/useEditorSettings";
 import { createPlaybackClockRef } from "@/lib/ai-edition/timeline/playback-clock";
 import type { SpeedRegion } from "@/lib/ai-edition/timeline/speed";
-import { locateVirtualPosition } from "@/lib/ai-edition/timeline/virtual-preview";
+import {
+	createVirtualTimelineIndex,
+	locateVirtualPositionIndexed,
+} from "@/lib/ai-edition/timeline/virtual-preview";
 import {
 	computeCameraFullscreenRect,
 	computeCompositeLayout,
@@ -52,7 +56,10 @@ import {
 } from "@/lib/compositeLayout";
 import { classifyWallpaper, resolveImageWallpaperUrl } from "@/lib/wallpaper";
 import { getCssClipPath } from "@/lib/webcamMaskShapes";
-import { computeCameraFullscreenProgress } from "@/lib/zoomMath/cameraFullscreenUtils";
+import {
+	computePreparedCameraFullscreenProgress,
+	prepareCameraFullscreenRegions,
+} from "@/lib/zoomMath/cameraFullscreenUtils";
 import { clamp, clamp01 } from "@/utils/math";
 import { AnnotationLayer } from "./AnnotationLayer";
 import { NativeCompositorOverlay } from "./NativeCompositorOverlay";
@@ -91,7 +98,6 @@ interface PreviewCanvasProps {
 	onSeek: (sec: number) => void;
 	onLoadedMetadata: (sec: number, assetId: string) => void;
 	onVideoElement: (el: HTMLVideoElement | null) => void;
-	currentTimeSec: number;
 	/** Receives the id of the asset whose <video> failed — the caller decides per
 	 *  source whether anything is left to render (see Preview.tsx). */
 	onVideoError?: (assetId: string) => void;
@@ -114,12 +120,37 @@ const WEBCAM_SOURCE_SIZE = { width: 960, height: 720 };
 
 export function PreviewCanvas(props: PreviewCanvasProps) {
 	const te = useScopedT("editor");
-	const { settings, setLive, commit } = useEditorSettings();
+	const settings = useEditorSettingsValue((value) => value);
+	const { setLive, commit } = useEditorSettingsActions();
 	const previewPolicy = usePreviewPerformancePolicy();
 	// Captions are derived from the transcript, not passed down as regions — the
 	// preview reads them from the same façade the inspector writes to.
 	const document = useProjectStore((s) => s.document);
 	const assets = document?.assets ?? [];
+	const virtualTimelineIndex = useMemo(
+		() => createVirtualTimelineIndex(props.clips),
+		[props.clips],
+	);
+	const clipById = useMemo(
+		() => new Map(props.clips.map((clip) => [clip.id, clip])),
+		[props.clips],
+	);
+	const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+	// Subscribe to the identity of the active clip, not the numeric playhead.
+	// Zustand still checks the store on each transport update, but Object.is keeps
+	// this large component asleep until playback actually crosses a clip boundary.
+	// Within a clip, media/camera/annotation/full-camera presentation is driven by
+	// PlaybackClockRef without a React round trip.
+	const selectActiveClipId = useCallback(
+		(state: ReturnType<typeof useProjectStore.getState>) =>
+			locateVirtualPositionIndexed(virtualTimelineIndex, state.currentTimeSec)?.clip.id ?? null,
+		[virtualTimelineIndex],
+	);
+	const activeClipId = useProjectStore(selectActiveClipId);
+	// Reading imperatively is intentional. `activeClipId` above is the render
+	// boundary, so every render caused by a seek across a clip sees the exact
+	// store time that selected that clip, while same-clip ticks stay outside React.
+	const structuralTimeSec = useProjectStore.getState().currentTimeSec;
 	const frameRef = useRef<HTMLDivElement | null>(null);
 	const webcamSlotRef = useRef<HTMLDivElement | null>(null);
 	// One clock per mounted canvas, shared between the screen preview (writer)
@@ -217,17 +248,26 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 	// itself uses to map playback position back to a clip. `undefined` (no
 	// crop stored) normalises to the identity region.
 	const activeClip = useMemo(
-		() => locateVirtualPosition(props.clips, props.currentTimeSec)?.clip ?? null,
-		[props.clips, props.currentTimeSec],
+		() => (activeClipId ? (clipById.get(activeClipId) ?? null) : null),
+		[activeClipId, clipById],
 	);
 	const cropRegion: CropRegion = activeClip?.cropRegion ?? DEFAULT_CROP_REGION;
 
 	// P4 — the layout preset is global (one panel for the whole timeline) but the camera
 	// is per clip, so the layout has to be resolved against the clip under the playhead.
-	const activeCameraTrack = useMemo(
-		() => resolveActiveCameraTrack(assets, props.clips, props.currentTimeSec),
-		[assets, props.clips, props.currentTimeSec],
-	);
+	const activeCameraTrack: AxcutCameraTrack | null = activeClip
+		? (assetById.get(activeClip.assetId)?.cameraTrack ?? null)
+		: null;
+	const activeSourceTimeSec = activeClip
+		? activeClip.sourceStartSec +
+			Math.max(
+				0,
+				Math.min(
+					(activeClip.sourceEndSec ?? activeClip.sourceStartSec) - activeClip.sourceStartSec,
+					structuralTimeSec - activeClip.timelineStartSec,
+				),
+			)
+		: null;
 	const activeClipHasCamera = Boolean(activeCameraTrack?.visible && activeCameraTrack.sourcePath);
 
 	const layout = useMemo(() => {
@@ -286,13 +326,17 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 	// Full Camera: during a cameraFullscreen region the webcam takes the whole
 	// frame and eases back. Same `computeCameraFullscreenRect` call as both
 	// exporters and the native compositor, so all four animate identically.
+	const preparedCameraFullscreenRegions = useMemo(
+		() => prepareCameraFullscreenRegions(props.cameraFullscreenRegions ?? []),
+		[props.cameraFullscreenRegions],
+	);
 	const cameraFullscreenProgress = useMemo(
 		() =>
-			computeCameraFullscreenProgress(
-				props.cameraFullscreenRegions ?? [],
-				Math.round(props.currentTimeSec * 1000),
+			computePreparedCameraFullscreenProgress(
+				preparedCameraFullscreenRegions,
+				Math.round(structuralTimeSec * 1000),
 			),
-		[props.cameraFullscreenRegions, props.currentTimeSec],
+		[preparedCameraFullscreenRegions, structuralTimeSec],
 	);
 	const effectiveLayout = useMemo<WebcamCompositeLayout | null>(() => {
 		if (!layout?.webcamRect || cameraFullscreenProgress <= 0) return layout;
@@ -308,68 +352,67 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 
 	const frameStyle = useMemo(() => buildFrameStyle(settings), [settings]);
 	const screenStyle = useMemo(
-		() => buildScreenStyle(layout, settings, frameSize, previewPolicy.mode),
-		[layout, settings, frameSize, previewPolicy.mode],
+		() => buildScreenStyle(layout, settings, frameSize, previewPolicy.visualQuality),
+		[layout, settings, frameSize, previewPolicy.visualQuality],
 	);
 	const displayedWebcamLayout = previewPolicy.useNativeCompositor ? effectiveLayout : layout;
 	const webcamStyle = useMemo(
-		() => buildWebcamStyle(displayedWebcamLayout, settings, frameSize, previewPolicy.mode),
-		[displayedWebcamLayout, settings, frameSize, previewPolicy.mode],
+		() => buildWebcamStyle(displayedWebcamLayout, settings, frameSize, previewPolicy.visualQuality),
+		[displayedWebcamLayout, settings, frameSize, previewPolicy.visualQuality],
 	);
 
-	// Renderer modes animate Full Camera directly from the 60 Hz visual clock.
-	// Keeping this out of React prevents the 30/15 Hz project-store budget from
+	// Animate Full Camera directly from the visual clock in every mode.
+	// Keeping this out of React prevents the 60/30 Hz project-store budget from
 	// stepping the camera rect and avoids re-rendering the full preview subtree.
 	useEffect(() => {
-		if (
-			previewPolicy.useNativeCompositor ||
-			!layout?.webcamRect ||
-			frameSize.width <= 0 ||
-			frameSize.height <= 0
-		) {
+		if (!layout?.webcamRect || frameSize.width <= 0 || frameSize.height <= 0) {
 			return;
 		}
 		const slot = webcamSlotRef.current;
 		if (!slot) return;
 		const baseRect = layout.webcamRect;
+		let previousProgress = Number.NaN;
+		let previousGeometry = "";
 		const paint = () => {
-			const progress = computeCameraFullscreenProgress(
-				props.cameraFullscreenRegions ?? [],
+			const progress = computePreparedCameraFullscreenProgress(
+				preparedCameraFullscreenRegions,
 				Math.round(clockRef.current.virtualTimeSec * 1000),
 			);
+			if (progress === previousProgress) return;
+			previousProgress = progress;
 			const rect =
 				progress > 0 ? computeCameraFullscreenRect(baseRect, frameSize, progress) : baseRect;
-			slot.style.left = `${(rect.x / frameSize.width) * 100}%`;
-			slot.style.top = `${(rect.y / frameSize.height) * 100}%`;
-			slot.style.width = `${(rect.width / frameSize.width) * 100}%`;
-			slot.style.height = `${(rect.height / frameSize.height) * 100}%`;
-			slot.style.borderRadius = `${rect.borderRadius}px`;
 			const clipPath =
 				getCssClipPath(rect.maskShape ?? (settings.webcamMaskShape as WebcamMaskShape)) ?? "";
+			const left = `${(rect.x / frameSize.width) * 100}%`;
+			const top = `${(rect.y / frameSize.height) * 100}%`;
+			const width = `${(rect.width / frameSize.width) * 100}%`;
+			const height = `${(rect.height / frameSize.height) * 100}%`;
+			const borderRadius = `${rect.borderRadius}px`;
+			const geometry = `${left}|${top}|${width}|${height}|${borderRadius}|${clipPath}`;
+			if (geometry === previousGeometry) return;
+			previousGeometry = geometry;
+			slot.style.left = left;
+			slot.style.top = top;
+			slot.style.width = width;
+			slot.style.height = height;
+			slot.style.borderRadius = borderRadius;
 			slot.style.clipPath = clipPath;
 			const video = slot.querySelector("video");
 			if (video) {
-				video.style.borderRadius = `${rect.borderRadius}px`;
+				video.style.borderRadius = borderRadius;
 				video.style.clipPath = clipPath;
 			}
 		};
 		paint();
 		return clockRef.subscribe(paint);
-	}, [
-		clockRef,
-		frameSize,
-		layout,
-		previewPolicy.useNativeCompositor,
-		props.cameraFullscreenRegions,
-		settings.webcamMaskShape,
-	]);
+	}, [clockRef, frameSize, layout, preparedCameraFullscreenRegions, settings.webcamMaskShape]);
 	// `layout` already resolves to "no-webcam" (hence `webcamRect: null`) for a
 	// camera-less clip, so this is belt-and-braces rather than the only guard.
 	const showWebcamSlot = Boolean(layout?.webcamRect && activeClipHasCamera);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const handleVideoElement = props.onVideoElement;
-	// L'élément `<video>` lui-même n'est plus retenu : il ne servait qu'à échantillonner des pixels
-	// pour la mosaïque dessinée en DOM, que le compositeur natif rend désormais.
+	// Relay the visible screen video so the transport can own play/pause without adding a decoder.
 	const relayIsPlaying = useCallback(
 		(el: HTMLVideoElement | null) => {
 			handleVideoElement(el);
@@ -448,9 +491,10 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 			data-preview-renderer={previewPolicy.useNativeCompositor ? "native" : "renderer"}
 			style={{ ...frameStyle, width: frameSize.width, height: frameSize.height }}
 		>
-			{/* Quality keeps the parity compositor available. Performance and power-saving
-			    never mount it: the already-present browser videos become the pixel source,
-			    eliminating native decode, full-frame RGBA readback and Electron IPC. */}
+			{/* Interactive modes use the already-present browser videos as their sole pixel source.
+			    This branch remains as an implementation fallback while the native compositor API is
+			    retained for export/parity work, but ordinary policies deliberately never mount it:
+			    doing so would add native decode, full-frame RGBA readback and Electron IPC. */}
 			{previewPolicy.useNativeCompositor ? <NativeCompositorOverlay /> : null}
 			{layout?.screenRect ? (
 				<div className={styles.screenStage} style={screenStyle}>
@@ -492,7 +536,7 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 						<AnnotationLayer
 							annotations={props.annotationRegions}
 							selectedAnnotationId={props.selectedAnnotationId ?? null}
-							currentTimeSec={props.currentTimeSec}
+							currentTimeSec={structuralTimeSec}
 							containerWidth={layout.screenRect.width}
 							containerHeight={layout.screenRect.height}
 							onSelectAnnotation={props.onSelectAnnotation}
@@ -500,7 +544,7 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 							onRectChange={props.onAnnotationRectChange}
 							onCommit={props.onAnnotationCommit}
 							renderContent={!previewPolicy.useNativeCompositor}
-							clockRef={previewPolicy.useNativeCompositor ? undefined : clockRef}
+							clockRef={clockRef}
 						/>
 					) : null}
 				</div>
@@ -519,7 +563,9 @@ export function PreviewCanvas(props: PreviewCanvasProps) {
 				>
 					<WebcamOverlay
 						clips={props.clips}
-						currentTimeSec={props.currentTimeSec}
+						resolvedCameraTrack={activeCameraTrack}
+						resolvedSourceTimeSec={activeSourceTimeSec}
+						currentTimeSec={structuralTimeSec}
 						onTimeChange={props.onTimeChange}
 						isPlaying={isPlaying}
 						clockRef={clockRef}
@@ -554,9 +600,7 @@ function resolveWallpaperImageUrl(imagePath: string): string | null {
 }
 
 // Canvas: wallpaper only — no padding, no shadow.
-function buildFrameStyle(
-	settings: ReturnType<typeof useEditorSettings>["settings"],
-): React.CSSProperties {
+function buildFrameStyle(settings: EditorSettingsSnapshot): React.CSSProperties {
 	const w = classifyWallpaper(settings.wallpaper);
 	if (w.kind === "color") return { backgroundColor: w.value };
 	if (w.kind === "gradient") return { backgroundImage: w.value, backgroundSize: "cover" };
@@ -571,19 +615,12 @@ function buildFrameStyle(
 }
 
 // Screen stage: rectangle from the composite layout, converted to percentages
-// of the canvas. Positions/sizes the interactive overlays (ZoomFocusOverlay,
-// AnnotationLayer) hosted inside it and the CSS-hidden <video> (decode/clock
-// only) — no borderRadius/boxShadow here: the native canvas already draws its
-// own rounded corners + shadow for this exact rect, and this container sits
-// on TOP of it (z-index for the interactive layers). Duplicating the same
-// decoration in CSS produced a visible "double rounded corner" — two
-// slightly-offset rounded edges (native's + this container's own) instead of
-// one.
+// of the frame. It hosts the visible browser video and interactive overlays.
 function buildScreenStyle(
 	layout: WebcamCompositeLayout | null,
-	settings: ReturnType<typeof useEditorSettings>["settings"],
+	settings: EditorSettingsSnapshot,
 	canvasSize: { width: number; height: number },
-	previewMode: "quality" | "performance" | "power-saving",
+	visualQuality: "full" | "reduced",
 ): React.CSSProperties {
 	if (!layout?.screenRect) return { display: "none" };
 	const r = layout.screenRect;
@@ -596,7 +633,7 @@ function buildScreenStyle(
 		overflow: "hidden",
 		display: "flex",
 		boxShadow:
-			previewMode === "power-saving" || settings.shadowIntensity <= 0
+			visualQuality === "reduced" || settings.shadowIntensity <= 0
 				? "none"
 				: `0 ${Math.max(4, 18 * settings.shadowIntensity)}px ${Math.max(10, 42 * settings.shadowIntensity)}px rgba(0, 0, 0, ${Math.min(0.72, settings.shadowIntensity)})`,
 	};
@@ -604,25 +641,20 @@ function buildScreenStyle(
 
 function videoBorderRadiusStyle(
 	layout: WebcamCompositeLayout | null,
-	settings: ReturnType<typeof useEditorSettings>["settings"],
+	settings: EditorSettingsSnapshot,
 ): React.CSSProperties {
 	const borderRadius = layout?.screenBorderRadius ?? settings.borderRadius;
 	return { borderRadius: `${borderRadius}px` };
 }
 
-// Webcam slot: full composite-layout rect — sizes/positions the drag hitbox
-// (handleWebcamPointerDown) and the CSS-hidden webcam <video> (decode/clock
-// only). No borderRadius/boxShadow: the native canvas already draws its own
-// rounded/circular shape + shadow for this exact rect (duplicating it here
-// produced a visible "double rounded corner"). `clipPath` is kept — unlike
-// borderRadius/boxShadow it's not just decoration, it also shapes the
-// hitbox's actual pointer-event area (e.g. "circle" mask), which should still
-// match the native-drawn shape.
+// Webcam slot: full composite-layout rect — sizes/positions both the visible
+// webcam video and its drag hitbox. `clipPath` also shapes the pointer-event
+// area (for example the circle mask).
 function buildWebcamStyle(
 	layout: WebcamCompositeLayout | null,
-	settings: ReturnType<typeof useEditorSettings>["settings"],
+	settings: EditorSettingsSnapshot,
 	canvasSize: { width: number; height: number },
-	previewMode: "quality" | "performance" | "power-saving",
+	visualQuality: "full" | "reduced",
 ): React.CSSProperties {
 	if (!layout?.webcamRect) return { display: "none" };
 	const r = layout.webcamRect;
@@ -643,7 +675,7 @@ function buildWebcamStyle(
 		display: "flex",
 		background: "transparent",
 		boxShadow:
-			previewMode === "quality" || previewMode === "power-saving" || settings.shadowIntensity <= 0
+			visualQuality === "reduced" || settings.shadowIntensity <= 0
 				? "none"
 				: `0 ${Math.max(3, 12 * settings.shadowIntensity)}px ${Math.max(8, 28 * settings.shadowIntensity)}px rgba(0, 0, 0, ${Math.min(0.65, settings.shadowIntensity)})`,
 	};

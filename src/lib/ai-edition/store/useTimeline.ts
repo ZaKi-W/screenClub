@@ -609,9 +609,8 @@ export function useTimeline() {
 		[document, saveDocument],
 	);
 
-	// Drag/resize on the preview overlay (position, size, blur mask edits) — same
-	// live/commit split as updateZoomFocusLive/commitZoomFocus, for the same
-	// reason: local-only writes while dragging, one persisted save on release.
+	// Preview annotation geometry stays local to react-rnd during the gesture.
+	// This receives its final value on release, then commitAnnotationChange saves it.
 	const updateAnnotationLive = useCallback(
 		(id: string, patch: Partial<AxcutDocument["annotations"][number]>) => {
 			const doc = useProjectStore.getState().document;
