@@ -75,6 +75,19 @@
 			"saving": "Enregistrement…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "L’autorisation d’enregistrement de l’écran est requise",
+			"detail": "Autorisez ScreenClub dans les Réglages Système de macOS, puis revenez choisir un écran ou une fenêtre.",
+			"openSettings": "Ouvrir les Réglages Système"
+		},
+		"accessibility": {
+			"title": "Le curseur modifiable requiert l’accès Accessibilité",
+			"detail": "Autorisez ScreenClub dans Réglages Système → Confidentialité et sécurité → Accessibilité, puis relancez l’enregistrement.",
+			"missingHelper": "L’utilitaire du curseur est introuvable. Recompilez l’utilitaire macOS natif ou utilisez le curseur système.",
+			"openSettings": "Ouvrir les réglages d’accessibilité"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "Enregistrer le GIF exporté",
 		"saveVideo": "Enregistrer la vidéo exportée",

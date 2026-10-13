@@ -18,7 +18,8 @@
  *     rendrait tout inadmissible.
  *
  * Activation : `window.__uiProbe.start()` depuis la console du renderer. Rien ne tourne tant
- * qu'on ne le demande pas — aucun coût en usage normal.
+ * qu'on ne le demande pas — aucun coût en usage normal. Le probe fonctionne sur le chemin
+ * Chromium `<video>` interactif ainsi que sur l'ancien overlay natif expérimental.
  */
 
 type BaseState =

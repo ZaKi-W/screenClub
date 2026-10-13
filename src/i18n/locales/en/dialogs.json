@@ -76,6 +76,19 @@
 			"saving": "Saving…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "Screen Recording permission is required",
+			"detail": "Allow ScreenClub in macOS System Settings, then come back and choose a screen or window.",
+			"openSettings": "Open System Settings"
+		},
+		"accessibility": {
+			"title": "Accessibility access is required for the editable cursor",
+			"detail": "Allow ScreenClub under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.",
+			"missingHelper": "The cursor helper could not be found in this build. Rebuild the macOS native helper or switch the cursor mode to system cursor.",
+			"openSettings": "Open Accessibility Settings"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "Save Exported GIF",
 		"saveVideo": "Save Exported Video",

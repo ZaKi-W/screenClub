@@ -4,12 +4,15 @@ import type { AxcutClip } from "../schema";
 import { formatSeconds } from "./format";
 import {
 	clampVirtualTime,
+	createVirtualTimelineIndex,
 	findNextKeptSegment,
+	findNextTimelineClipIndexed,
 	getRawVirtualStartTime,
 	keptWordIdSet,
 	locateKeptSegment,
 	locateSourcePosition,
 	locateVirtualPosition,
+	locateVirtualPositionIndexed,
 	totalVirtualDuration,
 } from "./virtual-preview";
 
@@ -41,6 +44,7 @@ const clips: AxcutClip[] = [
 describe("virtual-preview pure functions", () => {
 	it("totalVirtualDuration returns the last clip's timelineEndSec", () => {
 		expect(totalVirtualDuration(clips)).toBe(20);
+		expect(totalVirtualDuration([clips[1], clips[0]])).toBe(20);
 		expect(totalVirtualDuration([])).toBe(0);
 	});
 
@@ -59,6 +63,27 @@ describe("virtual-preview pure functions", () => {
 
 	it("locateVirtualPosition returns null for empty clips", () => {
 		expect(locateVirtualPosition([], 0)).toBeNull();
+	});
+
+	it("indexes an unordered timeline once and resolves positions by timeline time", () => {
+		const unordered = [clips[1], clips[0]];
+		const index = createVirtualTimelineIndex(unordered);
+
+		expect(index.durationSec).toBe(20);
+		expect(locateVirtualPositionIndexed(index, 2)?.clip.id).toBe("clip_1");
+		expect(locateVirtualPositionIndexed(index, 12)?.clip.id).toBe("clip_2");
+		expect(locateVirtualPositionIndexed(index, 20)?.clip.id).toBe("clip_2");
+		expect(findNextTimelineClipIndexed(index, 0)?.id).toBe("clip_2");
+	});
+
+	it("keeps original array order as the tie-breaker for overlapping timeline clips", () => {
+		const overlap = [
+			{ ...clips[1], id: "first", timelineStartSec: 5, timelineEndSec: 15 },
+			{ ...clips[0], id: "second", timelineStartSec: 0, timelineEndSec: 10 },
+		];
+		const index = createVirtualTimelineIndex(overlap);
+
+		expect(locateVirtualPositionIndexed(index, 7)?.clip.id).toBe("first");
 	});
 
 	it("locateSourcePosition maps source time back to virtual time", () => {

@@ -8,7 +8,7 @@
 // visible once zoomed in.
 
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { getZoomScale, type ZoomFocus } from "@/components/video-editor/types";
 import type { AxcutZoomRegion } from "@/lib/ai-edition/schema";
 import { getFocusBoundsForScale } from "@/lib/zoomMath/focusUtils";
@@ -31,7 +31,27 @@ export function ZoomFocusOverlay({
 	onFocusCommit,
 }: ZoomFocusOverlayProps) {
 	const overlayRef = useRef<HTMLDivElement | null>(null);
+	const indicatorRef = useRef<HTMLDivElement | null>(null);
 	const draggingRef = useRef(false);
+	const pendingFocusRef = useRef<ZoomFocus | null>(null);
+	const liveFrameRef = useRef(0);
+
+	const flushFocus = useCallback(() => {
+		if (liveFrameRef.current !== 0) {
+			cancelAnimationFrame(liveFrameRef.current);
+			liveFrameRef.current = 0;
+		}
+		const focus = pendingFocusRef.current;
+		pendingFocusRef.current = null;
+		if (focus) onFocusChange(region.id, focus);
+	}, [onFocusChange, region.id]);
+
+	useEffect(
+		() => () => {
+			if (liveFrameRef.current !== 0) cancelAnimationFrame(liveFrameRef.current);
+		},
+		[],
+	);
 
 	const updateFromClientPoint = useCallback(
 		(clientX: number, clientY: number) => {
@@ -45,12 +65,26 @@ export function ZoomFocusOverlay({
 			const cx = clamp01((clientX - rect.left) / rect.width);
 			const cy = clamp01((clientY - rect.top) / rect.height);
 
-			onFocusChange(region.id, {
+			const focus = {
 				cx: Math.min(bounds.maxX, Math.max(bounds.minX, cx)),
 				cy: Math.min(bounds.maxY, Math.max(bounds.minY, cy)),
-			});
+			};
+			const widthPercent = Math.min(100, (1 / zoomScale) * 100);
+			const left = Math.min(100 - widthPercent, Math.max(0, focus.cx * 100 - widthPercent / 2));
+			const top = Math.min(100 - widthPercent, Math.max(0, focus.cy * 100 - widthPercent / 2));
+			if (indicatorRef.current) {
+				indicatorRef.current.style.left = `${left}%`;
+				indicatorRef.current.style.top = `${top}%`;
+			}
+			pendingFocusRef.current = focus;
+			if (liveFrameRef.current === 0) {
+				liveFrameRef.current = requestAnimationFrame(() => {
+					liveFrameRef.current = 0;
+					flushFocus();
+				});
+			}
 		},
-		[region, onFocusChange],
+		[region, flushFocus],
 	);
 
 	const handlePointerDown = useCallback(
@@ -76,6 +110,7 @@ export function ZoomFocusOverlay({
 	const endDrag = useCallback(
 		(event: ReactPointerEvent<HTMLDivElement>) => {
 			if (!draggingRef.current) return;
+			flushFocus();
 			draggingRef.current = false;
 			try {
 				event.currentTarget.releasePointerCapture(event.pointerId);
@@ -84,7 +119,7 @@ export function ZoomFocusOverlay({
 			}
 			onFocusCommit?.();
 		},
-		[onFocusCommit],
+		[flushFocus, onFocusCommit],
 	);
 
 	// Auto-follow (cursor-driven) regions have no user-placed focus point.
@@ -109,6 +144,7 @@ export function ZoomFocusOverlay({
 			onPointerLeave={endDrag}
 		>
 			<div
+				ref={indicatorRef}
 				className={styles.indicator}
 				style={{
 					width: `${widthPercent}%`,

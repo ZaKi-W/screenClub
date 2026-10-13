@@ -75,6 +75,19 @@
 			"saving": "Kaydediliyor…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "Ekran kaydı izni gerekiyor",
+			"detail": "macOS Sistem Ayarları’nda ScreenClub için ekran kaydına izin verin, ardından geri dönüp bir ekran veya pencere seçin.",
+			"openSettings": "Sistem Ayarlarını Aç"
+		},
+		"accessibility": {
+			"title": "Düzenlenebilir imleç için Erişilebilirlik izni gerekiyor",
+			"detail": "Sistem Ayarları → Gizlilik ve Güvenlik → Erişilebilirlik bölümünde ScreenClub’a izin verip yeniden kayda basın.",
+			"missingHelper": "İmleç yardımcısı bulunamadı. macOS yerel yardımcısını yeniden derleyin veya sistem imlecini kullanın.",
+			"openSettings": "Erişilebilirlik Ayarlarını Aç"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "Dışa Aktarılan GIF'i Kaydet",
 		"saveVideo": "Dışa Aktarılan Videoyu Kaydet",

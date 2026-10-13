@@ -5,8 +5,13 @@
 // `document.annotations[]` array, so this uses a single filtered+sorted
 // list and a single selection id instead.
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { AxcutAnnotationRegion } from "@/lib/ai-edition/schema";
+import {
+	findAnnotationVisibilitySpan,
+	prepareAnnotationVisibility,
+	resolveVisibleAnnotations,
+} from "@/lib/ai-edition/timeline/annotation-visibility";
 import type { PlaybackClockRef } from "@/lib/ai-edition/timeline/playback-clock";
 import { AnnotationOverlay } from "./AnnotationOverlay";
 
@@ -47,16 +52,13 @@ export function AnnotationLayer({
 	renderContent = false,
 	clockRef,
 }: AnnotationLayerProps) {
+	const prepared = useMemo(() => prepareAnnotationVisibility(annotations), [annotations]);
 	const getVisibilitySnapshot = () => {
 		const timeMs = Math.round((clockRef?.current.virtualTimeSec ?? currentTimeSec) * 1000);
-		return annotations
-			.filter(
-				(annotation) =>
-					annotation.id === selectedAnnotationId ||
-					(timeMs >= annotation.startMs && timeMs < annotation.endMs),
-			)
-			.map((annotation) => annotation.id)
-			.join("|");
+		// Object identity remains stable throughout a prepared boundary span, so
+		// useSyncExternalStore can suppress every intermediate clock publish with
+		// no arrays or strings allocated on the visual hot path.
+		return findAnnotationVisibilitySpan(prepared, timeMs) ?? null;
 	};
 	// Snapshot equality suppresses all intermediate 60 Hz React renders. The
 	// component wakes only when crossing an annotation boundary.
@@ -67,15 +69,7 @@ export function AnnotationLayer({
 	);
 	const currentTimeMs = Math.round((clockRef?.current.virtualTimeSec ?? currentTimeSec) * 1000);
 
-	const visible = annotations
-		.filter((annotation) => {
-			if (typeof annotation.startMs !== "number" || typeof annotation.endMs !== "number") {
-				return false;
-			}
-			if (annotation.id === selectedAnnotationId) return true;
-			return currentTimeMs >= annotation.startMs && currentTimeMs < annotation.endMs;
-		})
-		.sort((a, b) => a.zIndex - b.zIndex);
+	const visible = resolveVisibleAnnotations(prepared, currentTimeMs, selectedAnnotationId);
 
 	const handleClick = (clickedId: string) => {
 		if (clickedId === selectedAnnotationId && visible.length > 1) {

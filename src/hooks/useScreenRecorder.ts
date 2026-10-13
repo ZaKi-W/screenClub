@@ -9,6 +9,7 @@ import {
 	portalOwnsSourceSelection,
 } from "@/lib/nativeLinuxRecording";
 import {
+	isScreenRecordingPermissionError,
 	type NativeMacRecordingRequest,
 	parseMacDisplayIdFromSourceId,
 	parseMacWindowIdFromSourceId,
@@ -249,6 +250,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const cameraOverlayVisible = useRef(false);
 	const mixingContext = useRef<AudioContext | null>(null);
 	const recordingId = useRef<number>(0);
+	const browserRecordingCursorMode = useRef<CursorCaptureMode>(cursorCaptureMode);
 	const accumulatedDurationMs = useRef(0);
 	const segmentStartedAt = useRef<number | null>(null);
 	const finalizingRecordingId = useRef<number | null>(null);
@@ -561,7 +563,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 								? { videoData: webcamVideoData, fileName: webcamFileName }
 								: undefined,
 						createdAt: activeRecordingId,
-						cursorCaptureMode,
+						cursorCaptureMode: browserRecordingCursorMode.current,
 						durationMs: duration,
 					});
 
@@ -601,7 +603,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 			})();
 		},
-		[cursorCaptureMode, teardownMedia],
+		[teardownMedia],
 	);
 
 	const finalizeNativeWindowsRecording = useCallback(async (discard = false) => {
@@ -1212,7 +1214,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 			const availability = await window.electronAPI.isNativeMacCaptureAvailable();
 			if (!availability.success || !availability.available) {
-				if (availability.reason === "unsupported-platform") {
+				if (
+					availability.reason === "unsupported-platform" ||
+					availability.reason === "unstable-code-signature"
+				) {
 					return false;
 				}
 
@@ -1329,7 +1334,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			};
 			const result = await window.electronAPI.startNativeMacRecording(request);
 			if (!result.success || !result.recordingId) {
-				throw new Error(result.error ?? "Native macOS capture failed.");
+				throw Object.assign(new Error(result.error ?? "Native macOS capture failed."), {
+					code: result.errorCode,
+				});
 			}
 			if (!isCountdownRunActive(countdownRunToken)) {
 				await window.electronAPI.stopNativeMacRecording(true);
@@ -1551,13 +1558,18 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		try {
 			const platform = window.electronAPI.getPlatform();
 			if (platform === "darwin" && cursorCaptureMode === "editable-overlay") {
-				// The main process shows a native dialog that deep-links to the
-				// Accessibility settings pane when access is missing, so we just stop
-				// here and let the user grant it and press record again.
-				const access = await window.electronAPI.requestNativeMacCursorAccess();
-				if (!access.granted) {
-					return;
+				const nativeCapture = await window.electronAPI.isNativeMacCaptureAvailable();
+				if (nativeCapture.available) {
+					// The main process shows a native dialog that deep-links to the
+					// Accessibility settings pane when access is missing, so we just stop
+					// here and let the user grant it and press record again.
+					const access = await window.electronAPI.requestNativeMacCursorAccess();
+					if (!access.granted) {
+						return;
+					}
 				}
+				// Ad-hoc/local packages use Chromium capture under the ScreenClub app identity.
+				// Do not let a separately signed cursor helper create a second preflight gate.
 			}
 		} catch (error) {
 			console.warn("Failed to preflight macOS cursor accessibility before countdown:", error);
@@ -1693,19 +1705,26 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				return;
 			}
 
+			const platform = window.electronAPI.getPlatform();
+			const macNativeCapture =
+				platform === "darwin" ? await window.electronAPI.isNativeMacCaptureAvailable() : null;
+			const activeCursorCaptureMode: CursorCaptureMode =
+				platform === "darwin" && macNativeCapture?.reason === "unstable-code-signature"
+					? "system"
+					: cursorCaptureMode;
+			browserRecordingCursorMode.current = activeCursorCaptureMode;
+
 			// Capture screen + microphone in parallel: the gap between the two
 			// `getUserMedia` calls is the dominant source of the mic-vs-video lag at the
 			// start of the recording (issue #57).
 			const screenCapture = (async (): Promise<MediaStream> => {
-				const platform = window.electronAPI.getPlatform();
-
 				if (platform === "win32") {
 					// getDisplayMedia + setDisplayMediaRequestHandler (main.ts) supplies the
 					// pre-selected source. Editable cursor mode excludes the system cursor so
 					// the editor can render a replacement; system mode bakes it into the video.
 					return navigator.mediaDevices.getDisplayMedia({
 						video: {
-							cursor: cursorCaptureMode === "editable-overlay" ? "never" : "always",
+							cursor: activeCursorCaptureMode === "editable-overlay" ? "never" : "always",
 							width: { max: TARGET_WIDTH },
 							height: { max: TARGET_HEIGHT },
 							frameRate: { ideal: TARGET_FRAME_RATE },
@@ -1930,7 +1949,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			setRecording(true);
 			setPaused(false);
 			setElapsedSeconds(0);
-			window.electronAPI?.setRecordingState(true, recordingId.current, cursorCaptureMode);
+			window.electronAPI?.setRecordingState(true, recordingId.current, activeCursorCaptureMode);
 
 			const activeScreenRecorder = screenRecorder.current;
 			const activeWebcamRecorder = webcamRecorder.current;
@@ -1955,7 +1974,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			window.electronAPI?.hideCameraOverlay?.();
 			console.error("Failed to start recording:", error);
 			const errorMsg = error instanceof Error ? error.message : "Failed to start recording";
-			if (errorMsg.includes("Permission denied") || errorMsg.includes("NotAllowedError")) {
+			if (
+				isScreenRecordingPermissionError(error) ||
+				errorMsg.includes("Permission denied") ||
+				errorMsg.includes("NotAllowedError")
+			) {
 				toast.error(t("recording.permissionDenied"));
 			} else {
 				toast.error(errorMsg);

@@ -248,6 +248,34 @@ export interface EditorSettingsPatch {
 	autoFocusAll?: boolean;
 }
 
+/**
+ * Combines continuous-control patches without losing sibling cursor fields. Undefined values are
+ * treated like absent keys, matching {@link patchEditorSettings}; the result can therefore be kept
+ * as a compact transient overlay for an arbitrarily long pointer gesture.
+ */
+export function mergeEditorSettingsPatches(
+	base: EditorSettingsPatch,
+	patch: EditorSettingsPatch,
+): EditorSettingsPatch {
+	const defined = Object.fromEntries(
+		Object.entries(patch).filter(([, value]) => value !== undefined),
+	) as EditorSettingsPatch;
+	const cursor =
+		base.cursor || patch.cursor
+			? {
+					...base.cursor,
+					...Object.fromEntries(
+						Object.entries(patch.cursor ?? {}).filter(([, value]) => value !== undefined),
+					),
+				}
+			: undefined;
+	return {
+		...base,
+		...defined,
+		...(cursor ? { cursor } : {}),
+	};
+}
+
 function nextLegacy(current: LegacyShape | null, patch: EditorSettingsPatch): LegacyShape {
 	const base: LegacyShape = current ?? {};
 	// Spread, but only over keys the patch actually set — a plain {...base,

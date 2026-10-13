@@ -75,6 +75,19 @@
 			"saving": "正在保存…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "需要屏幕录制权限",
+			"detail": "请在 macOS“系统设置”中允许 ScreenClub 录制屏幕，然后返回并选择要录制的屏幕或窗口。",
+			"openSettings": "打开系统设置"
+		},
+		"accessibility": {
+			"title": "可编辑光标需要辅助功能权限",
+			"detail": "请在“系统设置”→“隐私与安全性”→“辅助功能”中允许 ScreenClub，然后再次按下录制以开始倒计时。",
+			"missingHelper": "当前版本中找不到光标辅助程序。请重新构建 macOS 原生辅助程序，或将光标模式切换为系统光标。",
+			"openSettings": "打开辅助功能设置"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "保存导出的 GIF",
 		"saveVideo": "保存导出的视频",

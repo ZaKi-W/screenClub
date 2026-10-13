@@ -39,12 +39,16 @@ async function bootstrapRenderer() {
 		installBrowserShims();
 	}
 
+	const app = (
+		<I18nProvider>
+			<App />
+		</I18nProvider>
+	);
 	ReactDOM.createRoot(document.getElementById("root")!).render(
-		<React.StrictMode>
-			<I18nProvider>
-				<App />
-			</I18nProvider>
-		</React.StrictMode>,
+		// StrictMode deliberately double-mounts effects in development. Keep that
+		// diagnostic behaviour for browser work, but do not make Electron's media,
+		// waveform and editor effects initialize twice on every local studio launch.
+		import.meta.env.DEV && !window.electronAPI ? <React.StrictMode>{app}</React.StrictMode> : app,
 	);
 }
 

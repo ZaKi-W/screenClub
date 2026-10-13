@@ -15,7 +15,14 @@ vi.mock("@/contexts/I18nContext", () => ({
 }));
 
 vi.mock("@/lib/ai-edition/store/useEditorSettings", () => ({
-	useEditorSettings: () => editorSettings,
+	useEditorSettingsValue: (selector: (settings: typeof editorSettings.settings) => unknown) =>
+		selector(editorSettings.settings),
+	useEditorSettingsActions: () => ({ set: setSettings }),
+}));
+
+vi.mock("@/lib/ai-edition/store/projectStore", () => ({
+	useProjectStore: (selector: (state: { document: object | null }) => unknown) =>
+		selector({ document: editorSettings.hasDocument ? {} : null }),
 }));
 
 import { PreviewToolbar } from "./PreviewToolbar";
@@ -60,5 +67,16 @@ describe("PreviewToolbar", () => {
 		editorSettings.hasDocument = false;
 		render(<PreviewToolbar canCrop={false} onCrop={vi.fn()} />);
 		expect(screen.getByRole("button", { name: "aspectRatio.label" })).toBeDisabled();
+	});
+
+	it("describes performance as a quality tradeoff instead of a 30 fps interaction cap", () => {
+		render(<PreviewToolbar canCrop onCrop={vi.fn()} />);
+		fireEvent.click(screen.getByRole("button", { name: "Preview performance" }));
+		expect(screen.getByRole("menuitemradio", { name: /Performance/ })).toHaveTextContent(
+			"Smooth 60 fps · reduced preview decoration",
+		);
+		expect(screen.getByRole("menuitemradio", { name: /Power Saving/ })).toHaveTextContent(
+			"30 fps · reduced preview decoration",
+		);
 	});
 });

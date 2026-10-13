@@ -9,20 +9,23 @@ The native export engine and its historical measurements are covered by
 [rendering-performance.md](rendering-performance.md). This audit focuses on the live editor,
 window startup, and costs retained by hidden or compatibility-only features.
 
-## Implementation status (2026-08-11)
+## Implementation status (2026-08-12)
 
-The first P0/P1 pass is now implemented:
+The first two P0/P1 passes are now implemented:
 
-- **Performance is the default preview.** It presents Chromium `<video>` pixels directly and does
-  not mount the native decoder, RGBA readback, Electron frame IPC, `ImageData`, or canvas upload
-  path. Power Saving uses the same architecture; Quality retains the exact native compositor.
+- **Every interactive policy presents Chromium `<video>` pixels directly.** Quality and
+  Performance retain a smooth 60 fps cadence; Performance reduces preview-only decoration before
+  sacrificing cadence, and Power Saving runs at 30 fps. None mounts the native decoder, RGBA
+  readback, Electron frame IPC, `ImageData`, or canvas upload path.
 - One display-rate visual clock reads the master video's logical time independently of VFR frame
   delivery. Zoom, Full Camera, annotations, webcam and cursor subscribe to it, while application
-  state alone publishes at 30 fps in Performance and 15 fps in Power Saving.
-- Continuous settings, zoom-focus, annotation and webcam gestures capture one undo snapshot per
-  gesture instead of cloning the complete document on every pointer movement. Annotation updates
-  are limited to one document patch per display frame, resize position/size travel in one patch,
-  and Quality scene rebuilds keep only the newest document for each display frame.
+  state publishes at 60 fps in Quality/Performance and 30 fps in Power Saving without rebuilding
+  the large preview subtree on same-clip updates.
+- Continuous settings use a frame-coalesced transient overlay and write the project document,
+  undo snapshot and disk once at gesture commit, so Inspector sliders no longer rebuild the full
+  editor shell. Zoom-focus, annotation and webcam gestures capture one undo snapshot per gesture
+  instead of cloning the complete document on every pointer movement. Annotation updates
+  are limited to one document patch per display frame, and resize position/size travel in one patch.
 - Clip/trim changes now build an immutable playback index. The display-rate loop resolves segment
   ownership, active raw clips and asset camera tracks from that index instead of rescanning
   segment x raw-clip combinations on every frame. Zoom legacy-region conversion is also prepared
@@ -31,26 +34,42 @@ The first P0/P1 pass is now implemented:
   extraction, bar counts follow rendered pixel width, unknown-duration sources avoid whole-file
   decode, and the in-memory peaks cache is bounded. Timeline clip/pill children are memoized and
   pointer-driven state updates are coalesced to one per animation frame.
+- Clip cards themselves now mount only inside the visible timeline plus half a viewport of
+  overscan. Selection and the complete affected reorder span remain mounted during interaction;
+  reorder geometry is reconstructed from timeline coordinates rather than querying a complete DOM.
+- Zoom lane pills use the same visible window and indexed forced-retention rules; a 200-region lane
+  at 50x zoom mounts fewer than ten pills while selection, active drag and clip reorder spans remain
+  interactive.
+- Full Camera, annotation visibility, speed and zoom use prepared interval indexes. Static Full
+  Camera geometry skips duplicate DOM writes, and annotation drag/resize keeps pointer frames local
+  to `react-rnd`, publishing the final document patch only on gesture completion.
+- Settings consumers subscribe to field-level selectors instead of the complete settings snapshot.
+  Electron development windows no longer double-mount the media/editor effect graph under React
+  StrictMode, and renderer console forwarding is tree-shaken out of production builds.
+- The active Chromium video, transport timecode/progress and transcript cue no longer commit React
+  components on every display tick. Video time travels through the shared ref clock, transport
+  leaves paint from a vanilla store subscription, and the transcript commits only when the active
+  word changes. Transcript cue resolution uses a prepared clip/word index and binary search.
 - Window components, the browser-only shim/schema, custom fonts, stale source cleanup, CLI
   commands, STT, AI chat/provider modules and caption translation are loaded on demand. Tiptap is
   no longer part of every renderer's React vendor chunk, and disposable overlay windows no longer
   retain hidden WebContents for the whole session.
 
-This pass intentionally does not claim that Quality mode is fixed: exact-parity preview still uses
-the raw RGBA transport and Chromium screen-video clock. Bitmap conversion now has end-to-end
-backpressure, idle polling backs off, and the hidden DOM webcam no longer plays while native owns
-its pixels, but a platform-specific shared GPU surface remains the next P0 experiment. Full
-clip-card virtualization and delta-native scene updates also remain open.
+The raw RGBA transport remains in the repository as a parity experiment but is no longer reachable
+from the three interactive policies. Exact renderer/native shader parity remains open; it requires
+a shared GPU surface rather than reinstating CPU readback. A single WebGL scene graph is not being
+added to the current preview: Chromium already sends the sole DOM video's decoded frames directly
+to its compositor, whereas uploading the same element into WebGL would add another texture upload.
 
 ## Current priority order
 
-| ID | Risk | Status after first pass | Remaining impact |
+| ID | Risk | Status after current passes | Remaining impact |
 |---|---|---|---|
-| PERF-001 | Full-frame native RGBA readback and Electron IPC delivery | Removed from default/Power Saving; retained in Quality | Critical only while Quality plays |
-| PERF-002 | Chromium and native decoders play the same screen/webcam sources | Hidden DOM webcam paused in Quality; screen clock remains duplicated | Medium/high only while Quality plays |
-| PERF-003 | The 60 Hz playback clock passes through Zustand and React | Visual/store clocks split; playback index removes near-quadratic mapping | Region interval lookups can still be indexed further |
-| PERF-004 | Gesture updates clone the document and rebuild the full native scene | One undo snapshot; annotation/scene work rAF-coalesced | Quality still sends a complete scene rather than deltas |
-| PERF-005 | Multi-clip timeline and time mapping are not virtualized/indexed | Playback indexed; waveform/pills demand-driven; children memoized | All clip shells still mount |
+| PERF-001 | Full-frame native RGBA readback and Electron IPC delivery | Removed from every interactive policy; retained as experimental code | No interactive-preview cost |
+| PERF-002 | Chromium and native decoders play the same screen/webcam sources | Removed with the native interactive path | No interactive-preview cost |
+| PERF-003 | The 60 Hz playback clock passes through Zustand and React | Visual/store clocks split; preview/transport/transcript per-tick commits removed; playback, cue and overlay interval lookups indexed | No known full-tree playback subscriber in interactive policies |
+| PERF-004 | Gesture updates clone the document and rebuild the full native scene | Settings remain transient until commit; annotation position/size publishes only on gesture end; zoom focus is frame-coalesced | Structural timeline region resize persists on release by design |
+| PERF-005 | Multi-clip timeline and time mapping are not virtualized/indexed | Playback indexed; clip cards, waveforms and mounted zoom pills viewport-virtualized | Other region kinds have no mounted lane UI today |
 | PERF-006 | Renderer windows share an eager, heavyweight entry bundle | Windows/media/Tiptap split; initial JS reduced | Locale JSON remains eager |
 | PERF-007 | AI provider dependencies enter the eager Electron main bundle | Chat/config/providers/translation delayed | First AI action pays import cost |
 | PERF-008 | Every important window disables Chromium background throttling | Limited to HUD and Editor; countdown destroyed after use | Hidden Editor/HUD policy remains state-independent |
@@ -59,7 +78,7 @@ clip-card virtualization and delta-native scene updates also remain open.
 
 ## PERF-001 — full-frame preview transport
 
-In Quality mode, the native compositor renders off-screen, reads the render target back into a CPU RGBA buffer,
+In the retained native preview experiment, the compositor renders off-screen, reads the render target back into a CPU RGBA buffer,
 and publishes `width * height * 4` bytes for each new generation. The renderer polls at a target
 of 60 frames per second, receives the packet through Electron IPC, wraps it in `ImageData`, creates
 an `ImageBitmap`, and paints it into a 2D canvas.
@@ -82,7 +101,7 @@ and Power Saving never start this path.
 
 ## PERF-002 — duplicate media decode
 
-In Quality mode, the native compositor owns screen and webcam decoders. The DOM screen `<video>`
+In the retained native preview experiment, the compositor owns screen and webcam decoders. The DOM screen `<video>`
 remains playing but visually hidden so the renderer can use its clock, metadata, and interaction
 geometry. The DOM webcam remains mounted for metadata/dimensions but is paused while native owns
 its pixels.
@@ -97,7 +116,7 @@ Evidence:
 - [`NewEditorShell.module.css`](../../src/components/ai-edition/NewEditorShell.module.css) hides
   their pixels with CSS rather than suspending decode.
 
-Quality therefore retains the Chromium screen decoder alongside native screen/webcam decoders,
+That experiment therefore retains the Chromium screen decoder alongside native screen/webcam decoders,
 but no longer spends a second Chromium decoder on invisible webcam pixels. Performance and Power
 Saving use Chromium alone and share one display-rate visual notification.
 
@@ -106,7 +125,7 @@ Saving use Chromium alone and share one display-rate visual notification.
 During playback, `VirtualPreview` advances visual effects at display rate and writes separately
 budgeted `currentTimeSec` updates to the project store. Leaf subscriptions prevent the entire editor shell from
 rerendering, but the preview subtree, playhead, and transport consumers still update at the policy
-cadence; Quality also performs native position mapping and playback synchronization.
+cadence; the retained native experiment also performs native position mapping and playback synchronization.
 
 Evidence:
 
@@ -120,15 +139,16 @@ Evidence:
   raw clips for those resolutions.
 
 Clip/trim ownership and the primary screen/webcam lookup now share an immutable playback index.
-The remaining per-frame scale cost is primarily linear region matching (speed, Full Camera and
-annotation visibility) and Quality's separate native synchronization subscriber.
+Speed, zoom, Full Camera and annotation visibility now use prepared interval indexes. The native
+synchronization subscriber is dormant in interactive policies.
 
 ## PERF-004 — whole-document work during gestures
 
 Continuous editor gestures update the project document on pointer movement. `setDocumentLive`
 captures one `structuredClone` at gesture start and commits that snapshot on pointer release.
-The native overlay is not mounted in the default preview. Quality coalesces rapid revisions to one
-build per animation frame, but that build still serializes and sends the complete scene description.
+The native overlay is not mounted by any interactive preview policy. If the retained experiment is
+re-enabled, it coalesces rapid revisions to one build per animation frame, but that build still
+serializes and sends the complete scene description.
 
 Evidence:
 
@@ -152,7 +172,7 @@ clip/pill children are memoized and off-screen pills are omitted.
 Waveform content now mounts only inside the navigation viewport plus overscan, skips clips below
 12 rendered pixels, and caps bars to useful pixel density. Playback position resolution uses the
 shared index; scene projection still scans clips and visible segments when documents change, and
-Quality swaps native decoders at boundaries.
+The dormant native experiment swaps native decoders at boundaries.
 
 Evidence:
 
@@ -236,8 +256,8 @@ Studio release.
 
 The hidden implementation inventory is therefore not the leading explanation for poor baseline
 playback. Old project data can activate some of it, especially blur annotations and fragmented
-trim regions. The former always-on preview transport and duplicate decode remain larger costs only
-when Quality is selected.
+trim regions. The former native preview transport and duplicate decode are dormant in every
+interactive policy.
 
 ## Measurement gaps
 
@@ -332,9 +352,9 @@ proxy media, or an end-to-end shared Metal texture.
 
 | Priority | Screen Studio lesson | ScreenClub status |
 |---|---|---|
-| P0 | Keep the active frame inside one process presentation path | Done for the default renderer-resident preview; a shared native surface remains for Quality |
-| P0 | Preview quality is an explicit budget | Quality, Performance and Power Saving shipped; the latter modes omit native-only expensive effects |
-| P1 | Separate media delivery from visual presentation | One display-rate clock now drives zoom, camera and cursor from logical media time; React state is budgeted to 30/15 fps |
+| P0 | Keep the active frame inside one process presentation path | Done for every interactive preview policy; a shared native surface remains a parity experiment |
+| P0 | Preview quality is an explicit budget | Quality, Performance and Power Saving shipped; Performance reduces decoration before cadence |
+| P1 | Separate media delivery from visual presentation | One display-rate clock drives zoom, camera and cursor from logical media time; same-clip playback avoids preview-tree renders |
 | P1 | Do not render invisible project UI | Visible-range waveform mounting shipped; full clip-shell virtualization remains |
 | P1 | Cache stable visual/media work | Cache waveform tiles, cursor/text/annotation textures, and projected scene data by stable revision |
 | P1 | Delay unrelated modules | Window, browser shim, media, CLI, fonts, STT and AI graphs now load on demand |
@@ -342,9 +362,9 @@ proxy media, or an end-to-end shared Metal texture.
 | P2 | Stream assets instead of moving blobs through JS IPC | Introduce a range-capable custom media protocol for project assets and thumbnails where direct file URLs are insufficient |
 | P2 | Let interaction temporarily reduce quality | During drag/scrub, use lower-resolution/no-blur preview and rebuild the full-quality scene once at gesture commit |
 
-The first pass chose the renderer-resident route for Performance and Power Saving because it can
-reuse Chromium's media presentation without a raw-frame bridge. Quality retains the other
-requirement: a future native shared surface can preserve the existing compositor and parity, but
+The first pass chose the renderer-resident route for every interactive policy because it can reuse
+Chromium's media presentation without a raw-frame bridge. A future native shared surface can
+preserve the existing compositor and parity, but
 needs platform-specific integration (Metal/IOSurface on macOS, D3D/DXGI on Windows, and an
 appropriate Linux path). Optimizing the raw-RGBA IPC loop itself is not the target architecture.
 

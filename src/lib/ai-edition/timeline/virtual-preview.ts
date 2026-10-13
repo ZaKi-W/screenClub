@@ -2,6 +2,11 @@
 // functions shared by the VirtualPreview component and the timeline math.
 
 import type { AxcutClip } from "../schema";
+import {
+	findFirstMatchSpan,
+	type PreparedFirstMatchSpans,
+	prepareFirstMatchSpans,
+} from "./interval-index";
 
 export type VirtualPosition = {
 	clip: AxcutClip;
@@ -9,6 +14,98 @@ export type VirtualPosition = {
 	virtualTimeSec: number;
 	sourceTimeSec: number;
 };
+
+/**
+ * Timeline-order lookup prepared when clip geometry changes.
+ *
+ * `clips` is document order, not necessarily timeline order. The spans retain
+ * the old lookup's first-array-match priority for overlaps, while the sorted
+ * starts make the per-frame point lookup and next-clip lookup logarithmic.
+ */
+export interface VirtualTimelineIndex {
+	clips: AxcutClip[];
+	durationSec: number;
+	preparedSpans: PreparedFirstMatchSpans;
+	clipsByTimelineStart: Array<{ clip: AxcutClip; originalIndex: number }>;
+	timelineStarts: number[];
+	finalClipIndex: number;
+}
+
+function upperBound(values: readonly number[], target: number): number {
+	let low = 0;
+	let high = values.length;
+	while (low < high) {
+		const middle = (low + high) >>> 1;
+		if (values[middle] <= target) low = middle + 1;
+		else high = middle;
+	}
+	return low;
+}
+
+export function createVirtualTimelineIndex(clips: AxcutClip[]): VirtualTimelineIndex {
+	const clipsByTimelineStart = clips
+		.map((clip, originalIndex) => ({ clip, originalIndex }))
+		.sort(
+			(left, right) =>
+				left.clip.timelineStartSec - right.clip.timelineStartSec ||
+				left.originalIndex - right.originalIndex,
+		);
+	const durationSec = clips.reduce((maximum, clip) => Math.max(maximum, clip.timelineEndSec), 0);
+	return {
+		clips,
+		durationSec,
+		preparedSpans: prepareFirstMatchSpans(
+			clips.map((clip) => ({ start: clip.timelineStartSec, end: clip.timelineEndSec })),
+		),
+		clipsByTimelineStart,
+		timelineStarts: clipsByTimelineStart.map(({ clip }) => clip.timelineStartSec),
+		finalClipIndex:
+			[...clipsByTimelineStart].reverse().find(({ clip }) => clip.timelineEndSec === durationSec)
+				?.originalIndex ?? clips.length - 1,
+	};
+}
+
+function virtualPositionAt(
+	clips: AxcutClip[],
+	clipIndex: number,
+	virtualTimeSec: number,
+): VirtualPosition {
+	const clip = clips[clipIndex];
+	const clipDuration = Math.max(0, (clip.sourceEndSec ?? 0) - clip.sourceStartSec);
+	const clipOffset = Math.max(0, Math.min(clipDuration, virtualTimeSec - clip.timelineStartSec));
+	return {
+		clip,
+		clipIndex,
+		virtualTimeSec,
+		sourceTimeSec: clip.sourceStartSec + clipOffset,
+	};
+}
+
+export function locateVirtualPositionIndexed(
+	index: VirtualTimelineIndex,
+	virtualTimeSec: number,
+): VirtualPosition | null {
+	if (index.clips.length === 0) return null;
+	const clamped = Math.max(0, Math.min(index.durationSec, virtualTimeSec));
+	const span = findFirstMatchSpan(index.preparedSpans, clamped);
+	if (span) {
+		return virtualPositionAt(index.clips, span.itemIndex, clamped);
+	}
+
+	// The closing edge belongs to the clip that ends the whole timeline. Gaps
+	// keep the legacy fallback to the last document clip.
+	const fallbackIndex =
+		clamped === index.durationSec ? index.finalClipIndex : index.clips.length - 1;
+	return virtualPositionAt(index.clips, fallbackIndex, clamped);
+}
+
+export function findNextTimelineClipIndexed(
+	index: VirtualTimelineIndex,
+	afterTimelineStartSec: number,
+): AxcutClip | undefined {
+	const nextIndex = upperBound(index.timelineStarts, afterTimelineStartSec + 0.001);
+	return index.clipsByTimelineStart[nextIndex]?.clip;
+}
 
 interface IndexedClipSet {
 	clips: AxcutClip[];
@@ -122,7 +219,7 @@ export function createPlaybackIndex(
 }
 
 export function totalVirtualDuration(clips: AxcutClip[]): number {
-	return clips.at(-1)?.timelineEndSec ?? 0;
+	return clips.reduce((maximum, clip) => Math.max(maximum, clip.timelineEndSec), 0);
 }
 
 export function clampVirtualTime(clips: AxcutClip[], value: number): number {

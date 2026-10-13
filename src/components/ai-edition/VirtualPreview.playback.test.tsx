@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AxcutClip, AxcutTrimRange } from "@/lib/ai-edition/schema";
 import { type VideoSource, VirtualPreview } from "./VirtualPreview";
@@ -115,10 +116,50 @@ function mount(clips: AxcutClip[], trimRanges: AxcutTrimRange[] = []) {
 	return { onTimeChange, video, element: element as HTMLVideoElement };
 }
 
+function mountWithCommitCounter(clips: AxcutClip[]) {
+	let commits = 0;
+	const onTimeChange = vi.fn();
+	const sources: VideoSource[] = [{ id: "a1", src: "file:///tmp/a1.mp4", label: "a1" }];
+	const { container } = render(
+		<Profiler id="virtual-preview" onRender={() => commits++}>
+			<VirtualPreview videoSources={sources} clips={clips} onTimeChange={onTimeChange} />
+		</Profiler>,
+	);
+	const element = container.querySelector("video");
+	if (!element) throw new Error("no <video> rendered");
+	const video = driveVideo(element as HTMLVideoElement);
+	act(() => fireEvent.loadedMetadata(element));
+	return {
+		element: element as HTMLVideoElement,
+		video,
+		onTimeChange,
+		get commits() {
+			return commits;
+		},
+	};
+}
+
 const reportedTimes = (onTimeChange: ReturnType<typeof vi.fn>) =>
 	onTimeChange.mock.calls.map((call) => call[0] as number);
 
 describe("VirtualPreview playback across a clip boundary", () => {
+	it("buffers the sole active video without creating a second decoder", () => {
+		const { element } = mount([clip("clip_1", "a1", 0, 10, 0)]);
+		expect(element).toHaveAttribute("preload", "auto");
+		expect(document.querySelectorAll("video")).toHaveLength(1);
+	});
+
+	it("publishes playback ticks without committing the React preview tree", () => {
+		const mounted = mountWithCommitCounter([clip("clip_1", "a1", 0, 10, 0)]);
+		mounted.video.play();
+		const commitsBeforeTick = mounted.commits;
+		mounted.video.seekTo(1);
+		tick();
+
+		expect(mounted.onTimeChange).toHaveBeenLastCalledWith(1);
+		expect(mounted.commits).toBe(commitsBeforeTick);
+	});
+
 	it("keeps the editor pointer visible over the video preview", () => {
 		const { element } = mount([clip("clip_1", "a1", 0, 10, 0)]);
 

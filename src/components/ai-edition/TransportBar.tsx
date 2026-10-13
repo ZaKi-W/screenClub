@@ -30,11 +30,10 @@ export const TransportBar = memo(function TransportBar({
 	onSeek,
 }: TransportBarProps) {
 	const te = useScopedT("editor");
-	// Same reason as PlayheadOverlay (see V4Timeline.tsx): the timecode and the
-	// scrub thumb are animated during playback, so they subscribe to the playhead
-	// directly instead of forcing V4Timeline — and the whole editor shell above it —
-	// to re-render once per frame to hand it down as a prop.
-	const storeTimeSec = useProjectStore((s) => s.currentTimeSec);
+	// Transport time is a display signal, not component state. Subscribing through
+	// the React hook still committed this complete toolbar at playback cadence; the
+	// store subscription below paints the three moving leaves directly instead.
+	const storeTimeSec = useProjectStore.getState().currentTimeSec;
 	const currentTimeSec = overrideTimeSec ?? storeTimeSec;
 	const virtualDurationSec = clips.reduce(
 		(acc, c) => acc + (c.timelineEndSec - c.timelineStartSec),
@@ -80,6 +79,24 @@ export const TransportBar = memo(function TransportBar({
 	// deux écritures convergent au lieu de se contredire.
 	const progressElRef = useRef<HTMLDivElement | null>(null);
 	const thumbElRef = useRef<HTMLDivElement | null>(null);
+	const timeElRef = useRef<HTMLSpanElement | null>(null);
+	const inputElRef = useRef<HTMLInputElement | null>(null);
+
+	useEffect(() => {
+		const paint = (timeSec: number) => {
+			if (overrideTimeSec !== null || draggingRef.current) return;
+			const value = Math.min(Math.max(timeSec, 0), inputMax);
+			const pct = (value / inputMax) * 100;
+			if (timeElRef.current) timeElRef.current.textContent = formatSec(value);
+			if (inputElRef.current) inputElRef.current.value = String(value);
+			if (progressElRef.current) progressElRef.current.style.width = `${pct}%`;
+			if (thumbElRef.current) thumbElRef.current.style.left = `${pct}%`;
+		};
+		paint(useProjectStore.getState().currentTimeSec);
+		return useProjectStore.subscribe((state, previousState) => {
+			if (state.currentTimeSec !== previousState.currentTimeSec) paint(state.currentTimeSec);
+		});
+	}, [inputMax, overrideTimeSec]);
 
 	useEffect(() => {
 		return () => {
@@ -171,7 +188,7 @@ export const TransportBar = memo(function TransportBar({
 				<SkipForward size={13} />
 			</button>
 			<span className={styles.time}>
-				<span>{formatSec(currentTimeSec)}</span>
+				<span ref={timeElRef}>{formatSec(currentTimeSec)}</span>
 				<span className={styles.sep}>/</span>
 				<span className={styles.total}>{formatSec(virtualDurationSec)}</span>
 			</span>
@@ -184,6 +201,7 @@ export const TransportBar = memo(function TransportBar({
 					/>
 				</div>
 				<input
+					ref={inputElRef}
 					type="range"
 					min={0}
 					max={inputMax}

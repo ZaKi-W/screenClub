@@ -1157,9 +1157,8 @@ export function NewEditorShell() {
 									}
 									onSelectAnnotation={(id) => tl.selectRegion("annotation", id)}
 									onAnnotationPositionChange={(id, position) => {
-										// Live seulement : appelé à chaque mouvement de souris pour que le
-										// compositeur natif suive le geste. L'écriture disque se fait une fois,
-										// au relâchement, via `onAnnotationCommit`.
+										// AnnotationOverlay keeps pointer frames local and calls this once with
+										// the final position; commit persists it immediately afterward.
 										tl.updateAnnotationLive(id, { position });
 									}}
 									onAnnotationRectChange={(id, patch) => {

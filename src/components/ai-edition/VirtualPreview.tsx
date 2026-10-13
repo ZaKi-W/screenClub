@@ -5,18 +5,25 @@ import {
 	MAX_NATIVE_PLAYBACK_RATE,
 } from "@/components/video-editor/types";
 import { resolvePlaybackSegments } from "@/lib/ai-edition/document/timeline";
+import { noteUiProbePreviewFrame } from "@/lib/ai-edition/perf/uiFrameProbe";
 import type { AxcutClip, AxcutTrimRange, AxcutZoomRegion } from "@/lib/ai-edition/schema";
 import { usePreviewPerformancePolicy } from "@/lib/ai-edition/store/previewPerformance";
-import { useEditorSettings } from "@/lib/ai-edition/store/useEditorSettings";
+import { useEditorSettingsValue } from "@/lib/ai-edition/store/useEditorSettings";
 import type { PlaybackClockRef } from "@/lib/ai-edition/timeline/playback-clock";
-import { findActiveSpeedRegion, type SpeedRegion } from "@/lib/ai-edition/timeline/speed";
+import {
+	findActivePreparedSpeedRegion,
+	prepareSpeedRegions,
+	type SpeedRegion,
+} from "@/lib/ai-edition/timeline/speed";
 import {
 	clampVirtualTime,
 	createPlaybackIndex,
+	createVirtualTimelineIndex,
 	findNextKeptSegmentIndexed,
+	findNextTimelineClipIndexed,
 	locateKeptSegmentIndexed,
 	locateRawSourcePosition,
-	locateVirtualPosition,
+	locateVirtualPositionIndexed,
 	rawClipForSegment,
 	rawVirtualStartForSegment,
 	totalVirtualDuration,
@@ -34,20 +41,6 @@ export interface VideoSource {
 	src: string;
 	label: string;
 	sourcePath?: string;
-}
-
-/** First clip (by timeline order) starting strictly after `afterTimelineStartSec` —
- *  independent of the `clips` array's own order, which is never guaranteed to match
- *  timeline order (a clip can be inserted/reordered at any array index; only
- *  `timelineStartSec` is authoritative). Shared by every clip-boundary-advance path
- *  (rAF tick, the `<video>` `ended` event) so they all agree on "the next clip". */
-function findNextClipByTimelineOrder(
-	clips: AxcutClip[],
-	afterTimelineStartSec: number,
-): AxcutClip | undefined {
-	return clips
-		.filter((clip) => clip.timelineStartSec > afterTimelineStartSec + 0.001)
-		.sort((a, b) => a.timelineStartSec - b.timelineStartSec)[0];
 }
 
 interface VirtualPreviewProps {
@@ -97,7 +90,10 @@ export function VirtualPreview({
 	cropRegion,
 	clockRef,
 }: VirtualPreviewProps) {
-	const { settings } = useEditorSettings();
+	const screenAnimationStyle = useEditorSettingsValue((settings) => settings.screenAnimationStyle);
+	const cursorShow = useEditorSettingsValue((settings) => settings.cursorShow);
+	const cursorTheme = useEditorSettingsValue((settings) => settings.cursorTheme);
+	const cursorSize = useEditorSettingsValue((settings) => settings.cursor.size);
 	const previewPolicy = usePreviewPerformancePolicy();
 	// ponytail: an oversized, offset video inside .videoFrame's overflow:hidden
 	// box — the same "scale + negative-position the full frame, let the
@@ -132,7 +128,10 @@ export function VirtualPreview({
 	// clip" from (assetId, sourceTime) alone always picks the earliest
 	// matching clip, even while a later one is the one actually playing.
 	const activeClipIdRef = useRef<string | null>(null);
-	const [virtualTimeSec, setVirtualTimeSec] = useState(0);
+	// Transport time is a per-frame signal, not render state. The visible video is presented by
+	// Chromium and every animated overlay reads PlaybackClockRef directly; keeping a duplicate
+	// React state here committed this whole component at up to 60 Hz without changing its DOM.
+	const virtualTimeSecRef = useRef(0);
 	const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
 	const [sourceIndex, setSourceIndex] = useState(0);
 
@@ -172,18 +171,18 @@ export function VirtualPreview({
 	);
 	const playbackIndexRef = useRef(playbackIndex);
 	playbackIndexRef.current = playbackIndex;
+	const virtualTimelineIndex = useMemo(() => createVirtualTimelineIndex(clips), [clips]);
+	const virtualTimelineIndexRef = useRef(virtualTimelineIndex);
+	virtualTimelineIndexRef.current = virtualTimelineIndex;
 	const videoSourcesRef = useRef(videoSources);
 	videoSourcesRef.current = videoSources;
 	const sourceIndexRef = useRef(sourceIndex);
 	sourceIndexRef.current = sourceIndex;
-	const virtualTimeSecRef = useRef(virtualTimeSec);
-	useEffect(() => {
-		virtualTimeSecRef.current = virtualTimeSec;
-	}, [virtualTimeSec]);
 	const virtualDurationSecRef = useRef(virtualDurationSec);
 	virtualDurationSecRef.current = virtualDurationSec;
-	const speedRegionsRef = useRef(speedRegions);
-	speedRegionsRef.current = speedRegions;
+	const preparedSpeedRegions = useMemo(() => prepareSpeedRegions(speedRegions), [speedRegions]);
+	const preparedSpeedRegionsRef = useRef(preparedSpeedRegions);
+	preparedSpeedRegionsRef.current = preparedSpeedRegions;
 	const preparedZoomRegions = useMemo(() => prepareZoomPreviewRegions(zoomRegions), [zoomRegions]);
 	// Same reasoning as `clipsRef` above, for the one thing the rAF calls rather than reads:
 	// `seekToVirtualTime` is a `useCallback` whose deps include `clips`, so it takes a new
@@ -220,6 +219,7 @@ export function VirtualPreview({
 			// permanently stall presentation until the next pause/play cycle.
 			if (!v.paused) scheduleNext();
 			if (!Number.isFinite(v.currentTime)) return;
+			noteUiProbePreviewFrame();
 			const activeSourceId = videoSourcesRef.current[sourceIndexRef.current]?.id;
 			const activeRawClipIndex = activeClipIdRef.current
 				? playbackIndexRef.current.raw.indexById.get(activeClipIdRef.current)
@@ -351,7 +351,10 @@ export function VirtualPreview({
 			if (!position) {
 				// ponytail: fall back to timeline order so cross-asset / reordered
 				// clips don't keep playing unmapped media.
-				const nextClip = findNextClipByTimelineOrder(clipsRef.current, virtualTimeSecRef.current);
+				const nextClip = findNextTimelineClipIndexed(
+					virtualTimelineIndexRef.current,
+					virtualTimeSecRef.current,
+				);
 				if (nextClip) seekToVirtualTimeRef.current?.(nextClip.timelineStartSec, true);
 				else {
 					v.pause();
@@ -370,8 +373,8 @@ export function VirtualPreview({
 				// au lieu d'enchaîner — le "ça se stoppe en fin de clip" observé. Recherche par
 				// temps de timeline (comme le fallback juste au-dessus et
 				// `NativeCompositorOverlay`), indépendante de l'ordre du tableau.
-				const nextClip = findNextClipByTimelineOrder(
-					clipsRef.current,
+				const nextClip = findNextTimelineClipIndexed(
+					virtualTimelineIndexRef.current,
 					position.clip.timelineStartSec,
 				);
 				if (!nextClip) {
@@ -384,8 +387,8 @@ export function VirtualPreview({
 			}
 			const nextVirtualTime = clampVirtualTime(clipsRef.current, position.virtualTimeSec);
 			virtualTimeSecRef.current = nextVirtualTime;
-			const activeSpeedRegion = findActiveSpeedRegion(
-				speedRegionsRef.current,
+			const activeSpeedRegion = findActivePreparedSpeedRegion(
+				preparedSpeedRegionsRef.current,
 				Math.round(nextVirtualTime * 1000),
 			);
 			const nextPlaybackRate = Math.min(activeSpeedRegion?.speed ?? 1, MAX_NATIVE_PLAYBACK_RATE);
@@ -427,7 +430,6 @@ export function VirtualPreview({
 	const updateVirtualTime = useCallback(
 		(nextTimeSec: number) => {
 			virtualTimeSecRef.current = nextTimeSec;
-			setVirtualTimeSec(nextTimeSec);
 			onTimeChange?.(nextTimeSec);
 			// ponytail: mirrors main's per-frame `video.playbackRate = ...`
 			// (videoEventHandlers.ts) — the browser does the actual time
@@ -436,8 +438,8 @@ export function VirtualPreview({
 			// original span on the ruler, it's just played through faster.
 			const v = videoRef.current;
 			if (v) {
-				const activeRegion = findActiveSpeedRegion(
-					speedRegionsRef.current,
+				const activeRegion = findActivePreparedSpeedRegion(
+					preparedSpeedRegionsRef.current,
 					Math.round(nextTimeSec * 1000),
 				);
 				// Clamp to the browser's 16× playbackRate ceiling; >16× is rendered at
@@ -456,30 +458,30 @@ export function VirtualPreview({
 		if (!frame) return;
 		const paint = () => {
 			const visualTimeSec = clockRef?.current.virtualTimeSec ?? virtualTimeSecRef.current;
-			const activeSpeedRegion = findActiveSpeedRegion(
-				speedRegionsRef.current,
+			const activeSpeedRegion = findActivePreparedSpeedRegion(
+				preparedSpeedRegionsRef.current,
 				Math.round(visualTimeSec * 1000),
 			);
 			const playbackRate = activeSpeedRegion?.speed ?? 1;
 			const transform =
-				preparedZoomRegions.length === 0
+				preparedZoomRegions.regions.length === 0
 					? IDENTITY_ZOOM_TRANSFORM
 					: computePreparedZoomPreviewTransform(
 							preparedZoomRegions,
 							visualTimeSec * 1000,
 							undefined,
 							playbackRate,
-							settings.screenAnimationStyle,
+							screenAnimationStyle,
 						);
 			frame.style.transform = `translate(${transform.translateXPercent}%, ${transform.translateYPercent}%) scale(${transform.scale})`;
 		};
 		paint();
 		return clockRef?.subscribe(paint);
-	}, [clockRef, preparedZoomRegions, settings.screenAnimationStyle]);
+	}, [clockRef, preparedZoomRegions, screenAnimationStyle]);
 
 	const seekToVirtualTime = useCallback(
 		(nextVirtualTimeSec: number, preservePlayback = false, forceResume = false) => {
-			const position = locateVirtualPosition(clips, nextVirtualTimeSec);
+			const position = locateVirtualPositionIndexed(virtualTimelineIndex, nextVirtualTimeSec);
 			if (!position) {
 				videoRef.current?.pause();
 				updateVirtualTime(0);
@@ -538,7 +540,7 @@ export function VirtualPreview({
 				});
 			}
 		},
-		[clips, videoSources, sourceIndex, updateVirtualTime],
+		[videoSources, sourceIndex, updateVirtualTime, virtualTimelineIndex],
 	);
 
 	const seekToSourceTime = useCallback((sourceTimeSec: number) => {
@@ -615,7 +617,11 @@ export function VirtualPreview({
 								...cropVideoStyle,
 								...videoStyle,
 							}}
-							preload="metadata"
+							// Keep exactly one media element/decoder, but let Chromium buffer that active
+							// source beyond metadata. `auto` is only a hint and preserves the compositor's
+							// direct video-frame path; unlike a hidden next-video element it cannot create a
+							// second concurrent decoder.
+							preload="auto"
 							playsInline
 							onPlay={(event) => publishPlaybackState(event.currentTarget)}
 							onPause={(event) => publishPlaybackState(event.currentTarget)}
@@ -654,7 +660,7 @@ export function VirtualPreview({
 										});
 									}
 								} else if (clips.length > 0) {
-									seekToVirtualTime(virtualTimeSec);
+									seekToVirtualTime(virtualTimeSecRef.current);
 								}
 							}}
 							onWaiting={() => setLoadState("loading")}
@@ -695,7 +701,10 @@ export function VirtualPreview({
 									(clip) => clip.id === activeClipIdRef.current,
 								);
 								const nextClip = current
-									? findNextClipByTimelineOrder(clipsRef.current, current.timelineStartSec)
+									? findNextTimelineClipIndexed(
+											virtualTimelineIndexRef.current,
+											current.timelineStartSec,
+										)
 									: undefined;
 								if (nextClip) {
 									seekToVirtualTime(nextClip.timelineStartSec, true, true);
@@ -708,9 +717,9 @@ export function VirtualPreview({
 							<CursorDomOverlay
 								videoPath={activeSource.sourcePath ?? null}
 								clockRef={clockRef}
-								visible={settings.cursorShow}
-								themeId={settings.cursorTheme}
-								size={settings.cursor.size}
+								visible={cursorShow}
+								themeId={cursorTheme}
+								size={cursorSize}
 							/>
 						) : null}
 						{/* Plus d'overlay « Loading preview… » : il reflétait l'état du <video>

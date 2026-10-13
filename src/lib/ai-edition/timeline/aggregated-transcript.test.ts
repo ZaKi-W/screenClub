@@ -4,7 +4,9 @@ import {
 	buildAggregatedSections,
 	buildClipSection,
 	clipWordId,
+	createCueWordIndex,
 	findCueWordId,
+	findCueWordIdIndexed,
 	isSilenceWord,
 } from "./aggregated-transcript";
 
@@ -431,6 +433,24 @@ describe("findCueWordId", () => {
 			expect(
 				findCueWordId(withEmptyC2, { assetId: "asset_1", clipId: "c2", sourceTimeSec: 1.5 }),
 			).toBeNull();
+		});
+
+		it("indexes clip identity and preserves gap boundaries", () => {
+			const index = createCueWordIndex(sections());
+			expect(
+				findCueWordIdIndexed(index, {
+					assetId: "asset_1",
+					clipId: "c2",
+					sourceTimeSec: 1.5,
+				}),
+			).toBe("c2:w2");
+			expect(
+				findCueWordIdIndexed(index, {
+					assetId: "asset_1",
+					clipId: "c1",
+					sourceTimeSec: 0.5,
+				}),
+			).toBe("c1:w1");
 		});
 	});
 });

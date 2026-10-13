@@ -1,13 +1,6 @@
-// Chrome d'édition d'une annotation : cadre de sélection, glissement, poignées de
-// redimensionnement. Les PIXELS de l'annotation — texte, image, flèche, flou — sont peints par le
-// compositeur natif, aperçu compris.
-//
-// Ce fichier était le port du `AnnotationOverlay` de l'éditeur v2 : il rendait les quatre types en
-// DOM et portait la saisie du tracé libre, soit ~400 lignes qui ne s'exécutaient plus depuis que
-// le natif peint l'aperçu. Les garder ne coûtait pas seulement de la lecture : elles décrivaient un
-// rendu concurrent, sur une autre horloge, ce qui avait déjà produit le bug des annotations
-// affichées en double (une copie collée au curseur, un fantôme resté en place jusqu'au
-// relâchement). Le détail reste dans `git log`.
+// DOM annotation pixels plus their editing chrome. `react-rnd` owns the live
+// drag/resize rectangle; the project document receives one final patch on
+// release, so pointer frames never rebuild the editor root.
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
@@ -27,7 +20,7 @@ interface AnnotationOverlayProps {
 			size: { width: number; height: number };
 		},
 	) => void;
-	/** Écriture disque, appelée une fois en fin de geste — le drag/resize ne fait que du live. */
+	/** Persist the final patch once after a completed drag/resize. */
 	onCommit?: () => void;
 	onClick: (id: string) => void;
 	zIndex: number;
@@ -168,34 +161,6 @@ export function AnnotationOverlay({
 	const committedHeight = (annotation.size.height / 100) * containerHeight;
 	const blurShape = annotation.type === "blur" ? (annotation.blurData?.shape ?? "rectangle") : null;
 	const isDraggingRef = useRef(false);
-	type PendingLivePatch =
-		| { kind: "position"; position: { x: number; y: number } }
-		| {
-				kind: "rect";
-				position: { x: number; y: number };
-				size: { width: number; height: number };
-		  };
-	const pendingLivePatchRef = useRef<PendingLivePatch | null>(null);
-	const livePatchRafRef = useRef(0);
-	const flushLivePatch = () => {
-		if (livePatchRafRef.current !== 0) {
-			cancelAnimationFrame(livePatchRafRef.current);
-			livePatchRafRef.current = 0;
-		}
-		const pending = pendingLivePatchRef.current;
-		pendingLivePatchRef.current = null;
-		if (!pending) return;
-		if (pending.kind === "position") onPositionChange(annotation.id, pending.position);
-		else onRectChange(annotation.id, { position: pending.position, size: pending.size });
-	};
-	const queueLivePatch = (patch: PendingLivePatch) => {
-		pendingLivePatchRef.current = patch;
-		if (livePatchRafRef.current !== 0) return;
-		livePatchRafRef.current = requestAnimationFrame(() => {
-			livePatchRafRef.current = 0;
-			flushLivePatch();
-		});
-	};
 	const [liveRect, setLiveRect] = useState({
 		x: committedX,
 		y: committedY,
@@ -212,13 +177,6 @@ export function AnnotationOverlay({
 		});
 	}, [committedHeight, committedWidth, committedX, committedY]);
 
-	useEffect(
-		() => () => {
-			if (livePatchRafRef.current !== 0) cancelAnimationFrame(livePatchRafRef.current);
-		},
-		[],
-	);
-
 	const { x, y, width, height } = liveRect;
 
 	return (
@@ -230,26 +188,14 @@ export function AnnotationOverlay({
 			}}
 			onDrag={(_e, d) => {
 				setLiveRect((prev) => ({ ...prev, x: d.x, y: d.y }));
-				// Pousse la position PENDANT le geste : c'est le natif qui peint, il doit donc suivre
-				// le curseur. `onPositionChange` ne met à jour qu'en mémoire ; l'écriture disque se
-				// fait une seule fois, au relâchement (`onCommit`).
-				queueLivePatch({
-					kind: "position",
-					position: {
-						x: (d.x / containerWidth) * 100,
-						y: (d.y / containerHeight) * 100,
-					},
-				});
+				// Rnd moves the visible DOM pixels itself. Replacing the whole project
+				// document here added a root render per frame without changing the picture.
 			}}
 			onDragStop={(_e, d) => {
 				setLiveRect((prev) => ({ ...prev, x: d.x, y: d.y }));
 				const xPercent = (d.x / containerWidth) * 100;
 				const yPercent = (d.y / containerHeight) * 100;
-				pendingLivePatchRef.current = {
-					kind: "position",
-					position: { x: xPercent, y: yPercent },
-				};
-				flushLivePatch();
+				onPositionChange(annotation.id, { x: xPercent, y: yPercent });
 				onCommit?.();
 				setTimeout(() => {
 					isDraggingRef.current = false;
@@ -262,18 +208,7 @@ export function AnnotationOverlay({
 					width: ref.offsetWidth,
 					height: ref.offsetHeight,
 				});
-				// Même raison que le drag : le natif doit suivre la poignée en direct.
-				queueLivePatch({
-					kind: "rect",
-					position: {
-						x: (position.x / containerWidth) * 100,
-						y: (position.y / containerHeight) * 100,
-					},
-					size: {
-						width: (ref.offsetWidth / containerWidth) * 100,
-						height: (ref.offsetHeight / containerHeight) * 100,
-					},
-				});
+				// Local Rnd state is the complete interactive preview; publish on stop.
 			}}
 			onResizeStop={(_e, _direction, ref, _delta, position) => {
 				setLiveRect({
@@ -286,12 +221,10 @@ export function AnnotationOverlay({
 				const yPercent = (position.y / containerHeight) * 100;
 				const widthPercent = (ref.offsetWidth / containerWidth) * 100;
 				const heightPercent = (ref.offsetHeight / containerHeight) * 100;
-				pendingLivePatchRef.current = {
-					kind: "rect",
+				onRectChange(annotation.id, {
 					position: { x: xPercent, y: yPercent },
 					size: { width: widthPercent, height: heightPercent },
-				};
-				flushLivePatch();
+				});
 				onCommit?.();
 			}}
 			onClick={() => {

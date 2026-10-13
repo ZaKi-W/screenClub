@@ -75,6 +75,19 @@
 			"saving": "Đang lưu…"
 		}
 	},
+	"permissions": {
+		"screenRecording": {
+			"title": "Cần quyền ghi màn hình",
+			"detail": "Cho phép ScreenClub ghi màn hình trong Cài đặt Hệ thống macOS, sau đó quay lại và chọn màn hình hoặc cửa sổ.",
+			"openSettings": "Mở Cài đặt Hệ thống"
+		},
+		"accessibility": {
+			"title": "Con trỏ có thể chỉnh sửa cần quyền Trợ năng",
+			"detail": "Cho phép ScreenClub trong Cài đặt Hệ thống → Quyền riêng tư & Bảo mật → Trợ năng, rồi nhấn ghi lại.",
+			"missingHelper": "Không tìm thấy trình trợ giúp con trỏ. Hãy dựng lại trình trợ giúp macOS hoặc dùng con trỏ hệ thống.",
+			"openSettings": "Mở cài đặt Trợ năng"
+		}
+	},
 	"fileDialogs": {
 		"saveGif": "Lưu GIF đã xuất",
 		"saveVideo": "Lưu Video đã xuất",

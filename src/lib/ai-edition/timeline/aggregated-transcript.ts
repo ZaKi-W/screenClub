@@ -242,6 +242,52 @@ export interface CuePosition {
 	sourceTimeSec: number;
 }
 
+interface IndexedCueWord {
+	id: string;
+	startSec: number;
+}
+
+export interface CueWordIndex {
+	byClipId: ReadonlyMap<string, readonly IndexedCueWord[]>;
+	firstClipIdByAssetId: ReadonlyMap<string, string>;
+}
+
+/** Prepare the transcript's static lookup once; the playhead then does one map lookup and
+ * a binary search instead of filtering every section and scanning every word at 60 Hz. */
+export function createCueWordIndex(sections: ClipSection[]): CueWordIndex {
+	const byClipId = new Map<string, IndexedCueWord[]>();
+	const firstClipIdByAssetId = new Map<string, string>();
+	for (const section of sections) {
+		const words = section.words
+			.filter((word) => !isSilenceWord(word.word))
+			.map((word) => ({ id: word.id, startSec: word.word.startSec }))
+			.sort((a, b) => a.startSec - b.startSec);
+		if (words.length === 0) continue;
+		byClipId.set(section.clip.id, words);
+		if (!firstClipIdByAssetId.has(section.clip.assetId)) {
+			firstClipIdByAssetId.set(section.clip.assetId, section.clip.id);
+		}
+	}
+	return { byClipId, firstClipIdByAssetId };
+}
+
+export function findCueWordIdIndexed(index: CueWordIndex, cue: CuePosition | null): string | null {
+	if (!cue) return null;
+	const clipId = cue.clipId ?? index.firstClipIdByAssetId.get(cue.assetId);
+	if (!clipId) return null;
+	const words = index.byClipId.get(clipId);
+	if (!words || words.length === 0 || cue.sourceTimeSec < words[0].startSec) return null;
+
+	let low = 0;
+	let high = words.length;
+	while (low < high) {
+		const mid = low + Math.floor((high - low) / 2);
+		if (words[mid].startSec <= cue.sourceTimeSec) low = mid + 1;
+		else high = mid;
+	}
+	return words[low - 1]?.id ?? null;
+}
+
 /**
  * Find the word in `sections` that the playback head is currently inside, as a
  * {@link clipWordId} — NOT a bare `word.id`, which would name the same moment in every
